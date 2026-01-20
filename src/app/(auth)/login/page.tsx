@@ -5,8 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Msg = { type: "success" | "error" | "info"; text: string } | null;
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+
 export default function LoginPage() {
   const router = useRouter();
   const params = useSearchParams();
@@ -64,7 +63,7 @@ export default function LoginPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Login failed");
+      if (!res.ok) throw new Error((data as any)?.error || "Login failed");
 
       showSuccess("Login successful. Redirecting...");
       router.replace(nextUrl);
@@ -91,7 +90,7 @@ export default function LoginPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "OTP request failed");
+      if (!res.ok) throw new Error((data as any)?.error || "OTP request failed");
 
       showSuccess("OTP sent. Redirecting...");
       const qs = new URLSearchParams({
@@ -108,11 +107,9 @@ export default function LoginPage() {
     }
   }
 
-  // Register isn’t wired yet — keep UX clean + no broken navigation
   function handleRegisterClick() {
-  router.push("/register");
-}
-
+    router.push("/register");
+  }
 
   const msgClass = (m: Msg) =>
     !m
@@ -129,43 +126,52 @@ export default function LoginPage() {
         <div className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_60px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
           <div className="grid grid-cols-1 lg:grid-cols-2">
             {/* LEFT: eKasiBooks brand panel */}
-            <div className="relative p-8 lg:p-12 text-white bg-gradient-to-br from-[#0b2a3a] via-[#0e3a4f] to-[#215D63]">
+            <div className="relative bg-gradient-to-br from-[#0b2a3a] via-[#0e3a4f] to-[#215D63] p-8 text-white lg:p-12">
               {/* Soft highlights */}
               <div className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
               <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-black/10 blur-3xl" />
 
               <div className="relative">
-              <div className="mb-6 flex justify-center">
-              <Image
-                src="/logo/ekasibooks.png"
-                alt="eKasiBooks"
-                width={120}
-                height={120}
-                priority
-                className="h-auto w-[120px]"
-              />
-            </div>
+                <div className="mb-6 flex justify-center">
+                  <Image
+                    src="/logo/ekasibooks.png"
+                    alt="eKasiBooks"
+                    width={120}
+                    height={120}
+                    priority
+                    className="h-auto w-[120px]"
+                  />
+                </div>
+
                 <div className="flex justify-center">
-  <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">
-    <span className="h-2 w-2 rounded-full bg-emerald-300" />
-    Secure portal access
-  </div>
-</div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">
+                    <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                    Secure portal access
+                  </div>
+                </div>
 
-
-                  <h1 className="mt-5 text-center text-3xl font-semibold tracking-tight lg:text-4xl">
+                <h1 className="mt-5 text-center text-3xl font-semibold tracking-tight lg:text-4xl">
                   eKasiBooks Portal
                 </h1>
 
-                <p className="mt-3 text-center text-white/85 leading-relaxed">
+                <p className="mt-3 text-center leading-relaxed text-white/85">
                   Sign in to manage invoices, customers, and subscription access — with
                   password login or quick OTP when needed.
                 </p>
 
                 <div className="mt-8 space-y-3 text-sm text-white/90">
-                  <BrandFeature title="Branded invoicing" desc="Generate professional invoices with your business identity." />
-                  <BrandFeature title="Password or OTP" desc="Choose your password, or request a one-time code." />
-                  <BrandFeature title="Remember me" desc="Stay signed in for up to 7 days if you want." />
+                  <BrandFeature
+                    title="Branded invoicing"
+                    desc="Generate professional invoices with your business identity."
+                  />
+                  <BrandFeature
+                    title="Password or OTP"
+                    desc="Choose your password, or request a one-time code."
+                  />
+                  <BrandFeature
+                    title="Remember me"
+                    desc="Stay signed in for up to 7 days if you want."
+                  />
                 </div>
 
                 <div className="mt-10 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15">
@@ -174,9 +180,10 @@ export default function LoginPage() {
                     <button
                       onClick={handleRegisterClick}
                       className="ml-1 inline-flex items-center font-semibold underline underline-offset-4 hover:text-white"
+                      type="button"
                     >
                       Create an account
-                    </button>{" "}
+                    </button>
                   </p>
                 </div>
               </div>
@@ -195,7 +202,7 @@ export default function LoginPage() {
 
               <div className="mt-8 space-y-4">
                 {msg && (
-                  <div className={`text-sm rounded-xl border px-3 py-2 ${msgClass(msg)}`}>
+                  <div className={`rounded-xl border px-3 py-2 text-sm ${msgClass(msg)}`}>
                     {msg.text}
                   </div>
                 )}
@@ -229,7 +236,7 @@ export default function LoginPage() {
                   />
                 </label>
 
-                <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
+                <label className="flex select-none items-center gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
                     checked={remember}
@@ -243,7 +250,8 @@ export default function LoginPage() {
                   <button
                     onClick={loginWithPassword}
                     disabled={isBusy}
-                    className="rounded-xl bg-[#215D63] text-white py-2 font-semibold shadow-sm hover:bg-[#1c4f54] disabled:opacity-60"
+                    className="rounded-xl bg-[#215D63] py-2 font-semibold text-white shadow-sm hover:bg-[#1c4f54] disabled:opacity-60"
+                    type="button"
                   >
                     {pwLoading ? "Signing in..." : "Login with password"}
                   </button>
@@ -253,6 +261,7 @@ export default function LoginPage() {
                     disabled={isBusy || !emailOk}
                     className="rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
                     title={!emailOk ? "Enter a valid email first" : undefined}
+                    type="button"
                   >
                     {otpLoading ? "Sending OTP..." : "Request OTP instead"}
                   </button>
@@ -278,7 +287,7 @@ export default function LoginPage() {
 function BrandFeature({ title, desc }: { title: string; desc: string }) {
   return (
     <div className="flex gap-3">
-      <div className="mt-1 h-5 w-5 shrink-0 rounded-lg bg-white/10 ring-1 ring-white/20 flex items-center justify-center">
+      <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/20">
         <span className="h-2 w-2 rounded-full bg-white/70" />
       </div>
       <div>
