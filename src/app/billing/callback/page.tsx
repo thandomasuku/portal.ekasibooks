@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 
 type Entitlement = {
   plan: string;
