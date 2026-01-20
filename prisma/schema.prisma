@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+}
+
+enum SubscriptionStatus {
+  inactive
+  active
+  canceled
+  past_due
+}
+
+enum EntitlementTier {
+  none
+  free
+  pro
+}
+
+enum EntitlementStatus {
+  none
+  active
+  grace
+  blocked
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  otpCodes     OtpCode[]
+  payments     Payment[]
+  subscription Subscription?
+  entitlement  Entitlement?
+}
+
+model OtpCode {
+  id        String    @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String?
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model Payment {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  provider  String @default("paystack")
+  reference String @unique
+
+  amountKobo Int?
+  currency   String? // "NGN", etc.
+
+  status PaymentStatus @default(pending)
+  paidAt DateTime?
+
+  // Optional: store a small slice of Paystack payload for debugging/audit
+  raw Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  provider String             @default("paystack")
+  status   SubscriptionStatus @default(inactive)
+
+  // Paystack identifiers (nullable: you may start with one-time payments)
+  customerCode     String?
+  subscriptionCode String?
+  planCode         String?
+
+  // Useful for access windows (even with subscriptions)
+  currentPeriodEnd DateTime?
+  canceledAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([customerCode])
+  @@index([subscriptionCode])
+}
+
+model Entitlement {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  tier   EntitlementTier   @default(free)
+  status EntitlementStatus @default(active)
+
+  // Optional feature flags / limits
+  features Json?
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([tier])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id        String  @id @default(cuid())
+  provider  String  @default("paystack")
+  eventId   String  @unique
+  eventType String
+  reference String?
+  raw       Json?
+
+  processedAt DateTime @default(now())
+
+  @@index([provider])
+  @@index([eventType])
+  @@index([reference])
+}
