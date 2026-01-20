@@ -5,7 +5,8 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Msg = { type: "success" | "error" | "info"; text: string } | null;
-
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export default function LoginPage() {
   const router = useRouter();
   const params = useSearchParams();
