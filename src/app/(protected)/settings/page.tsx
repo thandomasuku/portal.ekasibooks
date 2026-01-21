@@ -7,11 +7,23 @@ import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
 
 type LoadState = "loading" | "ready" | "unauth" | "error";
 
+type Entitlement = {
+  plan: "FREE" | "PRO" | string;
+  status: string;
+  currentPeriodEnd: string | null;
+  graceUntil: string | null;
+  features: { readOnly: boolean; limits: any };
+};
+
 function fmtDate(d?: string | null) {
   if (!d) return "—";
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "—";
   return dt.toLocaleString();
+}
+
+function normalizePlan(plan?: string | null) {
+  return String(plan ?? "FREE").toUpperCase();
 }
 
 export default function SettingsPage() {
@@ -23,45 +35,86 @@ export default function SettingsPage() {
     return next && next.startsWith("/") ? next : "/settings";
   }, [sp]);
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<any>(null); // { authenticated, user: { id,email,... } } OR { id,email } depending on your API
+  const [ent, setEnt] = useState<Entitlement | null>(null);
+
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  async function loadAll() {
+    setState("loading");
+    setError(null);
 
-    (async () => {
-      setState("loading");
-      setError(null);
+    try {
+      // 1) Auth identity (email/id)
+      const meRes = await fetch("/api/auth/me", { credentials: "include" });
+      if (meRes.status === 401 || meRes.status === 403) {
+        setUser(null);
+        setEnt(null);
+        setState("unauth");
+        return;
+      }
+      if (!meRes.ok) {
+        setUser(null);
+        setEnt(null);
+        setState("error");
+        setError(`Failed to load profile (${meRes.status}).`);
+        return;
+      }
 
+      const meJson = await meRes.json().catch(() => null);
+      if (!meJson) {
+        setState("error");
+        setError("Profile returned an invalid response.");
+        return;
+      }
+
+      // your /api/auth/me currently returns { authenticated, user: {...} }
+      const meUser = meJson?.user ?? meJson;
+      setUser(meUser);
+
+      // 2) Entitlement (plan) — best-effort (don’t block settings if it fails)
       try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (cancelled) return;
+        const entRes = await fetch("/api/entitlement", { credentials: "include" });
 
-        if (!res.ok) {
+        // If entitlement says unauth, treat as unauth
+        if (entRes.status === 401 || entRes.status === 403) {
           setUser(null);
+          setEnt(null);
           setState("unauth");
           return;
         }
 
-        const data = await res.json().catch(() => null);
-        if (cancelled) return;
-
-        setUser(data);
-        setState("ready");
-      } catch (e: any) {
-        if (cancelled) return;
-        setError(e?.message || "Network error while checking session.");
-        setState("error");
+        if (entRes.ok) {
+          const entJson = await entRes.json().catch(() => null);
+          if (entJson) setEnt(entJson);
+        }
+      } catch {
+        // ignore (settings can still render)
       }
-    })();
 
+      setState("ready");
+    } catch (e: any) {
+      setError(e?.message || "Network error while checking session.");
+      setState("error");
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await loadAll();
+    })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const planName = String(user?.plan ?? "FREE").toUpperCase();
+  const planName = normalizePlan(ent?.plan);
+  const userEmail = String(user?.email ?? "—");
+  const userId = String(user?.id ?? "—");
 
   const subtitle =
     state === "ready"
@@ -72,6 +125,11 @@ export default function SettingsPage() {
       ? "We couldn’t confirm your session."
       : "Loading account details...";
 
+  // Password plan (UX messaging only for now)
+  const passwordMode = "OTP sign-in (current)";
+  const passwordNote =
+    "You’re currently using OTP sign-in. In a future update, you’ll be able to set a password (optional) and manage sessions.";
+
   return (
     <PortalShell
       badge="Settings"
@@ -79,13 +137,13 @@ export default function SettingsPage() {
       subtitle={subtitle}
       userEmail={user?.email ?? null}
       planName={planName}
-      tipText="Tip: Keep your account secure — OTP is handy when you don’t want to type passwords."
+      tipText="Tip: OTP is a secure way to sign in — password & sessions management will be added next."
       headerRight={
         <button
-          onClick={() => router.push("/dashboard")}
+          onClick={() => loadAll()}
           className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
         >
-          Back to overview
+          Refresh
         </button>
       }
       footerRight={
@@ -111,7 +169,7 @@ export default function SettingsPage() {
           title="Session check failed"
           body={error ?? "Something went wrong. Please try again."}
           primaryLabel="Retry"
-          onPrimary={() => router.refresh()}
+          onPrimary={() => loadAll()}
           secondaryLabel="Go to login"
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />
@@ -126,11 +184,9 @@ export default function SettingsPage() {
                   Account security: Protected
                 </Chip>
 
-                <h2 className="mt-3 text-xl font-semibold text-slate-900">
-                  Keep your account safe.
-                </h2>
+                <h2 className="mt-3 text-xl font-semibold text-slate-900">Keep your account safe.</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Review your profile info and security options — changes will unlock as APIs are enabled.
+                  Review your profile info and security options — password & sessions will unlock as APIs are enabled.
                 </p>
               </div>
 
@@ -157,9 +213,9 @@ export default function SettingsPage() {
 
           {/* KPI row */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Email" value={String(user?.email ?? "—")} icon="✉" />
-            <KpiCard label="Plan" value={String(user?.plan ?? "—")} icon="★" />
-            <KpiCard label="Account ID" value={String(user?.id ?? "—")} icon="ID" />
+            <KpiCard label="Email" value={userEmail} icon="✉" />
+            <KpiCard label="Plan" value={planName} icon="★" />
+            <KpiCard label="Account ID" value={userId} icon="ID" />
             <KpiCard label="Last login" value={fmtDate(user?.lastLoginAt)} icon="✓" />
           </div>
 
@@ -180,18 +236,14 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-6 grid grid-cols-1 gap-4">
-                <DetailTile label="Email" value={String(user?.email ?? "—")} />
-                <DetailTile label="Plan" value={String(user?.plan ?? "—")} />
-                <DetailTile label="Account ID" value={String(user?.id ?? "—")} />
+                <DetailTile label="Email" value={userEmail} />
+                <DetailTile label="Plan" value={planName} />
+                <DetailTile label="Account ID" value={userId} />
               </div>
 
               <div className="mt-6 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                <p className="text-sm text-slate-700">
-                  Profile editing will be enabled once the API supports updates.
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  For now, contact support if you need to change your email.
-                </p>
+                <p className="text-sm text-slate-700">Profile editing will be enabled once the API supports updates.</p>
+                <p className="mt-1 text-xs text-slate-500">For now, contact support if you need to change your email.</p>
               </div>
 
               <button
@@ -206,14 +258,19 @@ export default function SettingsPage() {
             {/* Security */}
             <PremiumCard>
               <h2 className="text-lg font-semibold text-slate-900">Security</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Password, sessions, and access controls.
-              </p>
+              <p className="mt-1 text-sm text-slate-600">Password, sessions, and access controls.</p>
 
               <div className="mt-6 space-y-3">
+                <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
+                  <p className="text-sm text-slate-800">
+                    <span className="font-semibold">Sign-in method:</span> {passwordMode}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{passwordNote}</p>
+                </div>
+
                 <ActionRow
                   title="Password"
-                  subtitle="Change your account password"
+                  subtitle="Set / change your account password (coming soon)"
                   icon="🔒"
                   tone="neutral"
                   disabled
@@ -221,7 +278,7 @@ export default function SettingsPage() {
                 />
                 <ActionRow
                   title="Active sessions"
-                  subtitle="View and manage logged-in devices"
+                  subtitle="View and manage logged-in devices (coming soon)"
                   icon="💻"
                   tone="neutral"
                   disabled
@@ -253,7 +310,7 @@ export default function SettingsPage() {
   );
 }
 
-/* ---------------- Local UI helpers (move to ui.tsx later if you want) ---------------- */
+/* ---------------- Local UI helpers ---------------- */
 
 function ActionRow({
   title,
@@ -297,14 +354,10 @@ function ActionRow({
       ].join(" ")}
     >
       <div className="flex items-center gap-3">
-        <div className={["grid h-10 w-10 place-items-center rounded-2xl", iconChip].join(" ")}>
-          {icon}
-        </div>
+        <div className={["grid h-10 w-10 place-items-center rounded-2xl", iconChip].join(" ")}>{icon}</div>
         <div className="min-w-0">
           <div className="text-sm font-semibold">{title}</div>
-          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>
-            {subtitle}
-          </div>
+          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>{subtitle}</div>
         </div>
         <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
       </div>

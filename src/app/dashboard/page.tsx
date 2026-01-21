@@ -7,11 +7,23 @@ import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
 
 type LoadState = "loading" | "ready" | "unauth" | "error";
 
+type Entitlement = {
+  plan: "FREE" | "PRO" | string;
+  status: string;
+  currentPeriodEnd: string | null;
+  graceUntil: string | null;
+  features: { readOnly: boolean; limits: any };
+};
+
 function fmtDate(d?: string | null) {
   if (!d) return "—";
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "—";
   return dt.toLocaleString();
+}
+
+function normalizePlan(plan?: string | null) {
+  return String(plan ?? "FREE").toUpperCase();
 }
 
 export default function DashboardPage() {
@@ -24,41 +36,76 @@ export default function DashboardPage() {
   }, [sp]);
 
   const [user, setUser] = useState<any>(null);
+  const [ent, setEnt] = useState<Entitlement | null>(null);
+
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
+
+  async function loadAll() {
+    setState("loading");
+    setError(null);
+
+    try {
+      // 1) Identity (auth)
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+
+      if (res.status === 401 || res.status === 403) {
+        setUser(null);
+        setEnt(null);
+        setState("unauth");
+        return;
+      }
+
+      if (!res.ok) {
+        setUser(null);
+        setEnt(null);
+        setState("error");
+        setError(`Session check failed (${res.status}).`);
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      const meUser = data?.user ?? data; // supports {user:{...}} or direct
+      setUser(meUser);
+
+      // 2) Entitlement (plan) — best-effort
+      try {
+        const entRes = await fetch("/api/entitlement", { credentials: "include" });
+
+        if (entRes.status === 401 || entRes.status === 403) {
+          setUser(null);
+          setEnt(null);
+          setState("unauth");
+          return;
+        }
+
+        if (entRes.ok) {
+          const entJson = await entRes.json().catch(() => null);
+          if (entJson) setEnt(entJson);
+        }
+      } catch {
+        // ignore
+      }
+
+      setState("ready");
+    } catch (e: any) {
+      setError(e?.message || "Network error while checking session.");
+      setState("error");
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      setState("loading");
-      setError(null);
-
-      try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (cancelled) return;
-
-        if (!res.ok) {
-          setUser(null);
-          setState("unauth");
-          return;
-        }
-
-        const data = await res.json().catch(() => null);
-        if (cancelled) return;
-
-        setUser(data);
-        setState("ready");
-      } catch (e: any) {
-        if (cancelled) return;
-        setError(e?.message || "Network error while checking session.");
-        setState("error");
-      }
+      if (cancelled) return;
+      await loadAll();
     })();
 
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subtitle =
@@ -70,8 +117,7 @@ export default function DashboardPage() {
       ? "We couldn’t confirm your session."
       : "Preparing your workspace...";
 
-  const planName = state === "ready" ? String(user?.plan ?? "FREE") : "FREE";
-  const planUpper = String(planName).toUpperCase();
+  const planUpper = normalizePlan(ent?.plan);
   const portalStatus = planUpper === "FREE" ? "Limited" : "Active";
 
   const name =
@@ -87,7 +133,7 @@ export default function DashboardPage() {
       backHref="/"
       backLabel="Home"
       userEmail={state === "ready" ? (user?.email ?? null) : null}
-      planName={planName}
+      planName={planUpper}
       tipText="Tip: This portal manages access and billing — your invoices live inside the desktop app."
       footerRight={
         <span className="inline-flex items-center rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
@@ -121,7 +167,7 @@ export default function DashboardPage() {
           title="Session check failed"
           body={error ?? "Something went wrong. Please try again."}
           primaryLabel="Retry"
-          onPrimary={() => router.refresh()}
+          onPrimary={() => loadAll()}
           secondaryLabel="Go to login"
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />
@@ -149,9 +195,7 @@ export default function DashboardPage() {
                   onClick={() => router.push("/downloads")}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-800"
                 >
-                  <span className="grid h-7 w-7 place-items-center rounded-xl bg-white/10">
-                    ⇩
-                  </span>
+                  <span className="grid h-7 w-7 place-items-center rounded-xl bg-white/10">⇩</span>
                   Get desktop app
                 </button>
 
@@ -170,7 +214,7 @@ export default function DashboardPage() {
 
           {/* KPI row */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Plan" value={String(user?.plan ?? "—")} icon="★" />
+            <KpiCard label="Plan" value={planUpper} icon="★" />
             <KpiCard label="Email" value={String(user?.email ?? "—")} icon="✉" />
             <KpiCard label="Created" value={fmtDate(user?.createdAt)} icon="⏱" />
             <KpiCard label="Last login" value={fmtDate(user?.lastLoginAt)} icon="✓" />
@@ -182,9 +226,7 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Account details</h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Your portal identity and access level.
-                  </p>
+                  <p className="mt-1 text-sm text-slate-600">Your portal identity and access level.</p>
                 </div>
 
                 <Chip tone="success">
@@ -195,7 +237,7 @@ export default function DashboardPage() {
 
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <DetailTile label="Email" value={user?.email ?? "—"} />
-                <DetailTile label="Plan" value={String(user?.plan ?? "—")} />
+                <DetailTile label="Plan" value={planUpper} />
                 <DetailTile label="Created" value={fmtDate(user?.createdAt)} />
                 <DetailTile label="Last login" value={fmtDate(user?.lastLoginAt)} />
               </div>
@@ -203,7 +245,7 @@ export default function DashboardPage() {
               <div className="mt-6 rounded-2xl bg-gradient-to-br from-[#0b2a3a]/5 via-[#0e3a4f]/5 to-[#215D63]/10 p-4 ring-1 ring-slate-200">
                 <p className="text-sm text-slate-800">
                   <span className="font-semibold">Access:</span>{" "}
-                  {String(user?.plan ?? "").toUpperCase() === "FREE"
+                  {planUpper === "FREE"
                     ? "You’re on the FREE plan — upgrade anytime to unlock full features."
                     : "You have an active subscription — full access enabled."}
                 </p>
@@ -302,9 +344,7 @@ function ActionRow({
             {subtitle}
           </div>
         </div>
-        <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>
-          →
-        </div>
+        <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
       </div>
     </button>
   );

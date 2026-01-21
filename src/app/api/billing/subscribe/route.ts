@@ -6,9 +6,9 @@ import { getSessionCookieName, verifySession } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
-const PAYSTACK_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || ""; // optional (for subscriptions)
-const PAYSTACK_AMOUNT_KOBO = Number(process.env.PAYSTACK_AMOUNT_KOBO || "0"); // required
-const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || ""; // for callback URL
+const PAYSTACK_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || ""; // optional (subscriptions)
+const PAYSTACK_AMOUNT_KOBO = Number(process.env.PAYSTACK_AMOUNT_KOBO || "0"); // ZAR cents
+const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "";
 
 function cleanBaseUrl(url: string) {
   return url.replace(/\/$/, "");
@@ -16,7 +16,9 @@ function cleanBaseUrl(url: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    // 1) Auth (server-side, cookie)
+    /* -------------------------------------------------
+     * 1) Auth (server-side, cookie-based)
+     * ------------------------------------------------- */
     const cookieName = getSessionCookieName();
     const token = req.cookies.get(cookieName)?.value;
 
@@ -31,11 +33,13 @@ export async function POST(req: NextRequest) {
       select: { id: true, email: true },
     });
 
-    if (!user) {
+    if (!user || !user.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2) Env sanity
+    /* -------------------------------------------------
+     * 2) Environment sanity checks
+     * ------------------------------------------------- */
     if (!PAYSTACK_SECRET_KEY) {
       return NextResponse.json(
         { error: "Missing PAYSTACK_SECRET_KEY env var." },
@@ -43,68 +47,72 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!PAYSTACK_AMOUNT_KOBO || Number.isNaN(PAYSTACK_AMOUNT_KOBO) || PAYSTACK_AMOUNT_KOBO <= 0) {
+    if (!PAYSTACK_AMOUNT_KOBO || PAYSTACK_AMOUNT_KOBO <= 0) {
       return NextResponse.json(
         { error: "Missing/invalid PAYSTACK_AMOUNT_KOBO env var (must be > 0)." },
         { status: 500 }
       );
     }
 
-    // If you're in production, you *really* want an APP_URL for a correct callback.
-    if (process.env.NODE_ENV === "production" && !APP_URL) {
-      return NextResponse.json(
-        { error: "Missing APP_URL env var (required in production for Paystack callback)." },
-        { status: 500 }
-      );
+    const baseUrl =
+      APP_URL !== ""
+        ? cleanBaseUrl(APP_URL)
+        : req.nextUrl.origin; // safe dev fallback
+
+    /* -------------------------------------------------
+     * 3) Initialize Paystack transaction
+     * ------------------------------------------------- */
+    const payload: Record<string, any> = {
+      email: user.email,
+      amount: PAYSTACK_AMOUNT_KOBO, // ZAR cents (e.g. 19900)
+      currency: "ZAR",
+      callback_url: `${baseUrl}/billing`, // 🔥 IMPORTANT
+      metadata: {
+        userId: user.id,
+        source: "ekasi-portal",
+      },
+    };
+
+    // Optional recurring plan
+    if (PAYSTACK_PLAN_CODE) {
+      payload.plan = PAYSTACK_PLAN_CODE;
     }
 
-    // 3) Initialize transaction with Paystack
-    // We intentionally keep the endpoint name as /subscribe so the existing UI continues to work.
-    //
-    // IMPORTANT: We include `reference` later in the redirect URL so the Billing page can
-    // call /api/billing/verify immediately on return.
-
-    const payload: Record<string, any> = {
-  email: user.email,
-  amount: PAYSTACK_AMOUNT_KOBO,
-  callback_url: `${cleanBaseUrl(APP_URL)}/billing/callback`,
-  metadata: {
-    userId: user.id,
-    source: "ekasi-portal",
-  },
-};
-
-    // If you are using Paystack Plans (recurring), set PAYSTACK_PLAN_CODE
-    if (PAYSTACK_PLAN_CODE) payload.plan = PAYSTACK_PLAN_CODE;
-
-    const upstream = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    const upstream = await fetch(
+      "https://api.paystack.co/transaction/initialize",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      }
+    );
 
     const json = await upstream.json().catch(() => null);
 
     if (!upstream.ok || !json?.status) {
-      const msg = json?.message || `Paystack initialize failed (${upstream.status}).`;
+      const msg =
+        json?.message || `Paystack initialize failed (${upstream.status}).`;
       return NextResponse.json({ error: msg }, { status: 502 });
     }
 
-    const authUrl: string | undefined = json?.data?.authorization_url;
+    const authorization_url: string | undefined =
+      json?.data?.authorization_url;
     const reference: string | undefined = json?.data?.reference;
     const access_code: string | undefined = json?.data?.access_code;
 
-    if (!authUrl || !reference) {
+    if (!authorization_url || !reference) {
       return NextResponse.json(
         { error: "Paystack response missing authorization_url or reference." },
         { status: 502 }
       );
     }
 
-    // 4) Persist a pending payment record (helps reconciliation + support)
+    /* -------------------------------------------------
+     * 4) Persist pending payment (idempotent)
+     * ------------------------------------------------- */
     await prisma.payment.upsert({
       where: { reference },
       create: {
@@ -117,7 +125,6 @@ export async function POST(req: NextRequest) {
         raw: json?.data ?? undefined,
       },
       update: {
-        userId: user.id,
         amountKobo: PAYSTACK_AMOUNT_KOBO,
         currency: "ZAR",
         status: "pending" as any,
@@ -125,10 +132,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Return exactly what your UI expects
+    /* -------------------------------------------------
+     * 5) Return exactly what UI expects
+     * ------------------------------------------------- */
     return NextResponse.json(
       {
-        authorization_url: authUrl,
+        authorization_url,
         reference,
         access_code,
       },

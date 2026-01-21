@@ -65,6 +65,16 @@ function statusTone(status: string): "success" | "brand" | "neutral" {
   return "neutral";
 }
 
+function statusDotClass(status: string) {
+  const s = normalizeStatus(status);
+  if (s === "active") return "bg-emerald-500";
+  if (s === "trial" || s === "trialing") return "bg-sky-500";
+  if (s === "past_due") return "bg-amber-500";
+  if (s === "canceled" || s === "cancelled") return "bg-slate-400";
+  if (s === "free") return "bg-slate-400";
+  return "bg-slate-400";
+}
+
 export default function BillingPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -78,7 +88,7 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [ent, setEnt] = useState<Entitlement | null>(null);
-  const [user, setUser] = useState<any>(null); // best-effort for sidebar email display
+  const [user, setUser] = useState<any>(null);
 
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
@@ -86,7 +96,10 @@ export default function BillingPage() {
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyNote, setVerifyNote] = useState<string | null>(null);
 
-  // UI display price (Paystack is source of truth)
+  const [manualRef, setManualRef] = useState("");
+  const [manualErr, setManualErr] = useState<string | null>(null);
+
+  // UI-only display price (Paystack remains source of truth)
   const price = 199;
 
   async function loadEntitlement() {
@@ -102,7 +115,6 @@ export default function BillingPage() {
       return;
     }
 
-    // Correct handling: only treat 401/403 as unauth.
     if (res.status === 401 || res.status === 403) {
       setEnt(null);
       setState("unauth");
@@ -129,17 +141,20 @@ export default function BillingPage() {
     setState("ready");
   }
 
-  async function loadUserNonBlocking() {
-    try {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (!res.ok) return;
-      const data = await res.json().catch(() => null);
-      if (!data) return;
-      setUser(data);
-    } catch {
-      // ignore
-    }
+async function loadUserNonBlocking() {
+  try {
+    const res = await fetch("/api/auth/me", { credentials: "include" });
+    if (!res.ok) return;
+
+    const data = await res.json().catch(() => null);
+    if (!data) return;
+
+    // ✅ FIX: unwrap nested user
+    setUser(data.user ?? data);
+  } catch {
+    // ignore
   }
+}
 
   async function verifyReference(reference: string) {
     const ref = String(reference || "").trim();
@@ -187,15 +202,15 @@ export default function BillingPage() {
       setError(null);
       setUpgradeError(null);
       setVerifyNote(null);
+      setManualErr(null);
 
       try {
         await loadEntitlement();
         if (cancelled) return;
 
-        // best-effort fetch for sidebar email (doesn't gate the page)
         void loadUserNonBlocking();
 
-        // If Paystack redirected back here, verify the reference immediately.
+        // Paystack redirects often include reference or trxref
         const ref = sp.get("reference") || sp.get("trxref") || "";
         if (ref) {
           void verifyReference(ref);
@@ -266,8 +281,19 @@ export default function BillingPage() {
     }
   }
 
+  function onManualVerify() {
+    const ref = manualRef.trim();
+    if (!ref) {
+      setManualErr("Paste your Paystack reference (or trxref) to verify.");
+      return;
+    }
+    setManualErr(null);
+    void verifyReference(ref);
+  }
+
   const heroStatusLabel = statusLabel(status);
   const heroTone = statusTone(status);
+  const heroDot = statusDotClass(status);
 
   return (
     <PortalShell
@@ -324,7 +350,7 @@ export default function BillingPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <Chip tone={heroTone === "success" ? "success" : heroTone === "brand" ? "brand" : "neutral"}>
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className={`h-2 w-2 rounded-full ${heroDot}`} />
                   Status: {heroStatusLabel}
                 </Chip>
 
@@ -386,6 +412,23 @@ export default function BillingPage() {
             <KpiCard label="Price" value={planName === "FREE" ? "—" : `${moneyZar(price)}/mo`} icon="R" />
           </div>
 
+          {/* Notices */}
+          {upgradeError ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {upgradeError}
+            </div>
+          ) : null}
+
+          {verifyLoading ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Verifying payment…
+            </div>
+          ) : verifyNote ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              {verifyNote}
+            </div>
+          ) : null}
+
           {/* Main grid */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* LEFT */}
@@ -397,6 +440,7 @@ export default function BillingPage() {
                 </div>
 
                 <Chip tone={heroTone === "success" ? "success" : heroTone === "brand" ? "brand" : "neutral"}>
+                  <span className={`mr-2 inline-block h-2 w-2 rounded-full ${heroDot}`} />
                   {heroStatusLabel}
                 </Chip>
               </div>
@@ -416,101 +460,154 @@ export default function BillingPage() {
                       </>
                     ) : (
                       <>
-                        Your subscription is <span className="font-semibold">active</span>. Manage or cancel anytime.
+                        Your subscription is <span className="font-semibold">{heroStatusLabel.toLowerCase()}</span>. Manage
+                        or cancel anytime (coming next).
                       </>
                     )}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Billing is powered by Paystack.</p>
-                </div>
-
-                {planName === "FREE" ? (
-                  <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-                    <p className="text-sm font-semibold text-slate-900">Free tier limits</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      After you hit the limits, the desktop app becomes read-only until you subscribe.
-                    </p>
-
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <MiniStat label="Invoices" value={`${limits.invoice}`} />
-                      <MiniStat label="Quotes" value={`${limits.quote}`} />
-                      <MiniStat label="Purchase Orders" value={`${limits.purchase_order}`} />
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {planName === "FREE" ? "Free plan includes:" : "Your plan includes:"}
+                  <p className="mt-1 text-xs text-slate-500">
+                    Paystack handles checkout & tokenization. We only store subscription status.
                   </p>
-
-                  <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                    <Feature ok label="Desktop app access" />
-                    <Feature ok label="Invoice creation" />
-                    <Feature ok label="Customer management" />
-                    <Feature ok={planName !== "FREE"} label="Unlimited invoices" />
-                    <Feature ok={planName !== "FREE"} label="Branded invoices (logo & footer)" />
-                    <Feature ok={planName !== "FREE"} label="Priority support" />
-                  </ul>
                 </div>
-              </div>
 
-              {upgradeError ? (
-                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  {upgradeError}
+                {/* Plan comparison */}
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Plan comparison</p>
+                      <p className="mt-1 text-xs text-slate-500">Quick view of what Pro unlocks.</p>
+                    </div>
+                    <Chip tone="neutral">Free vs Pro</Chip>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <PlanCard
+                      title="FREE"
+                      price="R0"
+                      active={planName === "FREE"}
+                      items={[
+                        { ok: true, label: "Desktop app access" },
+                        { ok: true, label: "Customer management" },
+                        { ok: true, label: `Invoices up to ${limits.invoice}` },
+                        { ok: true, label: `Quotes up to ${limits.quote}` },
+                        { ok: true, label: `Purchase orders up to ${limits.purchase_order}` },
+                        { ok: false, label: "Unlimited invoices & quotes" },
+                        { ok: false, label: "Branded invoices (logo & footer)" },
+                        { ok: false, label: "Priority support" },
+                      ]}
+                    />
+                    <PlanCard
+                      title="PRO"
+                      price={`${moneyZar(price)}/mo`}
+                      active={planName !== "FREE"}
+                      highlight
+                      items={[
+                        { ok: true, label: "Desktop app access" },
+                        { ok: true, label: "Unlimited invoices & quotes" },
+                        { ok: true, label: "Branded invoices (logo & footer)" },
+                        { ok: true, label: "Priority support" },
+                        { ok: true, label: "Future: team access & roles" },
+                        { ok: true, label: "Future: statements & automation" },
+                      ]}
+                    />
+                  </div>
+
+                  {planName === "FREE" ? (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <button
+                        onClick={onUpgrade}
+                        disabled={upgradeLoading}
+                        className={[
+                          "rounded-2xl bg-[#215D63] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition",
+                          "hover:-translate-y-[1px] hover:bg-[#1c4f54]",
+                          upgradeLoading ? "opacity-70" : "",
+                        ].join(" ")}
+                      >
+                        {upgradeLoading ? "Redirecting..." : `Upgrade to Pro (${moneyZar(price)}/mo)`}
+                      </button>
+
+                      <button
+                        onClick={() => loadEntitlement()}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
+                      >
+                        Refresh status
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
 
-              {verifyLoading ? (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  Verifying payment…
+                {/* Paystack flow clarity */}
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <p className="text-sm font-semibold text-slate-900">How payment works</p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <StepTile n="1" title="Checkout on Paystack" body="We redirect you to Paystack’s secure payment page." />
+                    <StepTile n="2" title="Redirect back here" body="Paystack returns you to Billing with a reference." />
+                    <StepTile n="3" title="We verify + unlock Pro" body="We verify the reference, then update your plan." />
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    If verification is delayed (rare), paste the reference below to verify manually.
+                  </p>
                 </div>
-              ) : verifyNote ? (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  {verifyNote}
+
+                {/* Manual verify */}
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Verify payment</p>
+                      <p className="mt-1 text-xs text-slate-500">Paste a Paystack reference / trxref to confirm your payment.</p>
+                    </div>
+                    <Chip tone="neutral">Manual</Chip>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={manualRef}
+                      onChange={(e) => setManualRef(e.target.value)}
+                      placeholder="e.g. 9t5k9m9d0x / trxref"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 shadow-sm outline-none ring-0 placeholder:text-slate-400 focus:border-slate-300"
+                    />
+                    <button
+                      onClick={onManualVerify}
+                      disabled={verifyLoading}
+                      className={[
+                        "rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition",
+                        "hover:-translate-y-[1px] hover:bg-slate-50",
+                        verifyLoading ? "opacity-70" : "",
+                      ].join(" ")}
+                    >
+                      {verifyLoading ? "Verifying…" : "Verify"}
+                    </button>
+                  </div>
+
+                  {manualErr ? (
+                    <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                      {manualErr}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
 
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                {planName === "FREE" ? (
-                  <button
-                    onClick={onUpgrade}
-                    disabled={upgradeLoading}
-                    className={[
-                      "rounded-2xl bg-[#215D63] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition",
-                      "hover:-translate-y-[1px] hover:bg-[#1c4f54]",
-                      upgradeLoading ? "opacity-70" : "",
-                    ].join(" ")}
-                  >
-                    {upgradeLoading ? "Redirecting..." : `Upgrade to Pro (${moneyZar(price)}/mo)`}
-                  </button>
-                ) : (
-                  <button
-                    disabled
-                    className="rounded-2xl bg-[#215D63] px-4 py-2.5 text-sm font-semibold text-white opacity-60"
-                    title="Manage coming next"
-                  >
-                    Manage plan (soon)
-                  </button>
-                )}
-
-                <button
-                  onClick={() => loadEntitlement()}
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
-                >
-                  Refresh status
-                </button>
-
-                <button
-                  disabled
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 opacity-60"
-                  title="Coming next"
-                >
-                  Download receipt (soon)
-                </button>
+                {/* FAQ */}
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                  <p className="text-sm font-semibold text-slate-900">FAQ</p>
+                  <div className="mt-3 space-y-3">
+                    <Faq
+                      q="Do you store my card details?"
+                      a="No. Paystack stores and secures payment methods. eKasiBooks only stores your subscription status."
+                    />
+                    <Faq
+                      q="My plan didn’t update after payment — what now?"
+                      a="Click Refresh. If it still doesn’t update, paste the Paystack reference in Verify payment above."
+                    />
+                    <Faq
+                      q="Can I cancel?"
+                      a="Cancel / manage subscriptions is coming next. For now, support can assist while we ship it."
+                    />
+                  </div>
+                </div>
               </div>
             </PremiumCard>
 
-            {/* RIGHT (premium upgrade) */}
+            {/* RIGHT */}
             <div className="space-y-6">
               <PremiumCard tone="soft">
                 <div className="flex items-start justify-between gap-3">
@@ -627,6 +724,70 @@ function Feature({ ok, label }: { ok: boolean; label: string }) {
       </span>
       <span className={ok ? "" : "text-slate-400"}>{label}</span>
     </li>
+  );
+}
+
+function PlanCard({
+  title,
+  price,
+  items,
+  active,
+  highlight,
+}: {
+  title: string;
+  price: string;
+  items: { ok: boolean; label: string }[];
+  active?: boolean;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-2xl border bg-white p-4",
+        highlight ? "border-[#215D63]/30 ring-1 ring-[#215D63]/20" : "border-slate-200",
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">{title}</div>
+          <div className="mt-1 text-xs text-slate-500">{price}</div>
+        </div>
+        {active ? (
+          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+            Current
+          </span>
+        ) : null}
+      </div>
+
+      <ul className="mt-4 space-y-2 text-sm text-slate-700">
+        {items.map((it) => (
+          <Feature key={it.label} ok={it.ok} label={it.label} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function StepTile({ n, title, body }: { n: string; title: string; body: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-2">
+        <span className="grid h-7 w-7 place-items-center rounded-xl bg-slate-900/5 text-sm font-semibold text-slate-900 ring-1 ring-slate-200">
+          {n}
+        </span>
+        <div className="text-sm font-semibold text-slate-900">{title}</div>
+      </div>
+      <p className="mt-2 text-xs text-slate-600">{body}</p>
+    </div>
+  );
+}
+
+function Faq({ q, a }: { q: string; a: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="text-sm font-semibold text-slate-900">{q}</div>
+      <div className="mt-1 text-sm text-slate-600">{a}</div>
+    </div>
   );
 }
 
