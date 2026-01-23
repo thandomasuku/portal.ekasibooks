@@ -48,6 +48,10 @@ export async function GET(req: NextRequest) {
         id: true,
         email: true,
         createdAt: true,
+        lastLoginAt: true,
+        fullName: true,
+        companyName: true,
+        phone: true,
       },
     });
 
@@ -70,6 +74,12 @@ export async function GET(req: NextRequest) {
         email: user.email,
         displayName,
         createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt,
+
+        // ✅ profile fields (flat)
+        fullName: user.fullName,
+        companyName: user.companyName,
+        phone: user.phone,
 
         // keep existing nested shape too
         user: {
@@ -77,6 +87,12 @@ export async function GET(req: NextRequest) {
           email: user.email,
           displayName,
           createdAt: user.createdAt,
+          lastLoginAt: user.lastLoginAt,
+
+          // ✅ profile fields (nested)
+          fullName: user.fullName,
+          companyName: user.companyName,
+          phone: user.phone,
         },
       },
       { status: 200, headers: noStoreHeaders() }

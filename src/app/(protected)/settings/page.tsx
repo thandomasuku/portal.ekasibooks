@@ -26,6 +26,11 @@ function normalizePlan(plan?: string | null) {
   return String(plan ?? "FREE").toUpperCase();
 }
 
+function cleanStr(v: any, max: number) {
+  const s = String(v ?? "").trim();
+  return s ? s.slice(0, max) : "";
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -35,11 +40,33 @@ export default function SettingsPage() {
     return next && next.startsWith("/") ? next : "/settings";
   }, [sp]);
 
-  const [user, setUser] = useState<any>(null); // { authenticated, user: { id,email,... } } OR { id,email } depending on your API
+  const [user, setUser] = useState<any>(null);
   const [ent, setEnt] = useState<Entitlement | null>(null);
 
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Edit Profile Modal state ----
+  const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formMsg, setFormMsg] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const [form, setForm] = useState<{ fullName: string; companyName: string; phone: string }>({
+    fullName: "",
+    companyName: "",
+    phone: "",
+  });
+
+  // ---- Password Modal (OTP step-up) ----
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwStep, setPwStep] = useState<"request" | "verify">("request");
+  const [pwSending, setPwSending] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const [pwForm, setPwForm] = useState<{ otpCode: string; newPassword: string; confirmPassword: string }>({
+    otpCode: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   async function loadAll() {
     setState("loading");
@@ -47,7 +74,11 @@ export default function SettingsPage() {
 
     try {
       // 1) Auth identity (email/id)
-      const meRes = await fetch("/api/auth/me", { credentials: "include" });
+      const meRes = await fetch(`/api/auth/me?ts=${Date.now()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+
       if (meRes.status === 401 || meRes.status === 403) {
         setUser(null);
         setEnt(null);
@@ -69,15 +100,17 @@ export default function SettingsPage() {
         return;
       }
 
-      // your /api/auth/me currently returns { authenticated, user: {...} }
+      // /api/auth/me returns { authenticated, user: {...} }
       const meUser = meJson?.user ?? meJson;
       setUser(meUser);
 
-      // 2) Entitlement (plan) — best-effort (don’t block settings if it fails)
+      // 2) Entitlement (plan) — best-effort
       try {
-        const entRes = await fetch("/api/entitlement", { credentials: "include" });
+        const entRes = await fetch(`/api/entitlement?ts=${Date.now()}`, {
+          credentials: "include",
+          cache: "no-store",
+        });
 
-        // If entitlement says unauth, treat as unauth
         if (entRes.status === 401 || entRes.status === 403) {
           setUser(null);
           setEnt(null);
@@ -90,7 +123,7 @@ export default function SettingsPage() {
           if (entJson) setEnt(entJson);
         }
       } catch {
-        // ignore (settings can still render)
+        // ignore
       }
 
       setState("ready");
@@ -125,10 +158,161 @@ export default function SettingsPage() {
       ? "We couldn’t confirm your session."
       : "Loading account details...";
 
-  // Password plan (UX messaging only for now)
-  const passwordMode = "OTP sign-in (current)";
-  const passwordNote =
-    "You’re currently using OTP sign-in. In a future update, you’ll be able to set a password (optional) and manage sessions.";
+  const canEditProfile = state === "ready" && !(ent?.features?.readOnly);
+  const canManageSecurity = state === "ready" && !(ent?.features?.readOnly);
+
+  function openEdit() {
+    setFormMsg(null);
+
+    const u = user ?? {};
+    setForm({
+      fullName: cleanStr(u?.fullName, 80),
+      companyName: cleanStr(u?.companyName, 120),
+      phone: cleanStr(u?.phone, 30),
+    });
+
+    setEditOpen(true);
+  }
+
+  async function saveProfile() {
+    if (saving) return;
+    setSaving(true);
+    setFormMsg(null);
+
+    try {
+      const payload = {
+        fullName: cleanStr(form.fullName, 80),
+        companyName: cleanStr(form.companyName, 120),
+        phone: cleanStr(form.phone, 30),
+      };
+
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.error || "Failed to save profile");
+
+      setFormMsg({ type: "success", text: "Profile saved." });
+
+      // Optimistic UI update (instant refresh)
+      setUser((prev: any) => {
+        const base = prev ?? {};
+        return { ...base, ...payload };
+      });
+
+      setEditOpen(false);
+
+      // Best-effort refetch (sync)
+      loadAll();
+    } catch (e: any) {
+      setFormMsg({ type: "error", text: e?.message || "Failed to save profile" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openPassword() {
+    setPwMsg(null);
+    setPwStep("request");
+    setPwForm({ otpCode: "", newPassword: "", confirmPassword: "" });
+    setPwOpen(true);
+  }
+
+  // NOTE:
+  // This expects you to have an endpoint that sends an OTP to the currently logged-in user.
+  // Recommended route: POST /api/auth/request-otp  (server should use session user email, NOT client-supplied email)
+  async function requestPasswordOtp() {
+    if (pwSending) return;
+    setPwSending(true);
+    setPwMsg(null);
+
+    try {
+      const res = await fetch("/api/auth/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        // keep body minimal; server should derive email from session
+        body: JSON.stringify({ purpose: "PASSWORD_UPDATE" }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.error || "Failed to send OTP");
+
+      setPwMsg({
+        type: "success",
+        text: "OTP sent. Check your inbox (and spam).",
+      });
+      setPwStep("verify");
+    } catch (e: any) {
+      setPwMsg({ type: "error", text: e?.message || "Failed to send OTP" });
+    } finally {
+      setPwSending(false);
+    }
+  }
+
+  // This expects you to create the step-up password update endpoint:
+  // POST /api/auth/password/update  { otpCode, newPassword }
+  async function submitPasswordUpdate() {
+    if (pwSaving) return;
+    setPwSaving(true);
+    setPwMsg(null);
+
+    try {
+      const otpCode = cleanStr(pwForm.otpCode, 12);
+      const newPassword = String(pwForm.newPassword ?? "");
+      const confirmPassword = String(pwForm.confirmPassword ?? "");
+
+      if (!otpCode || otpCode.length < 4) throw new Error("Please enter the OTP code.");
+      if (!newPassword || newPassword.length < 8) throw new Error("Password must be at least 8 characters.");
+      if (newPassword !== confirmPassword) throw new Error("Passwords do not match.");
+
+      const res = await fetch("/api/auth/password/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({ otpCode, newPassword }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.error || "Failed to update password");
+
+      setPwMsg({ type: "success", text: "Password updated successfully." });
+
+      // close after a beat (optional)
+      setTimeout(() => {
+        setPwOpen(false);
+        setPwStep("request");
+        setPwForm({ otpCode: "", newPassword: "", confirmPassword: "" });
+      }, 600);
+    } catch (e: any) {
+      setPwMsg({ type: "error", text: e?.message || "Failed to update password" });
+    } finally {
+      setPwSaving(false);
+    }
+  }
+
+  const formMsgClass =
+    !formMsg
+      ? ""
+      : formMsg.type === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : formMsg.type === "error"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : "border-sky-200 bg-sky-50 text-sky-800";
+
+  const pwMsgClass =
+    !pwMsg
+      ? ""
+      : pwMsg.type === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : pwMsg.type === "error"
+      ? "border-red-200 bg-red-50 text-red-800"
+      : "border-sky-200 bg-sky-50 text-sky-800";
 
   return (
     <PortalShell
@@ -137,7 +321,7 @@ export default function SettingsPage() {
       subtitle={subtitle}
       userEmail={user?.email ?? null}
       planName={planName}
-      tipText="Tip: OTP is a secure way to sign in — password & sessions management will be added next."
+      tipText="Tip: For security, changing a password requires an OTP verification (step-up)."
       headerRight={
         <button
           onClick={() => loadAll()}
@@ -186,7 +370,7 @@ export default function SettingsPage() {
 
                 <h2 className="mt-3 text-xl font-semibold text-slate-900">Keep your account safe.</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Review your profile info and security options — password & sessions will unlock as APIs are enabled.
+                  Review your profile info and security options. Password changes are protected by OTP verification.
                 </p>
               </div>
 
@@ -239,19 +423,30 @@ export default function SettingsPage() {
                 <DetailTile label="Email" value={userEmail} />
                 <DetailTile label="Plan" value={planName} />
                 <DetailTile label="Account ID" value={userId} />
+
+                <DetailTile label="Full name" value={String(user?.fullName ?? "—")} />
+                <DetailTile label="Company" value={String(user?.companyName ?? "—")} />
+                <DetailTile label="Phone" value={String(user?.phone ?? "—")} />
               </div>
 
               <div className="mt-6 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                <p className="text-sm text-slate-700">Profile editing will be enabled once the API supports updates.</p>
-                <p className="mt-1 text-xs text-slate-500">For now, contact support if you need to change your email.</p>
+                <p className="text-sm text-slate-700">
+                  You can edit your profile details below. Email changes will be added later with verification.
+                </p>
+                <p className="mt-1 text-xs text-slate-500">If your account is read-only, profile updates are disabled.</p>
               </div>
 
               <button
-                disabled
-                className="mt-6 w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-900 opacity-60"
-                title="Coming soon"
+                disabled={!canEditProfile}
+                onClick={openEdit}
+                className={[
+                  "mt-6 w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-900 transition",
+                  canEditProfile ? "hover:bg-slate-50" : "opacity-60 cursor-not-allowed",
+                ].join(" ")}
+                title={!canEditProfile ? "Your account is read-only or unavailable right now" : "Edit your profile"}
+                type="button"
               >
-                Edit profile (soon)
+                Edit profile
               </button>
             </PremiumCard>
 
@@ -261,21 +456,29 @@ export default function SettingsPage() {
               <p className="mt-1 text-sm text-slate-600">Password, sessions, and access controls.</p>
 
               <div className="mt-6 space-y-3">
+                {/* Replace “choose sign-in method” with a clear read-only status */}
                 <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <p className="text-sm text-slate-800">
-                    <span className="font-semibold">Sign-in method:</span> {passwordMode}
+                    <span className="font-semibold">Login methods enabled:</span>
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">{passwordNote}</p>
+                  <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                    <li>• OTP sign-in (enabled)</li>
+                    <li>• Email + password (optional — once you set a password)</li>
+                  </ul>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Changing your password requires OTP verification to protect your account.
+                  </p>
                 </div>
 
                 <ActionRow
                   title="Password"
-                  subtitle="Set / change your account password (coming soon)"
+                  subtitle="Set / change your password (requires OTP)"
                   icon="🔒"
                   tone="neutral"
-                  disabled
-                  onClick={() => {}}
+                  disabled={!canManageSecurity}
+                  onClick={openPassword}
                 />
+
                 <ActionRow
                   title="Active sessions"
                   subtitle="View and manage logged-in devices (coming soon)"
@@ -296,13 +499,220 @@ export default function SettingsPage() {
               </div>
 
               <button
-                disabled
-                className="mt-6 w-full rounded-2xl bg-slate-900 py-2.5 text-sm font-semibold text-white opacity-60"
-                title="Coming soon"
+                disabled={!canManageSecurity}
+                onClick={openPassword}
+                className={[
+                  "mt-6 w-full rounded-2xl py-2.5 text-sm font-semibold text-white transition",
+                  canManageSecurity ? "bg-slate-900 hover:bg-slate-800" : "bg-slate-900 opacity-60 cursor-not-allowed",
+                ].join(" ")}
+                title={!canManageSecurity ? "Your account is read-only or unavailable right now" : "Set / change password"}
+                type="button"
               >
-                Change password (soon)
+                Set / change password
               </button>
             </PremiumCard>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Edit Profile Modal ---------- */}
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Edit profile</h3>
+                <p className="mt-1 text-sm text-slate-600">Update your profile details. Email changes are not supported yet.</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditOpen(false)}
+                className="rounded-xl px-2 py-1 text-slate-500 hover:bg-slate-100"
+                aria-label="Close"
+                disabled={saving}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {formMsg && <div className={["rounded-xl border px-3 py-2 text-sm", formMsgClass].join(" ")}>{formMsg.text}</div>}
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Full name</span>
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                  value={form.fullName}
+                  onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
+                  placeholder="e.g. Syrus Masuku"
+                  disabled={saving}
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Company name</span>
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                  value={form.companyName}
+                  onChange={(e) => setForm((p) => ({ ...p, companyName: e.target.value }))}
+                  placeholder="e.g. Onkabetse IT Solutions"
+                  disabled={saving}
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Phone</span>
+                <input
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                  value={form.phone}
+                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                  placeholder="e.g. +27 71 234 5678"
+                  disabled={saving}
+                />
+                <p className="mt-1 text-xs text-slate-500">Tip: Use numbers, spaces, +, dashes, brackets.</p>
+              </label>
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditOpen(false)}
+                className="flex-1 rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
+                disabled={saving}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={saveProfile}
+                className="flex-1 rounded-xl bg-[#215D63] py-2 font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Password Modal (OTP step-up) ---------- */}
+      {pwOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Set / change password</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  For security, we’ll verify your account with an OTP before updating your password.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPwOpen(false)}
+                className="rounded-xl px-2 py-1 text-slate-500 hover:bg-slate-100"
+                aria-label="Close"
+                disabled={pwSending || pwSaving}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {pwMsg && <div className={["rounded-xl border px-3 py-2 text-sm", pwMsgClass].join(" ")}>{pwMsg.text}</div>}
+
+              {pwStep === "request" ? (
+                <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
+                  <p className="text-sm text-slate-800">
+                    We’ll send an OTP to <span className="font-semibold">{userEmail}</span>.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Click “Send OTP”, then enter the code and your new password.</p>
+
+                  <button
+                    type="button"
+                    onClick={requestPasswordOtp}
+                    className="mt-4 w-full rounded-xl bg-[#215D63] py-2 font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
+                    disabled={pwSending}
+                  >
+                    {pwSending ? "Sending..." : "Send OTP"}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">OTP code</span>
+                    <input
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                      value={pwForm.otpCode}
+                      onChange={(e) => setPwForm((p) => ({ ...p, otpCode: e.target.value }))}
+                      placeholder="Enter OTP"
+                      disabled={pwSaving}
+                    />
+                    <div className="mt-2 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={requestPasswordOtp}
+                        className="text-xs font-semibold text-[#215D63] hover:underline disabled:opacity-60"
+                        disabled={pwSending || pwSaving}
+                      >
+                        {pwSending ? "Sending..." : "Resend OTP"}
+                      </button>
+                      <span className="text-xs text-slate-500">Check spam if you don’t see it.</span>
+                    </div>
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">New password</span>
+                    <input
+                      type="password"
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                      value={pwForm.newPassword}
+                      onChange={(e) => setPwForm((p) => ({ ...p, newPassword: e.target.value }))}
+                      placeholder="At least 8 characters"
+                      disabled={pwSaving}
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">Confirm new password</span>
+                    <input
+                      type="password"
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                      value={pwForm.confirmPassword}
+                      onChange={(e) => setPwForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                      placeholder="Repeat password"
+                      disabled={pwSaving}
+                    />
+                  </label>
+
+                  <div className="mt-2 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPwMsg(null);
+                        setPwStep("request");
+                        setPwForm({ otpCode: "", newPassword: "", confirmPassword: "" });
+                      }}
+                      className="flex-1 rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
+                      disabled={pwSaving || pwSending}
+                    >
+                      Back
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={submitPasswordUpdate}
+                      className="flex-1 rounded-xl bg-slate-900 py-2 font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      disabled={pwSaving}
+                    >
+                      {pwSaving ? "Updating..." : "Update password"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

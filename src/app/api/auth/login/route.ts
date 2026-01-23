@@ -57,6 +57,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ✅ Update last login timestamp on successful auth
+    // Do NOT block login if this fails — but we’ll try.
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+        select: { id: true }, // keep it light
+      });
+    } catch (e) {
+      console.warn("[auth/login] failed to update lastLoginAt", e);
+    }
+
     // Session duration:
     // - remember=false => 1 day (reduces risk if device is shared)
     // - remember=true  => SESSION_DAYS

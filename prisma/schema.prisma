@@ -39,6 +39,12 @@ model User {
   passwordHash String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
+
+  // ✅ Editable profile fields
+  fullName     String?
+  companyName  String?
+  phone        String?
 
   otpCodes     OtpCode[]
   payments     Payment[]

@@ -20,6 +20,9 @@ export default function LoginClient() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
+  // Show dev OTP (if API returns devCode in non-prod)
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+
   const isBusy = pwLoading || otpLoading;
 
   const emailOk = useMemo(() => {
@@ -38,6 +41,9 @@ export default function LoginClient() {
   function showSuccess(text: string) {
     setMsg({ type: "success", text });
   }
+  function showInfo(text: string) {
+    setMsg({ type: "info", text });
+  }
 
   async function loginWithPassword() {
     if (isBusy) return;
@@ -46,6 +52,7 @@ export default function LoginClient() {
 
     setPwLoading(true);
     setMsg(null);
+    setDevOtp(null);
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -77,6 +84,12 @@ export default function LoginClient() {
 
     setOtpLoading(true);
     setMsg(null);
+    setDevOtp(null);
+
+    // Set expectations immediately (zero-budget fix for slow SMTP)
+    showInfo(
+      "Requesting OTP… delivery can take up to 1–2 minutes on some email providers. Please also check spam/promotions."
+    );
 
     try {
       const res = await fetch("/api/auth/request-otp", {
@@ -89,7 +102,15 @@ export default function LoginClient() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as any)?.error || "OTP request failed");
 
-      showSuccess("OTP sent. Redirecting...");
+      // If API returns devCode in non-prod, show it to speed up testing
+      if (!isProd && (data as any)?.devCode) {
+        setDevOtp(String((data as any).devCode));
+      }
+
+      showSuccess(
+        "OTP requested. If it doesn’t arrive within 2 minutes, check spam/promotions or tap Resend on the next screen."
+      );
+
       const qs = new URLSearchParams({
         email: email.trim().toLowerCase(),
         remember: remember ? "1" : "0",
@@ -184,6 +205,15 @@ export default function LoginClient() {
                   </div>
                 )}
 
+                {!isProd && devOtp && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Dev OTP:{" "}
+                    <span className="font-mono font-semibold tracking-widest">
+                      {devOtp}
+                    </span>
+                  </div>
+                )}
+
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">Email</span>
                   <input
@@ -240,9 +270,14 @@ export default function LoginClient() {
                     title={!emailOk ? "Enter a valid email first" : undefined}
                     type="button"
                   >
-                    {otpLoading ? "Sending OTP..." : "Request OTP instead"}
+                    {otpLoading ? "Requesting OTP..." : "Request OTP instead"}
                   </button>
                 </div>
+
+                <p className="text-xs text-slate-500">
+                  OTP emails can sometimes be delayed (up to a few minutes) depending on your
+                  inbox provider. Please check spam/promotions if you don’t see it.
+                </p>
 
                 <p className="text-xs text-slate-500">
                   Tip: OTP is handy when you don’t want to type your password. Password

@@ -105,16 +105,20 @@ export async function POST(req: NextRequest) {
       return res;
     }
 
-    // Mark OTP used
-    await prisma.otpCode.update({
-      where: { id: otp.id },
-      data: { usedAt: now },
-    });
+    // ✅ Mark OTP used + ensure user exists + update lastLoginAt (atomic)
+    const user = await prisma.$transaction(async (tx) => {
+      await tx.otpCode.update({
+        where: { id: otp.id },
+        data: { usedAt: now },
+      });
 
-    const user = await prisma.user.upsert({
-      where: { email: e },
-      update: {},
-      create: { email: e },
+      const u = await tx.user.upsert({
+        where: { email: e },
+        update: { lastLoginAt: now }, // ✅ update on OTP login too
+        create: { email: e, lastLoginAt: now }, // ✅ new users get stamped
+      });
+
+      return u;
     });
 
     const maxAgeSeconds = (remember ? SESSION_DAYS : 1) * 24 * 60 * 60;
