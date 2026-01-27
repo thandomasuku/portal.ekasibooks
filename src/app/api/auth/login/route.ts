@@ -1,39 +1,69 @@
+// src/app/api/auth/login/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/db";
 import { buildSessionCookie, signSession } from "@/lib/auth";
 
-const SESSION_DAYS = 7;
+export const dynamic = "force-dynamic";
 
-function noStoreHeaders() {
-  return {
-    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-    Pragma: "no-cache",
-  };
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ success: false, error: message }, { status });
+}
+
+function getClientMeta(req: NextRequest) {
+  const userAgent = req.headers.get("user-agent") || "";
+
+  // If x-forwarded-for contains a list, take the first IP
+  const xff = req.headers.get("x-forwarded-for") || "";
+  const ip =
+    (xff.split(",")[0] || "").trim() ||
+    (req.headers.get("x-real-ip") || "").trim() ||
+    "";
+
+  return { userAgent, ip };
+}
+
+/**
+ * ✅ Enforce "1 active session per account":
+ * revoke ALL existing active sessions for this user, then create a fresh one.
+ * (Done in a transaction to avoid races.)
+ */
+async function createSingleActiveSession(userId: string, meta: { userAgent: string; ip: string }) {
+  const now = new Date();
+
+  return await prisma.$transaction(async (tx) => {
+    // revoke all active sessions
+    await tx.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: now },
+    });
+
+    // create the new single active session
+    const session = await tx.session.create({
+      data: {
+        userId,
+        userAgent: meta.userAgent,
+        ip: String(meta.ip || "").slice(0, 190),
+        createdAt: now,
+        lastSeenAt: now,
+        revokedAt: null,
+      },
+      select: { id: true },
+    });
+
+    return session;
+  });
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({} as any));
+    const body = await req.json().catch(() => ({}));
+    const email = String(body?.email || "").trim().toLowerCase();
+    const password = String(body?.password || "");
 
-    const email = String(body?.email ?? "").trim().toLowerCase();
-    const password = String(body?.password ?? "");
-    const remember = Boolean(body?.remember);
-
-    if (!email || !email.includes("@")) {
-      return NextResponse.json(
-        { error: "Invalid email" },
-        { status: 400, headers: noStoreHeaders() }
-      );
-    }
-
-    if (!password) {
-      // Keep message simple; UI can show "password required"
-      return NextResponse.json(
-        { error: "Password is required" },
-        { status: 400, headers: noStoreHeaders() }
-      );
+    if (!email || !password) {
+      return jsonError("Email and password are required.", 400);
     }
 
     const user = await prisma.user.findUnique({
@@ -41,56 +71,32 @@ export async function POST(req: NextRequest) {
       select: { id: true, email: true, passwordHash: true },
     });
 
-    // IMPORTANT: do not reveal which part failed (email vs password)
-    if (!user?.passwordHash) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401, headers: noStoreHeaders() }
-      );
+    if (!user || !user.passwordHash) {
+      return jsonError("Invalid email or password.", 401);
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401, headers: noStoreHeaders() }
-      );
-    }
+    if (!ok) return jsonError("Invalid email or password.", 401);
 
-    // ✅ Update last login timestamp on successful auth
-    // Do NOT block login if this fails — but we’ll try.
-    try {
-      await prisma.user.update({
+    // ✅ Enforce 1 session/account in portal (last login wins)
+    const meta = getClientMeta(req);
+    const session = await createSingleActiveSession(user.id, meta);
+
+    const token = await signSession(user.id, session.id);
+
+    // update last login (best-effort)
+    prisma.user
+      .update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() },
-        select: { id: true }, // keep it light
-      });
-    } catch (e) {
-      console.warn("[auth/login] failed to update lastLoginAt", e);
-    }
+      })
+      .catch(() => {});
 
-    // Session duration:
-    // - remember=false => 1 day (reduces risk if device is shared)
-    // - remember=true  => SESSION_DAYS
-    const maxAgeSeconds = (remember ? SESSION_DAYS : 1) * 24 * 60 * 60;
-
-    // Rotate session on every login
-    const token = await signSession({ sub: user.id, email: user.email }, maxAgeSeconds);
-
-    const res = NextResponse.json(
-      { ok: true, user: { id: user.id, email: user.email } },
-      { status: 200, headers: noStoreHeaders() }
-    );
-
-    // HttpOnly + SameSite + Secure(in prod) handled inside buildSessionCookie
-    res.headers.append("set-cookie", buildSessionCookie(token, maxAgeSeconds));
-
+    const res = NextResponse.json({ success: true }, { status: 200 });
+    res.cookies.set(buildSessionCookie(token));
     return res;
-  } catch (err: any) {
-    console.error("[auth/login] error", err?.message || err);
-    return NextResponse.json(
-      { error: "Login failed" },
-      { status: 500, headers: noStoreHeaders() }
-    );
+  } catch (err) {
+    console.error("Login failed:", err);
+    return jsonError("Login failed. Please try again.", 500);
   }
 }

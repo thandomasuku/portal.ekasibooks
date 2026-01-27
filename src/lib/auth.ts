@@ -1,58 +1,113 @@
+// src/lib/auth.ts
 import { SignJWT, jwtVerify } from "jose";
+import { prisma } from "@/lib/db";
 
 const COOKIE_NAME = "ekasi_session";
 
-function getSecret() {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error("Missing AUTH_SECRET");
+// 30 days default (same vibe as you already have)
+const SESSION_TTL_DAYS = 30;
+
+type SessionJwtPayload = {
+  userId: string;
+  sessionId: string;
+  iat: number;
+  exp: number;
+};
+
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error("Missing JWT_SECRET (or NEXTAUTH_SECRET) env var");
+  }
   return new TextEncoder().encode(secret);
 }
-
-export type SessionPayload = {
-  sub: string;
-  email: string;
-};
 
 export function getSessionCookieName() {
   return COOKIE_NAME;
 }
 
-export async function signSession(payload: SessionPayload, maxAgeSeconds: number) {
+export function buildSessionCookie(token: string) {
+  // keep your cookie behavior: httpOnly, secure in prod, sameSite lax
+  return {
+    name: COOKIE_NAME,
+    value: token,
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * SESSION_TTL_DAYS,
+  };
+}
+
+export async function signSession(userId: string, sessionId: string) {
+  const secret = getJwtSecret();
+
   const now = Math.floor(Date.now() / 1000);
-  return await new SignJWT({ email: payload.email })
+  const exp = now + 60 * 60 * 24 * SESSION_TTL_DAYS;
+
+  return await new SignJWT({ userId, sessionId } satisfies Omit<
+    SessionJwtPayload,
+    "iat" | "exp"
+  >)
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(payload.sub)
     .setIssuedAt(now)
-    .setExpirationTime(now + maxAgeSeconds)
-    .sign(getSecret());
+    .setExpirationTime(exp)
+    .sign(secret);
 }
 
-export async function verifySession(token: string) {
-  const { payload } = await jwtVerify(token, getSecret());
-  const sub = payload.sub;
-  const email = (payload as any).email;
-  if (!sub || typeof sub !== "string" || !email || typeof email !== "string") {
-    throw new Error("Invalid session");
+async function verifyJwtOnly(token: string): Promise<SessionJwtPayload> {
+  const secret = getJwtSecret();
+  const { payload } = await jwtVerify(token, secret);
+
+  const userId = String((payload as any)?.userId || "").trim();
+  const sessionId = String((payload as any)?.sessionId || "").trim();
+
+  if (!userId || !sessionId) {
+    throw new Error("Invalid session token payload");
   }
-  return { userId: sub, email };
+
+  // iat/exp are validated by jwtVerify already, but keep shape consistent
+  return {
+    userId,
+    sessionId,
+    iat: Number((payload as any)?.iat ?? 0) || 0,
+    exp: Number((payload as any)?.exp ?? 0) || 0,
+  };
 }
 
-export function buildSessionCookie(token: string, maxAgeSeconds: number) {
-  const isProd = process.env.NODE_ENV === "production";
-  const attrs = [
-    `${COOKIE_NAME}=${token}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${maxAgeSeconds}`,
-  ];
-  if (isProd) attrs.push("Secure");
-  return attrs.join("; ");
+/**
+ * ✅ Portal enforcement hook:
+ * - verify JWT
+ * - check session exists + not revoked
+ * - touch lastSeenAt
+ */
+export async function verifySession(token: string) {
+  const decoded = await verifyJwtOnly(token);
+
+  const session = await prisma.session.findUnique({
+    where: { id: decoded.sessionId },
+    select: { id: true, userId: true, revokedAt: true },
+  });
+
+  if (!session) throw new Error("Session not found");
+  if (session.revokedAt) throw new Error("Session revoked");
+  if (session.userId !== decoded.userId) throw new Error("Session mismatch");
+
+  // touch (best-effort)
+  prisma.session
+    .update({
+      where: { id: session.id },
+      data: { lastSeenAt: new Date() },
+    })
+    .catch(() => {});
+
+  return { userId: decoded.userId, sessionId: decoded.sessionId };
 }
 
-export function buildLogoutCookie() {
-  const isProd = process.env.NODE_ENV === "production";
-  const parts = [`${COOKIE_NAME}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
-  if (isProd) parts.push("Secure");
-  return parts.join("; ");
+/**
+ * For logout: we want to extract sessionId even if DB check fails
+ * (e.g. session already revoked/deleted).
+ */
+export async function decodeSession(token: string) {
+  return await verifyJwtOnly(token);
 }

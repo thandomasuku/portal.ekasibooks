@@ -33,6 +33,25 @@ enum EntitlementStatus {
   blocked
 }
 
+model Session {
+  id        String   @id @default(cuid())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  // optional diagnostics
+  userAgent String   @default("")
+  ip        String   @default("")
+
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+  @@index([userId, lastSeenAt])
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -50,7 +69,11 @@ model User {
   payments     Payment[]
   subscription Subscription?
   entitlement  Entitlement?
+
+  // ✅ NEW: server-tracked sessions (for max 2 sessions enforcement)
+  sessions     Session[]
 }
+
 
 model OtpCode {
   id        String    @id @default(cuid())
