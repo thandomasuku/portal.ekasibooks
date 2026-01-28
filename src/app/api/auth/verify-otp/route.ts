@@ -1,3 +1,4 @@
+// src/app/api/auth/verify-otp/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
@@ -5,134 +6,140 @@ import { buildSessionCookie, signSession } from "@/lib/auth";
 
 const SESSION_DAYS = 7;
 
-// Brute-force protection (cookie-based)
-const ATTEMPT_COOKIE = "ekb_otp_attempts";
-const ATTEMPT_WINDOW_SECONDS = 10 * 60; // 10 minutes
-const MAX_ATTEMPTS = 5;
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ success: false, error: message }, { status });
+}
 
-function parseAttemptsCookie(raw?: string | null) {
-  if (!raw) return null;
-  try {
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object") return null;
-    return {
-      email: typeof obj.email === "string" ? obj.email : "",
-      n: typeof obj.n === "number" ? obj.n : 0,
-      ts: typeof obj.ts === "number" ? obj.ts : 0,
-    };
-  } catch {
-    return null;
+function getClientMeta(req: NextRequest) {
+  const userAgent = req.headers.get("user-agent") || "";
+  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+  return { userAgent, ip };
+}
+
+// ✅ 1 active session per account (revoke older before creating new)
+async function enforceMaxSessions(userId: string, max = 1) {
+  const sessions = await prisma.session.findMany({
+    where: { userId, revokedAt: null },
+    orderBy: [{ lastSeenAt: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+
+  if (sessions.length < max) return;
+
+  const toRevokeCount = sessions.length - (max - 1);
+  const toRevoke = sessions.slice(0, Math.max(0, toRevokeCount));
+
+  if (toRevoke.length) {
+    await prisma.session.updateMany({
+      where: { id: { in: toRevoke.map((s) => s.id) } },
+      data: { revokedAt: new Date() },
+    });
   }
-}
-
-function attemptsCookieValue(email: string, n: number) {
-  return JSON.stringify({ email, n, ts: Date.now() });
-}
-
-function setAttemptsCookie(res: NextResponse, email: string, n: number) {
-  const isProd = process.env.NODE_ENV === "production";
-  res.headers.append(
-    "set-cookie",
-    `${ATTEMPT_COOKIE}=${encodeURIComponent(attemptsCookieValue(email, n))}; Path=/; Max-Age=${ATTEMPT_WINDOW_SECONDS}; HttpOnly; SameSite=Lax${
-      isProd ? "; Secure" : ""
-    }`
-  );
-}
-
-function clearAttemptsCookie(res: NextResponse) {
-  const isProd = process.env.NODE_ENV === "production";
-  res.headers.append(
-    "set-cookie",
-    `${ATTEMPT_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${isProd ? "; Secure" : ""}`
-  );
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({} as any));
+    const body = await req.json().catch(() => ({}));
+    const email = String(body?.email || "").trim().toLowerCase();
 
-    // Accept common client payload shapes
-    const rawEmail = body?.email ?? body?.user?.email ?? body?.identifier ?? "";
-    const rawCode = body?.code ?? body?.otp ?? body?.otpCode ?? body?.passcode ?? "";
+    // ✅ Backward compatible: accept `code` or `otp`
+    const rawCode = body?.code ?? body?.otp ?? "";
+    const code = String(rawCode).trim();
+
     const remember = Boolean(body?.remember);
 
-    const e = String(rawEmail || "").trim().toLowerCase();
-    const c = String(rawCode || "").trim();
-
-    if (!e || !e.includes("@")) {
-      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
-    }
-    if (!c || c.length < 4) {
-      return NextResponse.json({ error: "Invalid code" }, { status: 400 });
+    if (!email || !email.includes("@")) {
+      return jsonError("Invalid email.", 400);
     }
 
-    // ---- Attempt lockout (cookie-based) ----
-    const attempts = parseAttemptsCookie(req.cookies.get(ATTEMPT_COOKIE)?.value ?? null);
-    const nowMs = Date.now();
-
-    if (attempts && attempts.email === e && attempts.ts && nowMs - attempts.ts < ATTEMPT_WINDOW_SECONDS * 1000) {
-      if (attempts.n >= MAX_ATTEMPTS) {
-        return NextResponse.json(
-          { error: "Too many attempts. Please request a new code and try again shortly." },
-          { status: 429 }
-        );
-      }
+    if (!code) {
+      return jsonError("OTP code is required.", 400);
     }
 
-    const now = new Date();
+    // Optional: enforce format (6 digits). If you sometimes use alphanumeric OTP, remove this.
+    if (!/^\d{6}$/.test(code)) {
+      return jsonError("OTP must be a 6-digit code.", 400);
+    }
 
-    // Match an unused, unexpired OTP
+    // Find OTP (unused + not expired)
     const otp = await prisma.otpCode.findFirst({
       where: {
-        email: e,
-        code: c,
+        email,
+        code,
         usedAt: null,
-        expiresAt: { gt: now },
+        expiresAt: { gt: new Date() },
       },
-      orderBy: { createdAt: "desc" },
+      select: { id: true, userId: true },
     });
 
     if (!otp) {
-      // Slight delay slows brute forcing (without breaking UX)
-      await new Promise((r) => setTimeout(r, 350));
-
-      const res = NextResponse.json({ error: "Invalid or expired code" }, { status: 401 });
-
-      const prevN =
-        attempts && attempts.email === e && nowMs - attempts.ts < ATTEMPT_WINDOW_SECONDS * 1000 ? attempts.n : 0;
-
-      setAttemptsCookie(res, e, prevN + 1);
-      return res;
+      return jsonError("Invalid or expired OTP code.", 401);
     }
 
-    // ✅ Mark OTP used + ensure user exists + update lastLoginAt (atomic)
-    const user = await prisma.$transaction(async (tx) => {
-      await tx.otpCode.update({
-        where: { id: otp.id },
-        data: { usedAt: now },
-      });
-
-      const u = await tx.user.upsert({
-        where: { email: e },
-        update: { lastLoginAt: now }, // ✅ update on OTP login too
-        create: { email: e, lastLoginAt: now }, // ✅ new users get stamped
-      });
-
-      return u;
+    // Mark OTP used (best practice to prevent replay)
+    await prisma.otpCode.update({
+      where: { id: otp.id },
+      data: { usedAt: new Date() },
     });
 
+    // Load or create user (depends on how you flow OTP)
+    let user = otp.userId
+      ? await prisma.user.findUnique({
+          where: { id: otp.userId },
+          select: { id: true, email: true },
+        })
+      : await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, email: true },
+        });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email },
+        select: { id: true, email: true },
+      });
+    }
+
+    // ✅ Enforce single active session then create a new session for this login
+    await enforceMaxSessions(user.id, 1);
+
+    const meta = getClientMeta(req);
+    const session = await prisma.session.create({
+      data: {
+        userId: user.id,
+        userAgent: meta.userAgent,
+        ip: String(meta.ip || "").slice(0, 190),
+        createdAt: new Date(),
+        lastSeenAt: new Date(),
+        revokedAt: null,
+      },
+      select: { id: true },
+    });
+
+    const token = await signSession(user.id, session.id);
+
+    // Cookie maxAge: 1 day vs 7 days (remember)
     const maxAgeSeconds = (remember ? SESSION_DAYS : 1) * 24 * 60 * 60;
-    const token = await signSession({ sub: user.id, email: user.email }, maxAgeSeconds);
 
-    const res = NextResponse.json({ ok: true, user: { id: user.id, email: user.email } });
-    res.headers.append("set-cookie", buildSessionCookie(token, maxAgeSeconds));
+    // Update last login (best-effort)
+    prisma.user
+      .update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      })
+      .catch(() => {});
 
-    // ✅ success clears attempt counter
-    clearAttemptsCookie(res);
+    const res = NextResponse.json(
+      { success: true, user: { id: user.id, email: user.email } },
+      { status: 200 }
+    );
+
+    const cookie = buildSessionCookie(token);
+    res.cookies.set({ ...cookie, maxAge: maxAgeSeconds });
 
     return res;
-  } catch (err: any) {
-    console.error("[auth/verify-otp]", err?.message || err);
-    return NextResponse.json({ error: "OTP verification failed" }, { status: 500 });
+  } catch (err) {
+    console.error("[auth/verify-otp] error", err);
+    return jsonError("OTP verification failed. Please try again.", 500);
   }
 }

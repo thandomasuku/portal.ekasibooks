@@ -60,7 +60,12 @@ export default function OtpPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email: email.trim().toLowerCase(), otp: otpClean, remember }),
+        // ✅ Backend expects `code` (not `otp`)
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          code: otpClean,
+          remember,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -127,8 +132,7 @@ export default function OtpPage() {
 
         {missingEmail ? (
           <p className="text-slate-600 mt-1">
-            We couldn’t find an email address for this OTP session. Please go back
-            and request a new OTP.
+            We couldn’t find an email address for this OTP session. Please go back and request a new OTP.
           </p>
         ) : (
           <p className="text-slate-600 mt-1">
