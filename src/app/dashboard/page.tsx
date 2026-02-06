@@ -1,19 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
-
-type LoadState = "loading" | "ready" | "unauth" | "error";
-
-type Entitlement = {
-  plan: "FREE" | "PRO" | string;
-  status: string;
-  currentPeriodEnd: string | null;
-  graceUntil: string | null;
-  features: { readOnly: boolean; limits: any };
-};
+import { useSession } from "@/components/portal/session";
 
 function fmtDate(d?: string | null) {
   if (!d) return "—";
@@ -35,78 +26,7 @@ export default function DashboardPage() {
     return next && next.startsWith("/") ? next : "/dashboard";
   }, [sp]);
 
-  const [user, setUser] = useState<any>(null);
-  const [ent, setEnt] = useState<Entitlement | null>(null);
-
-  const [state, setState] = useState<LoadState>("loading");
-  const [error, setError] = useState<string | null>(null);
-
-  async function loadAll() {
-    setState("loading");
-    setError(null);
-
-    try {
-      // 1) Identity (auth)
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-
-      if (res.status === 401 || res.status === 403) {
-        setUser(null);
-        setEnt(null);
-        setState("unauth");
-        return;
-      }
-
-      if (!res.ok) {
-        setUser(null);
-        setEnt(null);
-        setState("error");
-        setError(`Session check failed (${res.status}).`);
-        return;
-      }
-
-      const data = await res.json().catch(() => null);
-      const meUser = data?.user ?? data; // supports {user:{...}} or direct
-      setUser(meUser);
-
-      // 2) Entitlement (plan) — best-effort
-      try {
-        const entRes = await fetch("/api/entitlement", { credentials: "include" });
-
-        if (entRes.status === 401 || entRes.status === 403) {
-          setUser(null);
-          setEnt(null);
-          setState("unauth");
-          return;
-        }
-
-        if (entRes.ok) {
-          const entJson = await entRes.json().catch(() => null);
-          if (entJson) setEnt(entJson);
-        }
-      } catch {
-        // ignore
-      }
-
-      setState("ready");
-    } catch (e: any) {
-      setError(e?.message || "Network error while checking session.");
-      setState("error");
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      if (cancelled) return;
-      await loadAll();
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { state, user, entitlement, error, refresh } = useSession();
 
   const subtitle =
     state === "ready"
@@ -117,7 +37,7 @@ export default function DashboardPage() {
       ? "We couldn’t confirm your session."
       : "Preparing your workspace...";
 
-  const planUpper = normalizePlan(ent?.plan);
+  const planUpper = normalizePlan(entitlement?.plan);
   const portalStatus = planUpper === "FREE" ? "Limited" : "Active";
 
   const name =
@@ -134,7 +54,6 @@ export default function DashboardPage() {
       backLabel="Home"
       userEmail={state === "ready" ? (user?.email ?? null) : null}
       planName={planUpper}
-      tipText="Tip: This portal manages access and billing — your invoices live inside the desktop app."
       footerRight={
         <span className="inline-flex items-center rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
           Portal v1
@@ -167,7 +86,7 @@ export default function DashboardPage() {
           title="Session check failed"
           body={error ?? "Something went wrong. Please try again."}
           primaryLabel="Retry"
-          onPrimary={() => loadAll()}
+          onPrimary={() => refresh()}
           secondaryLabel="Go to login"
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />

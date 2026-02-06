@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
+import { useSession } from "@/components/portal/session";
 
 type LoadState = "loading" | "ready" | "unauth" | "error";
 
@@ -13,6 +14,16 @@ type Entitlement = {
   currentPeriodEnd: string | null;
   graceUntil: string | null;
   features: { readOnly: boolean; limits: any };
+};
+
+type UserProfile = {
+  id?: string | null;
+  email?: string | null;
+  fullName?: string | null;
+  companyName?: string | null;
+  phone?: string | null;
+  lastLoginAt?: string | null;
+  createdAt?: string | null;
 };
 
 function fmtDate(d?: string | null) {
@@ -40,11 +51,13 @@ export default function SettingsPage() {
     return next && next.startsWith("/") ? next : "/settings";
   }, [sp]);
 
-  const [user, setUser] = useState<any>(null);
-  const [ent, setEnt] = useState<Entitlement | null>(null);
+  const { state, user, entitlement: ent, error, refresh } = useSession();
 
-  const [state, setState] = useState<LoadState>("loading");
-  const [error, setError] = useState<string | null>(null);
+  // Treat session.user as a loosely typed profile object (UI-only typing fix)
+  const sessionUser = (user as UserProfile | null) ?? null;
+
+  // Local mirror for optimistic UI (profile edit modal)
+  const [userLocal, setUserLocal] = useState<UserProfile | null>(null);
 
   // ---- Edit Profile Modal state ----
   const [editOpen, setEditOpen] = useState(false);
@@ -68,86 +81,22 @@ export default function SettingsPage() {
     confirmPassword: "",
   });
 
-  async function loadAll() {
-    setState("loading");
-    setError(null);
-
-    try {
-      // 1) Auth identity (email/id)
-      const meRes = await fetch(`/api/auth/me?ts=${Date.now()}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      if (meRes.status === 401 || meRes.status === 403) {
-        setUser(null);
-        setEnt(null);
-        setState("unauth");
-        return;
-      }
-      if (!meRes.ok) {
-        setUser(null);
-        setEnt(null);
-        setState("error");
-        setError(`Failed to load profile (${meRes.status}).`);
-        return;
-      }
-
-      const meJson = await meRes.json().catch(() => null);
-      if (!meJson) {
-        setState("error");
-        setError("Profile returned an invalid response.");
-        return;
-      }
-
-      // /api/auth/me returns { authenticated, user: {...} }
-      const meUser = meJson?.user ?? meJson;
-      setUser(meUser);
-
-      // 2) Entitlement (plan) — best-effort
-      try {
-        const entRes = await fetch(`/api/entitlement?ts=${Date.now()}`, {
-          credentials: "include",
-          cache: "no-store",
-        });
-
-        if (entRes.status === 401 || entRes.status === 403) {
-          setUser(null);
-          setEnt(null);
-          setState("unauth");
-          return;
-        }
-
-        if (entRes.ok) {
-          const entJson = await entRes.json().catch(() => null);
-          if (entJson) setEnt(entJson);
-        }
-      } catch {
-        // ignore
-      }
-
-      setState("ready");
-    } catch (e: any) {
-      setError(e?.message || "Network error while checking session.");
-      setState("error");
-    }
-  }
-
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (cancelled) return;
-      await loadAll();
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setUserLocal(sessionUser);
+    setForm({
+      fullName: String(sessionUser?.fullName ?? ""),
+      companyName: String(sessionUser?.companyName ?? ""),
+      phone: String(sessionUser?.phone ?? ""),
+    });
+  }, [sessionUser]);
 
   const planName = normalizePlan(ent?.plan);
-  const userEmail = String(user?.email ?? "—");
-  const userId = String(user?.id ?? "—");
+
+  // Prefer optimistic local user, fallback to session user, then empty object
+  const u: UserProfile = userLocal ?? sessionUser ?? {};
+
+  const userEmail = String(u.email ?? "—");
+  const userId = String(u.id ?? "—");
 
   const subtitle =
     state === "ready"
@@ -164,11 +113,11 @@ export default function SettingsPage() {
   function openEdit() {
     setFormMsg(null);
 
-    const u = user ?? {};
+    const uu: UserProfile = sessionUser ?? {};
     setForm({
-      fullName: cleanStr(u?.fullName, 80),
-      companyName: cleanStr(u?.companyName, 120),
-      phone: cleanStr(u?.phone, 30),
+      fullName: cleanStr(uu.fullName, 80),
+      companyName: cleanStr(uu.companyName, 120),
+      phone: cleanStr(uu.phone, 30),
     });
 
     setEditOpen(true);
@@ -199,15 +148,15 @@ export default function SettingsPage() {
       setFormMsg({ type: "success", text: "Profile saved." });
 
       // Optimistic UI update (instant refresh)
-      setUser((prev: any) => {
-        const base = prev ?? {};
+      setUserLocal((prev) => {
+        const base: UserProfile = prev ?? {};
         return { ...base, ...payload };
       });
 
       setEditOpen(false);
 
       // Best-effort refetch (sync)
-      loadAll();
+      void refresh();
     } catch (e: any) {
       setFormMsg({ type: "error", text: e?.message || "Failed to save profile" });
     } finally {
@@ -312,12 +261,12 @@ export default function SettingsPage() {
       badge="Settings"
       title="Profile & Security"
       subtitle={subtitle}
-      userEmail={user?.email ?? null}
+      userEmail={sessionUser?.email ?? null}
       planName={planName}
-      tipText="Tip: For security, changing a password requires an OTP verification (step-up)."
+      // tipText removed (we're removing quick-tip blocks globally)
       headerRight={
         <button
-          onClick={() => loadAll()}
+          onClick={() => refresh()}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
         >
           Refresh
@@ -346,7 +295,7 @@ export default function SettingsPage() {
           title="Session check failed"
           body={error ?? "Something went wrong. Please try again."}
           primaryLabel="Retry"
-          onPrimary={() => loadAll()}
+          onPrimary={() => refresh()}
           secondaryLabel="Go to login"
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />
@@ -393,7 +342,7 @@ export default function SettingsPage() {
             <KpiCard label="Email" value={userEmail} icon="✉" />
             <KpiCard label="Plan" value={planName} icon="★" />
             <KpiCard label="Account ID" value={userId} icon="ID" />
-            <KpiCard label="Last login" value={fmtDate(user?.lastLoginAt)} icon="✓" />
+            <KpiCard label="Last login" value={fmtDate(sessionUser?.lastLoginAt)} icon="✓" />
           </div>
 
           {/* Main grid */}
@@ -416,12 +365,12 @@ export default function SettingsPage() {
                 <DetailTile label="Email" value={userEmail} />
                 <DetailTile label="Plan" value={planName} />
                 <DetailTile label="Account ID" value={userId} />
-                <DetailTile label="Last login" value={fmtDate(user?.lastLoginAt)} />
+                <DetailTile label="Last login" value={fmtDate(sessionUser?.lastLoginAt)} />
 
-                <DetailTile label="Full name" value={String(user?.fullName ?? "—")} />
-                <DetailTile label="Company" value={String(user?.companyName ?? "—")} />
-                <DetailTile label="Phone" value={String(user?.phone ?? "—")} />
-                <DetailTile label="Created" value={fmtDate(user?.createdAt)} />
+                <DetailTile label="Full name" value={String(sessionUser?.fullName ?? "—")} />
+                <DetailTile label="Company" value={String(sessionUser?.companyName ?? "—")} />
+                <DetailTile label="Phone" value={String(sessionUser?.phone ?? "—")} />
+                <DetailTile label="Created" value={fmtDate(sessionUser?.createdAt)} />
               </div>
 
               <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
@@ -539,9 +488,7 @@ export default function SettingsPage() {
 
             <div className="mt-4 space-y-3">
               {formMsg ? (
-                <div className={["rounded-xl border px-3 py-2 text-sm", formMsgClass].join(" ")}>
-                  {formMsg.text}
-                </div>
+                <div className={["rounded-xl border px-3 py-2 text-sm", formMsgClass].join(" ")}>{formMsg.text}</div>
               ) : null}
 
               <label className="block">
@@ -627,9 +574,7 @@ export default function SettingsPage() {
 
             <div className="mt-4 space-y-3">
               {pwMsg ? (
-                <div className={["rounded-xl border px-3 py-2 text-sm", pwMsgClass].join(" ")}>
-                  {pwMsg.text}
-                </div>
+                <div className={["rounded-xl border px-3 py-2 text-sm", pwMsgClass].join(" ")}>{pwMsg.text}</div>
               ) : null}
 
               {pwStep === "request" ? (
@@ -637,9 +582,7 @@ export default function SettingsPage() {
                   <p className="text-sm text-slate-800">
                     We’ll send an OTP to <span className="font-semibold">{userEmail}</span>.
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Click “Send OTP”, then enter the code and your new password.
-                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Click “Send OTP”, then enter the code and your new password.</p>
 
                   <button
                     type="button"
@@ -775,14 +718,10 @@ function ActionRow({
       ].join(" ")}
     >
       <div className="flex items-center gap-3">
-        <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>
-          {icon}
-        </div>
+        <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>{icon}</div>
         <div className="min-w-0">
           <div className="text-sm font-semibold">{title}</div>
-          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>
-            {subtitle}
-          </div>
+          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>{subtitle}</div>
         </div>
         <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
       </div>

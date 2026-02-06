@@ -4,23 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
-
-type LoadState = "loading" | "ready" | "unauth" | "error";
-
-type Entitlement = {
-  plan: "FREE" | "PRO" | string;
-  status: string;
-  currentPeriodEnd: string | null;
-  graceUntil: string | null;
-  features: {
-    readOnly: boolean;
-    limits: {
-      invoice: number;
-      quote: number;
-      purchase_order: number;
-    };
-  };
-};
+import { useSession } from "@/components/portal/session";
 
 /* ---------------- UI primitives (compact + aligned) ---------------- */
 
@@ -98,11 +82,7 @@ export default function BillingPage() {
     return next && next.startsWith("/") ? next : "/billing";
   }, [sp]);
 
-  const [state, setState] = useState<LoadState>("loading");
-  const [error, setError] = useState<string | null>(null);
-
-  const [ent, setEnt] = useState<Entitlement | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const { state, user, entitlement: ent, error: sessionError, refresh } = useSession();
 
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
@@ -120,59 +100,7 @@ export default function BillingPage() {
   // UI-only display price (Paystack remains source of truth)
   const price = 199;
 
-  async function loadEntitlement() {
-    setError(null);
 
-    let res: Response;
-    try {
-      res = await fetch("/api/entitlement", { credentials: "include" });
-    } catch (e: any) {
-      setEnt(null);
-      setError(e?.message || "Network error while loading billing details.");
-      setState("error");
-      return;
-    }
-
-    if (res.status === 401 || res.status === 403) {
-      setEnt(null);
-      setState("unauth");
-      return;
-    }
-
-    if (!res.ok) {
-      const msg = `Billing details failed (${res.status}).`;
-      setEnt(null);
-      setError(msg);
-      setState("error");
-      return;
-    }
-
-    const data = (await res.json().catch(() => null)) as Entitlement | null;
-    if (!data) {
-      setEnt(null);
-      setError("Billing details returned an invalid response.");
-      setState("error");
-      return;
-    }
-
-    setEnt(data);
-    setState("ready");
-  }
-
-  async function loadUserNonBlocking() {
-    try {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (!res.ok) return;
-
-      const data = await res.json().catch(() => null);
-      if (!data) return;
-
-      // ✅ unwrap nested user
-      setUser(data.user ?? data);
-    } catch {
-      // ignore
-    }
-  }
 
   async function verifyReference(reference: string) {
     const ref = String(reference || "").trim();
@@ -203,7 +131,7 @@ export default function BillingPage() {
         setVerifyNote(`Payment status: ${st}`);
       }
 
-      await loadEntitlement();
+      await refresh();
     } catch (e: any) {
       setVerifyNote(e?.message || "Failed to verify payment.");
     } finally {
@@ -213,39 +141,18 @@ export default function BillingPage() {
   }
 
   useEffect(() => {
-    let cancelled = false;
+    // Clear transient UI messages when the querystring changes (Paystack redirect, etc.)
+    setUpgradeError(null);
+    setVerifyNote(null);
+    setManualErr(null);
+    setManageError(null);
 
-    (async () => {
-      setState("loading");
-      setError(null);
-      setUpgradeError(null);
-      setVerifyNote(null);
-      setManualErr(null);
-      setManageError(null);
-
-      try {
-        await loadEntitlement();
-        if (cancelled) return;
-
-        void loadUserNonBlocking();
-
-        const ref = sp.get("reference") || sp.get("trxref") || "";
-        if (ref) {
-          void verifyReference(ref);
-        } else if (sp.get("paid") === "1") {
-          setVerifyNote("Payment detected. If your plan doesn’t update in a moment, click Refresh.");
-        }
-      } catch (e: any) {
-        if (cancelled) return;
-        setError(e?.message || "Network error while checking session.");
-        setState("error");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const ref = sp.get("reference") || sp.get("trxref") || "";
+    if (ref) {
+      void verifyReference(ref);
+    } else if (sp.get("paid") === "1") {
+      setVerifyNote("Payment detected. If your plan doesn’t update in a moment, click Refresh.");
+    }
   }, [sp]);
 
   const planName = String(ent?.plan ?? "FREE").toUpperCase();
@@ -354,7 +261,7 @@ export default function BillingPage() {
       planName={planName}
       // Removed tipText to match "no Quick tips" direction
       headerRight={
-        <button onClick={() => loadEntitlement()} className={BTN_SECONDARY}>
+        <button onClick={() => refresh()} className={BTN_SECONDARY}>
           Refresh
         </button>
       }
@@ -382,9 +289,9 @@ export default function BillingPage() {
       ) : state === "error" ? (
         <EmptyState
           title="Billing could not load"
-          body={error ?? "Something went wrong. Please try again."}
+          body={sessionError ?? "Something went wrong. Please try again."}
           primaryLabel="Retry"
-          onPrimary={() => loadEntitlement()}
+          onPrimary={() => refresh()}
           secondaryLabel="Go to login"
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />
@@ -445,7 +352,7 @@ export default function BillingPage() {
       </button>
     )}
 
-    <button onClick={() => loadEntitlement()} className={BTN_SECONDARY}>
+    <button onClick={() => refresh()} className={BTN_SECONDARY}>
       <span className={BTN_ICON_SECONDARY}>↻</span>
       Refresh status
     </button>

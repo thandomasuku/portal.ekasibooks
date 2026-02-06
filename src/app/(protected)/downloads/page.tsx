@@ -1,19 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, MiniRow, Chip } from "@/components/portal/ui";
-
-type LoadState = "loading" | "ready" | "unauth" | "error";
-
-type Entitlement = {
-  plan: "FREE" | "PRO" | string;
-  status: string;
-  currentPeriodEnd: string | null;
-  graceUntil: string | null;
-  features: { readOnly: boolean; limits: any };
-};
+import { useSession } from "@/components/portal/session";
 
 function fmtDate(d?: string | null) {
   if (!d) return "—";
@@ -58,96 +49,18 @@ export default function DownloadsPage() {
   const router = useRouter();
   const sp = useSearchParams();
 
+  const { state, user, entitlement, error, refresh } = useSession();
+
   const nextUrl = useMemo(() => {
     const next = sp.get("next");
     return next && next.startsWith("/") ? next : "/downloads";
   }, [sp]);
 
-  const [user, setUser] = useState<any>(null);
-  const [ent, setEnt] = useState<Entitlement | null>(null);
-
-  const [state, setState] = useState<LoadState>("loading");
-  const [error, setError] = useState<string | null>(null);
-
   const [openId, setOpenId] = useState<string>("latest");
 
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
-  async function loadAll() {
-    setState("loading");
-    setError(null);
-
-    try {
-      // 1) Auth identity (email/id)
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-
-      if (res.status === 401 || res.status === 403) {
-        setUser(null);
-        setEnt(null);
-        setState("unauth");
-        return;
-      }
-
-      if (!res.ok) {
-        setUser(null);
-        setEnt(null);
-        setState("error");
-        setError(`Session check failed (${res.status}).`);
-        return;
-      }
-
-      const data = await res.json().catch(() => null);
-      const meUser = data?.user ?? data; // support either {user:{...}} or direct
-      setUser(meUser);
-
-      // 2) Entitlement (plan) — best-effort
-      try {
-        const entRes = await fetch("/api/entitlement", { credentials: "include" });
-
-        if (entRes.status === 401 || entRes.status === 403) {
-          setUser(null);
-          setEnt(null);
-          setState("unauth");
-          return;
-        }
-
-        if (entRes.ok) {
-          const entJson = await entRes.json().catch(() => null);
-          if (entJson) setEnt(entJson);
-        }
-      } catch {
-        // ignore
-      }
-
-      setState("ready");
-    } catch (e: any) {
-      setError(e?.message || "Network error while checking session.");
-      setState("error");
-    }
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      if (cancelled) return;
-      await loadAll();
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // redirect must happen in an effect
-  useEffect(() => {
-    if (state === "unauth") {
-      router.push(`/login?next=${encodeURIComponent(nextUrl)}`);
-    }
-  }, [state, router, nextUrl]);
-
-  const planName = normalizePlan(ent?.plan);
+  const planName = normalizePlan(entitlement?.plan);
   const isPaid = planName !== "FREE";
 
   // ✅ The important part: the actual download URL (env-driven, with safe fallback)
@@ -227,7 +140,7 @@ export default function DownloadsPage() {
       backLabel="Back to overview"
       userEmail={user?.email ?? null}
       planName={planName}
-      tipText="Tip: Installers will be signed — you’ll be able to verify integrity via checksum."
+      // Removed tipText to match "remove tip blocks everywhere"
       footerRight={
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline text-xs text-slate-500">Desktop: Windows</span>
@@ -257,7 +170,7 @@ export default function DownloadsPage() {
           <p className="mt-2 text-sm text-slate-600">{error ?? "Something went wrong. Please try again."}</p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <button
-              onClick={() => loadAll()}
+              onClick={() => refresh()}
               className="rounded-2xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1c4f54]"
             >
               Retry
@@ -464,14 +377,7 @@ export default function DownloadsPage() {
                   <MiniRow label="Recommended RAM" value="4GB+" />
                 </div>
 
-                <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                  <p className="text-sm text-slate-700">
-                    When downloads go live, we’ll publish the checksum so users can verify the file is authentic.
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Installers will be signed for trust and easier Windows SmartScreen handling.
-                  </p>
-                </div>
+                {/* Removed the "downloads go live / checksum / smartscreen" notice block */}
               </PremiumCard>
 
               <PremiumCard tone="soft">

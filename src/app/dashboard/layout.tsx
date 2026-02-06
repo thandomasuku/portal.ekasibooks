@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { SessionProvider } from "@/components/portal/session";
+
 import { prisma } from "@/lib/db";
 import { getSessionCookieName, verifySession } from "@/lib/auth";
 
@@ -34,5 +36,5 @@ export default async function DashboardLayout({
     redirect("/login?next=/dashboard");
   }
 
-  return <>{children}</>;
+  return <SessionProvider>{children}</SessionProvider>;
 }

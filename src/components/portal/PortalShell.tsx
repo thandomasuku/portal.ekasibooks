@@ -51,6 +51,9 @@ type PortalShellProps = {
 
   mobileTopOffsetPx?: number;
   brandLogoSrc?: string;
+
+  // Optional: hide the desktop logo block to push content up
+  hideBrandBlock?: boolean;
 };
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -168,7 +171,7 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
       return (
         <svg viewBox="0 0 24 24" className={cx(base, className)}>
           <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
-          <path d="M19.4 15a7.8 7.8 0 0 0 .1-1l2-1.2-2-3.4-2.3.6a7.7 7.7 0 0 0-.8-.7l.3-2.3H9.3l.3 2.3c-.3.2-.6.5-.8.7l-2.3-.6-2 3.4 2 1.2a7.8 7.8 0 0 0 .1 1L4.6 16.2l2 3.4 2.3-.6c.2.3.5.6.8.8l-.3 2.2h5.4l-.3-2.2c.3-.2.6-.5.8-.8l2.3.6 2-3.4L19.4 15Z" />
+          <path d="M19.4 15a7.8 7.8 0 0 0 .1-1l2-1.2-2-3.4-2.3.6a7.7 0 0 0-.8-.7l.3-2.3H9.3l.3 2.3c-.3.2-.6.5-.8.7l-2.3-.6-2 3.4 2 1.2a7.8 7.8 0 0 0 .1 1L4.6 16.2l2 3.4 2.3-.6c.2.3.5.6.8.8l-.3 2.2h5.4l-.3-2.2c.3-.2.6-.5.8-.8l2.3.6 2-3.4L19.4 15Z" />
         </svg>
       );
     case "logout":
@@ -221,15 +224,13 @@ function inferIcon(item: NavItem): IconName {
 function SidebarSectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-1">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-        {children}
-      </div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">{children}</div>
     </div>
   );
 }
 
 function SidebarDivider({ tight }: { tight?: boolean }) {
-  return <div className={cx(tight ? "my-4" : "my-5", "h-px w-full bg-white/10")} />;
+  return <div className={cx(tight ? "my-3" : "my-4", "h-px w-full bg-white/10")} />;
 }
 
 function NavButton({
@@ -248,22 +249,21 @@ function NavButton({
       type="button"
       onClick={onClick}
       className={cx(
-        "group relative w-full overflow-hidden rounded-2xl px-4 py-3 text-left ring-1 transition-all duration-200",
+        "group relative w-full overflow-hidden rounded-xl px-3 py-2 text-left ring-1 transition-all duration-200",
+        // ✅ Guaranteed spacing between sidebar links (not affected by portal-compact gap overrides)
+        "mb-3 last:mb-0",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/40",
         active
           ? "bg-white/14 ring-white/22"
           : "bg-white/6 ring-white/10 hover:bg-white/10 hover:ring-white/18 hover:-translate-y-[1px]"
       )}
     >
-      {/* left accent rail */}
       <span
         className={cx(
-          "absolute left-0 top-3 bottom-3 w-[3px] rounded-full transition",
+          "absolute left-0 top-2 bottom-2 w-[3px] rounded-full transition",
           active ? "bg-emerald-300 opacity-100" : "bg-white/20 opacity-0 group-hover:opacity-60"
         )}
       />
-
-      {/* subtle glow blob */}
       <span
         className={cx(
           "pointer-events-none absolute -right-16 -top-10 h-24 w-24 rounded-full blur-2xl transition-opacity duration-200",
@@ -275,60 +275,22 @@ function NavButton({
         <div className="flex items-center gap-3">
           <span
             className={cx(
-              "grid h-9 w-9 place-items-center rounded-2xl ring-1 transition",
+              "grid h-8 w-8 place-items-center rounded-xl ring-1 transition",
               active ? "bg-white/16 ring-white/20" : "bg-white/10 ring-white/14 group-hover:bg-white/12"
             )}
           >
-            <Icon name={iconName} className="h-[18px] w-[18px] text-white/90" />
+            <Icon name={iconName} className="h-[16px] w-[16px] text-white/90" />
           </span>
 
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">{item.label}</div>
-            {item.hint ? <div className="mt-0.5 truncate text-xs text-white/65">{item.hint}</div> : null}
+            <div className="truncate text-[13px] font-semibold text-white">{item.label}</div>
+            {item.hint ? <div className="mt-0.5 truncate text-[11px] text-white/65">{item.hint}</div> : null}
           </div>
         </div>
 
-        <span className="grid h-7 w-7 place-items-center rounded-xl bg-white/0 ring-1 ring-white/0 transition group-hover:bg-white/8 group-hover:ring-white/10">
-          <Icon name="arrowRight" className="h-[16px] w-[16px] text-white/70 group-hover:text-white/90" />
+        <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/0 ring-1 ring-white/0 transition group-hover:bg-white/8 group-hover:ring-white/10">
+          <Icon name="arrowRight" className="h-[14px] w-[14px] text-white/70 group-hover:text-white/90" />
         </span>
-      </div>
-    </button>
-  );
-}
-
-function QuickActionButton({
-  label,
-  hint,
-  icon,
-  onClick,
-}: {
-  label: string;
-  hint: string;
-  icon: IconName;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cx(
-        "group w-full rounded-2xl bg-white/8 px-3 py-3 text-left ring-1 ring-white/12 transition",
-        "hover:bg-white/12 hover:ring-white/18 hover:-translate-y-[1px]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/40"
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/14">
-          <Icon name={icon} className="h-[18px] w-[18px] text-white/90" />
-        </span>
-
-        <div className="min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="truncate text-sm font-semibold text-white">{label}</div>
-            <span className="text-xs font-semibold text-white/70 transition group-hover:text-white/90">→</span>
-          </div>
-          <div className="mt-0.5 truncate text-xs text-white/65">{hint}</div>
-        </div>
       </div>
     </button>
   );
@@ -342,7 +304,8 @@ export function PortalShell({
   backHref = "/dashboard",
   backLabel = "Back",
   navItems = DEFAULT_NAV,
-  tipText = "Tip: This portal manages access and billing — your invoices live inside the desktop app.",
+  // We’re removing “tip blocks” everywhere; keep prop but default empty.
+  tipText = "",
   footerLinks = [
     { label: "Support", href: "/support" },
     { label: "Terms", href: "/terms" },
@@ -356,17 +319,15 @@ export function PortalShell({
   userName: userNameProp,
   planName,
   compact = true,
-  mobileTopOffsetPx = 72,
+  mobileTopOffsetPx = 60, // tighter default
   brandLogoSrc = "/ekasibooks-logo.png",
+  hideBrandBlock = true,
 }: PortalShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // PortalShell-owned identity (fallback)
-  const [me, setMe] = useState<{ email: string | null; displayName: string | null } | null>(null);
 
   // Logout UI state
   const [logoutLoading, setLogoutLoading] = useState(false);
@@ -375,46 +336,12 @@ export function PortalShell({
   const currentPath = pathname || "/dashboard";
   const planUpper = String(planName ?? "FREE").toUpperCase();
 
-  // close mobile sidebar on navigation changes
   useEffect(() => {
     setSidebarOpen(false);
   }, [currentPath, sp]);
 
-  // Auto-load /api/auth/me if page did not supply userEmail
-  useEffect(() => {
-    let cancelled = false;
-    if (userEmailProp) return;
-
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/me", { credentials: "include" });
-        if (!res.ok) return;
-
-        const data = await res.json().catch(() => null);
-        if (!data) return;
-
-        const u = data.user ?? data;
-        const email = (u?.email as string | undefined) ?? null;
-
-        const displayName =
-          (u?.displayName as string | undefined) ??
-          (u?.name as string | undefined) ??
-          deriveDisplayName(email);
-
-        if (cancelled) return;
-        setMe({ email, displayName: displayName ?? null });
-      } catch {
-        // ignore
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userEmailProp]);
-
-  const resolvedEmail = userEmailProp ?? me?.email ?? null;
-  const resolvedName = userNameProp ?? me?.displayName ?? deriveDisplayName(resolvedEmail) ?? null;
+  const resolvedEmail = userEmailProp ?? null;
+  const resolvedName = userNameProp ?? deriveDisplayName(resolvedEmail) ?? null;
   const avatarInitials = useMemo(
     () => getInitials(resolvedName ?? resolvedEmail ?? "User"),
     [resolvedName, resolvedEmail]
@@ -423,7 +350,6 @@ export function PortalShell({
   const year = new Date().getFullYear();
 
   const marketingBase = (process.env.NEXT_PUBLIC_MARKETING_URL ?? "https://ekasibooks.co.za").replace(/\/+$/, "");
-
   const resolvedFooterLinks = (footerLinks ?? []).map((l) => ({
     ...l,
     href: resolveMarketingHref(marketingBase, l.href),
@@ -457,8 +383,8 @@ export function PortalShell({
   const LogoutButton = ({ variant }: { variant: "desktop" | "mobile" }) => {
     const base =
       variant === "desktop"
-        ? "group w-full rounded-2xl px-4 py-3 text-left ring-1 transition-all duration-200"
-        : "group w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold ring-1 transition";
+        ? "group w-full rounded-xl px-3 py-2 text-left ring-1 transition-all duration-200"
+        : "group w-full rounded-xl px-3 py-2 text-left text-[13px] font-semibold ring-1 transition";
 
     const cls =
       variant === "desktop"
@@ -486,17 +412,17 @@ export function PortalShell({
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/14">
-              <Icon name="logout" className="h-[18px] w-[18px] text-white/90" />
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 ring-1 ring-white/14">
+              <Icon name="logout" className="h-[16px] w-[16px] text-white/90" />
             </span>
 
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-white">{logoutLoading ? "Logging out..." : "Logout"}</div>
-              {variant === "desktop" ? <div className="mt-0.5 text-xs text-white/65">End your session</div> : null}
+              <div className="text-[13px] font-semibold text-white">{logoutLoading ? "Logging out..." : "Logout"}</div>
+              {variant === "desktop" ? <div className="mt-0.5 text-[11px] text-white/65">End your session</div> : null}
             </div>
           </div>
 
-          <span className="text-xs font-semibold text-white/65 transition group-hover:text-white/90">
+          <span className="text-[11px] font-semibold text-white/65 transition group-hover:text-white/90">
             {logoutLoading ? "…" : "→"}
           </span>
         </div>
@@ -506,33 +432,29 @@ export function PortalShell({
 
   return (
     <div className={cx("h-screen w-full overflow-hidden bg-[#f6f9fb]", compact && "portal-compact")}>
-      {/* Mobile top bar */}
+      {/* Mobile top bar (tight) */}
       <div className="fixed left-0 top-0 z-30 w-full border-b border-slate-200/70 bg-white/70 backdrop-blur lg:hidden">
-        <div className="flex w-full items-center justify-between px-4 py-3">
+        <div className="flex w-full items-center justify-between px-3 py-2">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/25"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/25"
             aria-label="Open menu"
           >
             <span className="text-base leading-none">☰</span>
             Menu
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="relative h-10 w-[180px]">
+          <div className="flex items-center gap-2">
+            <div className="relative h-8 w-[130px]">
               <Image
                 src={brandLogoSrc}
                 alt={`${brandName} logo`}
                 fill
-                sizes="180px"
+                sizes="130px"
                 className="object-contain"
                 priority
               />
-            </div>
-            <div className="text-right">
-              <div className="text-xs font-semibold text-slate-900">{resolvedName ?? "Secure portal"}</div>
-              <div className="text-xs text-slate-600">{resolvedEmail ?? "Signed in"}</div>
             </div>
           </div>
         </div>
@@ -542,11 +464,9 @@ export function PortalShell({
       <div className="grid h-full w-full grid-cols-1 lg:grid-cols-[320px_1fr]">
         {/* Desktop sidebar */}
         <aside className="relative hidden h-full overflow-hidden border-r border-white/10 bg-gradient-to-br from-[#071f2c] via-[#0b2f41] to-[#1b5a5f] text-white lg:block">
-          {/* ambient blobs */}
           <div className="pointer-events-none absolute -top-32 -left-32 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-28 -right-28 h-80 w-80 rounded-full bg-black/15 blur-3xl" />
 
-          {/* subtle grid */}
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.06]"
             style={{
@@ -556,27 +476,41 @@ export function PortalShell({
             }}
           />
 
-          <div className="relative flex h-full flex-col px-5 py-6">
-            <BrandBlock brandName={brandName} logoSrc={brandLogoSrc} />
+          {/* - Remove sidebar padding from the root container
+              - Make the identity card full-bleed
+              - Keep padding ONLY for nav + footer area */}
+          <div className="relative flex h-full flex-col">
+            {/* Desktop logo block hidden by default (still padded when enabled) */}
+            {!hideBrandBlock ? (
+              <div className="px-5 pt-5">
+                <BrandBlock brandName={brandName} logoSrc={brandLogoSrc} />
+              </div>
+            ) : null}
 
-            {/* Identity card */}
-            <div className="mt-6 rounded-3xl bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur">
+            {/* Identity card (FULL WIDTH, no outer gaps) */}
+            <div
+              className={cx(
+                "w-full bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur",
+                "rounded-b-[5px]",
+                !hideBrandBlock ? "mt-4" : ""
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
-                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/12 ring-1 ring-white/18">
+                  <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/12 ring-1 ring-white/18">
                     <span className="text-sm font-extrabold tracking-wide text-white/95">{avatarInitials}</span>
                   </div>
 
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">Signed in</div>
-                    <div className="mt-1 truncate text-sm font-semibold text-white">{resolvedName ?? "—"}</div>
-                    <div className="mt-0.5 break-all text-xs text-white/65">{resolvedEmail ?? "—"}</div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">Signed in</div>
+                    <div className="mt-1 truncate text-[13px] font-semibold text-white">{resolvedName ?? "—"}</div>
+                    <div className="mt-0.5 break-all text-[11px] text-white/65">{resolvedEmail ?? "—"}</div>
                   </div>
                 </div>
 
                 <div
                   className={cx(
-                    "shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
+                    "shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
                     planChipClasses(planUpper)
                   )}
                   title="Your current plan"
@@ -586,66 +520,50 @@ export function PortalShell({
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center justify-between text-[11px] text-white/55">
+              <div className="mt-3 flex items-center justify-between text-[10px] text-white/55">
                 <span>Secure access</span>
                 <span>Portal</span>
               </div>
             </div>
 
-            <SidebarDivider />
+            {/* Padded nav + footer region */}
+            <div className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4">
+              <SidebarDivider />
 
-            {/* Scrollable sidebar body */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
-                {/* Nav */}
-                <nav>
-                  <SidebarSectionLabel>Navigation</SidebarSectionLabel>
-                  <div className="mt-3 space-y-2">
-                    {navItems.map((item) => {
-                      const active =
-                        (item.href === "/dashboard" && currentPath === "/dashboard") ||
-                        (item.href !== "/dashboard" && currentPath.startsWith(item.href));
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                  <nav>
+                    <SidebarSectionLabel>Navigation</SidebarSectionLabel>
+                    <div className="mt-3 space-y-2">
+                      {navItems.map((item) => {
+                        const active =
+                          (item.href === "/dashboard" && currentPath === "/dashboard") ||
+                          (item.href !== "/dashboard" && currentPath.startsWith(item.href));
 
-                      return (
-                        <NavButton
-                          key={item.href}
-                          item={item}
-                          active={active}
-                          onClick={() => router.push(item.href)}
-                        />
-                      );
-                    })}
-                  </div>
+                        return (
+                          <NavButton key={item.href} item={item} active={active} onClick={() => router.push(item.href)} />
+                        );
+                      })}
+                    </div>
 
-                  {/* Quick actions (no duplicates) */}
-                  <div className="mt-4 grid grid-cols-1 gap-2">
-                    <QuickActionButton
-                      label="Download the app"
-                      hint="Get the latest installer"
-                      icon="downloads"
-                      onClick={() => router.push("/downloads")}
-                    />
-                  </div>
+                    <SidebarDivider tight />
 
-                  <SidebarDivider tight />
+                    <SidebarSectionLabel>Account</SidebarSectionLabel>
+                    <div className="mt-3">
+                      <LogoutButton variant="desktop" />
+                      {logoutError ? (
+                        <div className="mt-2 rounded-2xl bg-white/10 p-3 text-xs text-white/80 ring-1 ring-white/12">
+                          {logoutError}
+                        </div>
+                      ) : null}
+                    </div>
+                  </nav>
+                </div>
 
-                  {/* Account */}
-                  <SidebarSectionLabel>Account</SidebarSectionLabel>
-                  <div className="mt-3">
-                    <LogoutButton variant="desktop" />
-                    {logoutError ? (
-                      <div className="mt-2 rounded-2xl bg-white/10 p-3 text-xs text-white/80 ring-1 ring-white/12">
-                        {logoutError}
-                      </div>
-                    ) : null}
-                  </div>
-                </nav>
-              </div>
-
-              {/* bottom */}
-              <div className="mt-5 flex items-center justify-between text-xs text-white/55">
-                <span>{brandName} Portal</span>
-                <span className="rounded-full bg-white/10 px-2.5 py-1 ring-1 ring-white/10">v1</span>
+                <div className="mt-4 flex items-center justify-between text-xs text-white/55">
+                  <span>{brandName} Portal</span>
+                  <span className="rounded-full bg-white/10 px-2.5 py-1 ring-1 ring-white/10">v1</span>
+                </div>
               </div>
             </div>
           </div>
@@ -660,12 +578,12 @@ export function PortalShell({
               onClick={() => setSidebarOpen(false)}
             />
             <div className="absolute left-0 top-0 h-full w-[344px] max-w-[88vw] border-r border-white/10 bg-gradient-to-br from-[#071f2c] via-[#0b2f41] to-[#1b5a5f] text-white shadow-2xl">
-              <div className="relative flex h-full flex-col p-5">
+              <div className="relative flex h-full flex-col p-4">
                 <div className="pointer-events-none absolute -top-20 -left-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-black/15 blur-3xl" />
 
                 <div className="relative flex items-center justify-between">
-                  <BrandBlock brandName={brandName} logoSrc={brandLogoSrc} compact />
+                  <div className="text-sm font-semibold text-white/90">{brandName}</div>
                   <button
                     onClick={() => setSidebarOpen(false)}
                     className="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold ring-1 ring-white/15 hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/35"
@@ -675,25 +593,23 @@ export function PortalShell({
                   </button>
                 </div>
 
-                <div className="relative mt-5 rounded-3xl bg-white/10 p-4 ring-1 ring-white/15">
+                <div className="relative mt-4 rounded-3xl bg-white/10 p-3 ring-1 ring-white/15">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/12 ring-1 ring-white/18">
+                      <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/12 ring-1 ring-white/18">
                         <span className="text-sm font-extrabold tracking-wide text-white/95">{avatarInitials}</span>
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">
-                          Signed in
-                        </div>
-                        <div className="mt-1 text-sm font-semibold text-white">{resolvedName ?? "—"}</div>
-                        <div className="mt-0.5 break-all text-xs text-white/65">{resolvedEmail ?? "—"}</div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">Signed in</div>
+                        <div className="mt-1 text-[13px] font-semibold text-white">{resolvedName ?? "—"}</div>
+                        <div className="mt-0.5 break-all text-[11px] text-white/65">{resolvedEmail ?? "—"}</div>
                       </div>
                     </div>
 
                     <div
                       className={cx(
-                        "shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
+                        "shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
                         planChipClasses(planUpper)
                       )}
                     >
@@ -703,7 +619,7 @@ export function PortalShell({
                   </div>
                 </div>
 
-                <div className="relative mt-5 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                <div className="relative mt-4 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
                   <SidebarSectionLabel>Navigation</SidebarSectionLabel>
                   <div className="mt-3 space-y-2">
                     {navItems.map((item) => {
@@ -717,34 +633,26 @@ export function PortalShell({
                           type="button"
                           onClick={() => router.push(item.href)}
                           className={cx(
-                            "w-full rounded-2xl px-4 py-3 text-left text-sm font-semibold ring-1 transition",
+                            "w-full rounded-xl px-3 py-2 text-left text-[13px] font-semibold ring-1 transition",
+                            // ✅ Match desktop spacing on mobile too
+                            "mb-3 last:mb-0",
                             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/35",
                             active ? "bg-white/14 ring-white/20" : "bg-white/10 ring-white/15 hover:bg-white/15"
                           )}
                         >
                           <div className="flex items-center justify-between">
                             <span className="flex items-center gap-3">
-                              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-white/10 ring-1 ring-white/14">
-                                <Icon name={inferIcon(item)} className="h-[18px] w-[18px] text-white/90" />
+                              <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 ring-1 ring-white/14">
+                                <Icon name={inferIcon(item)} className="h-[16px] w-[16px] text-white/90" />
                               </span>
                               {item.label}
                             </span>
                             <span className="text-white/70">→</span>
                           </div>
-                          {item.hint ? <div className="mt-1 text-xs text-white/65">{item.hint}</div> : null}
+                          {item.hint ? <div className="mt-1 text-[11px] text-white/65">{item.hint}</div> : null}
                         </button>
                       );
                     })}
-                  </div>
-
-                  {/* Quick actions (no duplicates) */}
-                  <div className="mt-4 grid grid-cols-1 gap-2">
-                    <QuickActionButton
-                      label="Download the app"
-                      hint="Get the latest installer"
-                      icon="downloads"
-                      onClick={() => router.push("/downloads")}
-                    />
                   </div>
 
                   <SidebarDivider tight />
@@ -760,7 +668,7 @@ export function PortalShell({
                   </div>
                 </div>
 
-                <div className="relative mt-5 flex items-center justify-between text-xs text-white/55">
+                <div className="relative mt-4 flex items-center justify-between text-xs text-white/55">
                   <span>{brandName} Portal</span>
                   <span className="rounded-full bg-white/10 px-2.5 py-1 ring-1 ring-white/10">v1</span>
                 </div>
@@ -769,28 +677,28 @@ export function PortalShell({
           </div>
         ) : null}
 
-        {/* Right column scroll area */}
+        {/* Right column scroll area (tight on mobile) */}
         <main
           className={cx(
             "h-full overflow-y-auto overscroll-contain",
             "bg-gradient-to-b from-[#f7fafc] to-[#eef4f7]",
-            "px-4 py-6 lg:px-10 lg:py-8",
+            "px-3 py-4 lg:px-10 lg:py-8",
             "pt-[calc(var(--mobileTopOffsetPx)_+_8px)] lg:pt-8"
           )}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           style={{ ["--mobileTopOffsetPx" as any]: `${mobileTopOffsetPx}px` }}
         >
           <div className="mx-auto flex min-h-full max-w-[1600px] flex-col">
-            {/* Top header */}
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            {/* Top header (tight on mobile) */}
+            <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   {badge}
                 </div>
 
-                <h1 className="mt-3 text-2xl font-semibold text-slate-900">{title}</h1>
-                {subtitle ? <p className="mt-1 text-slate-600">{subtitle}</p> : null}
+                <h1 className="mt-2 text-xl font-semibold text-slate-900 sm:mt-3 sm:text-2xl">{title}</h1>
+                {subtitle ? <p className="mt-1 text-sm text-slate-600 sm:text-base">{subtitle}</p> : null}
               </div>
 
               <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -798,7 +706,7 @@ export function PortalShell({
                 {backLabel ? (
                   <button
                     onClick={() => router.push(backHref)}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/25"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/25 sm:px-4 sm:text-sm"
                   >
                     {backLabel}
                   </button>
@@ -808,13 +716,7 @@ export function PortalShell({
 
             <div className="flex-1">{children}</div>
 
-            <PortalFooter
-              brandName={brandName}
-              year={year}
-              links={resolvedFooterLinks}
-              right={footerRight}
-              compact={compactFooter}
-            />
+            <PortalFooter brandName={brandName} year={year} links={resolvedFooterLinks} right={footerRight} compact={compactFooter} />
           </div>
         </main>
       </div>

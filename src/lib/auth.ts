@@ -86,20 +86,25 @@ export async function verifySession(token: string) {
 
   const session = await prisma.session.findUnique({
     where: { id: decoded.sessionId },
-    select: { id: true, userId: true, revokedAt: true },
+    select: { id: true, userId: true, revokedAt: true, lastSeenAt: true },
   });
 
   if (!session) throw new Error("Session not found");
   if (session.revokedAt) throw new Error("Session revoked");
   if (session.userId !== decoded.userId) throw new Error("Session mismatch");
 
-  // touch (best-effort)
-  prisma.session
-    .update({
-      where: { id: session.id },
-      data: { lastSeenAt: new Date() },
-    })
-    .catch(() => {});
+  // touch lastSeenAt (best-effort) — throttled to avoid DB writes on every page view
+  // Default: 15 minutes
+  const THROTTLE_MS = 15 * 60 * 1000;
+  const last = session.lastSeenAt ? session.lastSeenAt.getTime() : 0;
+  if (Date.now() - last > THROTTLE_MS) {
+    prisma.session
+      .update({
+        where: { id: session.id },
+        data: { lastSeenAt: new Date() },
+      })
+      .catch(() => {});
+  }
 
   return { userId: decoded.userId, sessionId: decoded.sessionId };
 }

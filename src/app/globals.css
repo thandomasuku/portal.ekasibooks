@@ -9,8 +9,9 @@
   --background: #ffffff;
   --foreground: #171717;
 
-  /* ✅ Primary UI font */
-  --font-sans: "sans", Trebuchet, "Segoe UI", Arial, sans-serif;
+  /* ✅ Primary UI font (DM Sans) */
+  --font-sans: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Arial, sans-serif;
 
   /* ✅ Portal compact tokens */
   --portal-card-radius: 16px;
@@ -28,7 +29,7 @@
 
   /* ✅ IMPORTANT: do NOT override --font-sans back to Geist here */
 
-  /* If you still want mono, keep this */
+  /* Keep mono mapping (Geist Mono variable still provided in layout.tsx) */
   --font-mono: var(--font-geist-mono);
 }
 
@@ -44,6 +45,9 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+
+  /* ✅ Nice for tables + money columns (aligned numbers) */
+  font-variant-numeric: tabular-nums;
 }
 
 /* =========================
