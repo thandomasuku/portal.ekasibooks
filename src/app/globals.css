@@ -10,7 +10,7 @@
   --foreground: #171717;
 
   /* ✅ Primary UI font */
-  --font-sans: "Trebuchet MS", Trebuchet, "Segoe UI", Arial, sans-serif;
+  --font-sans: "sans", Trebuchet, "Segoe UI", Arial, sans-serif;
 
   /* ✅ Portal compact tokens */
   --portal-card-radius: 16px;

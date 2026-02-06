@@ -222,9 +222,6 @@ export default function SettingsPage() {
     setPwOpen(true);
   }
 
-  // NOTE:
-  // This expects you to have an endpoint that sends an OTP to the currently logged-in user.
-  // Recommended route: POST /api/auth/request-otp  (server should use session user email, NOT client-supplied email)
   async function requestPasswordOtp() {
     if (pwSending) return;
     setPwSending(true);
@@ -235,7 +232,6 @@ export default function SettingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        // keep body minimal; server should derive email from session
         body: JSON.stringify({ purpose: "PASSWORD_UPDATE" }),
       });
 
@@ -254,8 +250,6 @@ export default function SettingsPage() {
     }
   }
 
-  // This expects you to create the step-up password update endpoint:
-  // POST /api/auth/password/update  { otpCode, newPassword }
   async function submitPasswordUpdate() {
     if (pwSaving) return;
     setPwSaving(true);
@@ -283,7 +277,6 @@ export default function SettingsPage() {
 
       setPwMsg({ type: "success", text: "Password updated successfully." });
 
-      // close after a beat (optional)
       setTimeout(() => {
         setPwOpen(false);
         setPwStep("request");
@@ -325,7 +318,7 @@ export default function SettingsPage() {
       headerRight={
         <button
           onClick={() => loadAll()}
-          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
         >
           Refresh
         </button>
@@ -358,17 +351,17 @@ export default function SettingsPage() {
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Hero */}
           <PremiumCard tone="brand">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <Chip>
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   Account security: Protected
                 </Chip>
 
-                <h2 className="mt-3 text-xl font-semibold text-slate-900">Keep your account safe.</h2>
+                <h2 className="mt-2 text-lg font-semibold text-slate-900">Keep your account safe.</h2>
                 <p className="mt-1 text-sm text-slate-600">
                   Review your profile info and security options. Password changes are protected by OTP verification.
                 </p>
@@ -377,18 +370,18 @@ export default function SettingsPage() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   disabled
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white opacity-60"
                   title="Coming soon"
                 >
-                  <span className="grid h-7 w-7 place-items-center rounded-xl bg-white/10">✓</span>
+                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/10 text-[12px]">✓</span>
                   Enable MFA (soon)
                 </button>
 
                 <button
                   onClick={() => router.push("/billing")}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#215D63] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-[#1c4f54]"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-[#1c4f54]"
                 >
-                  <span className="grid h-7 w-7 place-items-center rounded-xl bg-white/15">⟠</span>
+                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/15 text-[12px]">⟠</span>
                   View plan
                 </button>
               </div>
@@ -396,7 +389,7 @@ export default function SettingsPage() {
           </PremiumCard>
 
           {/* KPI row */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard label="Email" value={userEmail} icon="✉" />
             <KpiCard label="Plan" value={planName} icon="★" />
             <KpiCard label="Account ID" value={userId} icon="ID" />
@@ -404,12 +397,12 @@ export default function SettingsPage() {
           </div>
 
           {/* Main grid */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {/* Profile */}
             <PremiumCard>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Profile details</h2>
+                  <h2 className="text-base font-semibold text-slate-900">Profile details</h2>
                   <p className="mt-1 text-sm text-slate-600">Your basic account information.</p>
                 </div>
 
@@ -419,17 +412,19 @@ export default function SettingsPage() {
                 </Chip>
               </div>
 
-              <div className="mt-6 grid grid-cols-1 gap-4">
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <DetailTile label="Email" value={userEmail} />
                 <DetailTile label="Plan" value={planName} />
                 <DetailTile label="Account ID" value={userId} />
+                <DetailTile label="Last login" value={fmtDate(user?.lastLoginAt)} />
 
                 <DetailTile label="Full name" value={String(user?.fullName ?? "—")} />
                 <DetailTile label="Company" value={String(user?.companyName ?? "—")} />
                 <DetailTile label="Phone" value={String(user?.phone ?? "—")} />
+                <DetailTile label="Created" value={fmtDate(user?.createdAt)} />
               </div>
 
-              <div className="mt-6 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
+              <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                 <p className="text-sm text-slate-700">
                   You can edit your profile details below. Email changes will be added later with verification.
                 </p>
@@ -440,7 +435,7 @@ export default function SettingsPage() {
                 disabled={!canEditProfile}
                 onClick={openEdit}
                 className={[
-                  "mt-6 w-full rounded-2xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-900 transition",
+                  "mt-5 w-full rounded-2xl border border-slate-200 bg-white py-2 text-sm font-semibold text-slate-900 transition",
                   canEditProfile ? "hover:bg-slate-50" : "opacity-60 cursor-not-allowed",
                 ].join(" ")}
                 title={!canEditProfile ? "Your account is read-only or unavailable right now" : "Edit your profile"}
@@ -452,11 +447,15 @@ export default function SettingsPage() {
 
             {/* Security */}
             <PremiumCard>
-              <h2 className="text-lg font-semibold text-slate-900">Security</h2>
-              <p className="mt-1 text-sm text-slate-600">Password, sessions, and access controls.</p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Security</h2>
+                  <p className="mt-1 text-sm text-slate-600">Password, sessions, and access controls.</p>
+                </div>
+                <Chip tone="success">Secure</Chip>
+              </div>
 
-              <div className="mt-6 space-y-3">
-                {/* Replace “choose sign-in method” with a clear read-only status */}
+              <div className="mt-5 space-y-3">
                 <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <p className="text-sm text-slate-800">
                     <span className="font-semibold">Login methods enabled:</span>
@@ -502,7 +501,7 @@ export default function SettingsPage() {
                 disabled={!canManageSecurity}
                 onClick={openPassword}
                 className={[
-                  "mt-6 w-full rounded-2xl py-2.5 text-sm font-semibold text-white transition",
+                  "mt-5 w-full rounded-2xl py-2 text-sm font-semibold text-white transition",
                   canManageSecurity ? "bg-slate-900 hover:bg-slate-800" : "bg-slate-900 opacity-60 cursor-not-allowed",
                 ].join(" ")}
                 title={!canManageSecurity ? "Your account is read-only or unavailable right now" : "Set / change password"}
@@ -518,11 +517,13 @@ export default function SettingsPage() {
       {/* ---------- Edit Profile Modal ---------- */}
       {editOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Edit profile</h3>
-                <p className="mt-1 text-sm text-slate-600">Update your profile details. Email changes are not supported yet.</p>
+                <h3 className="text-base font-semibold text-slate-900">Edit profile</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Update your profile details. Email changes are not supported yet.
+                </p>
               </div>
 
               <button
@@ -537,7 +538,11 @@ export default function SettingsPage() {
             </div>
 
             <div className="mt-4 space-y-3">
-              {formMsg && <div className={["rounded-xl border px-3 py-2 text-sm", formMsgClass].join(" ")}>{formMsg.text}</div>}
+              {formMsg ? (
+                <div className={["rounded-xl border px-3 py-2 text-sm", formMsgClass].join(" ")}>
+                  {formMsg.text}
+                </div>
+              ) : null}
 
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Full name</span>
@@ -578,7 +583,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setEditOpen(false)}
-                className="flex-1 rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
+                className="flex-1 rounded-xl border border-slate-300 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
                 disabled={saving}
               >
                 Cancel
@@ -587,7 +592,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={saveProfile}
-                className="flex-1 rounded-xl bg-[#215D63] py-2 font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
+                className="flex-1 rounded-xl bg-[#215D63] py-2 text-sm font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
                 disabled={saving}
               >
                 {saving ? "Saving..." : "Save changes"}
@@ -600,10 +605,10 @@ export default function SettingsPage() {
       {/* ---------- Password Modal (OTP step-up) ---------- */}
       {pwOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Set / change password</h3>
+                <h3 className="text-base font-semibold text-slate-900">Set / change password</h3>
                 <p className="mt-1 text-sm text-slate-600">
                   For security, we’ll verify your account with an OTP before updating your password.
                 </p>
@@ -621,19 +626,25 @@ export default function SettingsPage() {
             </div>
 
             <div className="mt-4 space-y-3">
-              {pwMsg && <div className={["rounded-xl border px-3 py-2 text-sm", pwMsgClass].join(" ")}>{pwMsg.text}</div>}
+              {pwMsg ? (
+                <div className={["rounded-xl border px-3 py-2 text-sm", pwMsgClass].join(" ")}>
+                  {pwMsg.text}
+                </div>
+              ) : null}
 
               {pwStep === "request" ? (
                 <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <p className="text-sm text-slate-800">
                     We’ll send an OTP to <span className="font-semibold">{userEmail}</span>.
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Click “Send OTP”, then enter the code and your new password.</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Click “Send OTP”, then enter the code and your new password.
+                  </p>
 
                   <button
                     type="button"
                     onClick={requestPasswordOtp}
-                    className="mt-4 w-full rounded-xl bg-[#215D63] py-2 font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
+                    className="mt-4 w-full rounded-xl bg-[#215D63] py-2 text-sm font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
                     disabled={pwSending}
                   >
                     {pwSending ? "Sending..." : "Send OTP"}
@@ -695,7 +706,7 @@ export default function SettingsPage() {
                         setPwStep("request");
                         setPwForm({ otpCode: "", newPassword: "", confirmPassword: "" });
                       }}
-                      className="flex-1 rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
+                      className="flex-1 rounded-xl border border-slate-300 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
                       disabled={pwSaving || pwSending}
                     >
                       Back
@@ -704,7 +715,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={submitPasswordUpdate}
-                      className="flex-1 rounded-xl bg-slate-900 py-2 font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      className="flex-1 rounded-xl bg-slate-900 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
                       disabled={pwSaving}
                     >
                       {pwSaving ? "Updating..." : "Update password"}
@@ -756,7 +767,7 @@ function ActionRow({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "w-full rounded-2xl px-4 py-3 text-left transition",
+        "w-full rounded-2xl px-3 py-2.5 text-left transition",
         "hover:-translate-y-[1px]",
         toneClass,
         ringClass,
@@ -764,10 +775,14 @@ function ActionRow({
       ].join(" ")}
     >
       <div className="flex items-center gap-3">
-        <div className={["grid h-10 w-10 place-items-center rounded-2xl", iconChip].join(" ")}>{icon}</div>
+        <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>
+          {icon}
+        </div>
         <div className="min-w-0">
           <div className="text-sm font-semibold">{title}</div>
-          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>{subtitle}</div>
+          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>
+            {subtitle}
+          </div>
         </div>
         <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
       </div>
@@ -777,40 +792,40 @@ function ActionRow({
 
 function SettingsSkeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
         <div className="h-5 w-48 rounded-lg bg-slate-200 animate-pulse" />
         <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="h-20 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-20 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-20 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-20 rounded-3xl bg-slate-200 animate-pulse" />
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
           <div className="h-5 w-40 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-3 h-4 w-64 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-6 space-y-3">
+          <div className="mt-5 space-y-3">
             <div className="h-12 rounded-2xl bg-slate-200 animate-pulse" />
             <div className="h-12 rounded-2xl bg-slate-200 animate-pulse" />
             <div className="h-12 rounded-2xl bg-slate-200 animate-pulse" />
           </div>
-          <div className="mt-6 h-20 rounded-2xl bg-slate-200 animate-pulse" />
-          <div className="mt-6 h-11 rounded-2xl bg-slate-200 animate-pulse" />
+          <div className="mt-5 h-16 rounded-2xl bg-slate-200 animate-pulse" />
+          <div className="mt-5 h-11 rounded-2xl bg-slate-200 animate-pulse" />
         </div>
 
         <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
           <div className="h-5 w-32 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-3 h-4 w-56 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-6 space-y-3">
-            <div className="h-16 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-16 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-24 rounded-2xl bg-slate-200 animate-pulse" />
+          <div className="mt-5 space-y-3">
+            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
+            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
+            <div className="h-20 rounded-2xl bg-slate-200 animate-pulse" />
           </div>
-          <div className="mt-6 h-11 rounded-2xl bg-slate-200 animate-pulse" />
+          <div className="mt-5 h-11 rounded-2xl bg-slate-200 animate-pulse" />
         </div>
       </div>
     </div>

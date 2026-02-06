@@ -1,3 +1,4 @@
+// src/app/api/billing/verify/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
@@ -13,6 +14,30 @@ const PAYSTACK_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || "";
 // For non-subscription (one-time) upgrades, we approximate a 30-day period end.
 const DEFAULT_PRO_PERIOD_DAYS = Number(process.env.PRO_PERIOD_DAYS || "30");
 
+const PAYSTACK_BASE = "https://api.paystack.co";
+
+type PaystackResponse<T> = {
+  status: boolean;
+  message?: string;
+  data?: T;
+};
+
+type PaystackCustomer = {
+  id: number;
+  email: string;
+  customer_code: string;
+};
+
+type PaystackSubscription = {
+  id: number;
+  status: string;
+  subscription_code: string;
+  next_payment_date?: string | null;
+  plan?: {
+    plan_code: string;
+  };
+};
+
 function toLowerEmail(v: unknown) {
   return typeof v === "string" ? v.trim().toLowerCase() : "";
 }
@@ -27,6 +52,153 @@ function addDays(d: Date, days: number) {
   return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
+function safeTrim(v: unknown) {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function lower(v: unknown) {
+  return String(v ?? "").toLowerCase();
+}
+
+async function paystackGet<T>(path: string): Promise<PaystackResponse<T>> {
+  const res = await fetch(`${PAYSTACK_BASE}${path}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  const json = (await res.json().catch(() => null)) as PaystackResponse<T> | null;
+
+  if (!res.ok || !json?.status) {
+    const msg =
+      (json as any)?.message ||
+      (json as any)?.error ||
+      `Paystack request failed (${res.status}).`;
+    throw new Error(msg);
+  }
+
+  return json;
+}
+
+function pickManageableSubscription(list: PaystackSubscription[]): PaystackSubscription | null {
+  if (!Array.isArray(list) || list.length === 0) return null;
+
+  const active = list.find((s) => lower(s?.status) === "active");
+  if (active) return active;
+
+  const fallbacks = new Set(["trialing", "non-renewing", "paused", "attention"]);
+  const fb = list.find((s) => fallbacks.has(lower(s?.status)));
+  return fb ?? list[0] ?? null;
+}
+
+async function syncSubscriptionFromPaystack(userId: string, email: string) {
+  const sub = await prisma.subscription.findUnique({
+    where: { userId },
+    select: {
+      customerCode: true,
+      subscriptionCode: true,
+      planCode: true,
+      currentPeriodEnd: true,
+    },
+  });
+
+  const haveCustomerCode = Boolean(safeTrim(sub?.customerCode));
+  const haveSubscriptionCode = Boolean(safeTrim(sub?.subscriptionCode));
+
+  if (haveCustomerCode && haveSubscriptionCode) {
+    return {
+      synced: false,
+      customerCode: safeTrim(sub?.customerCode),
+      subscriptionCode: safeTrim(sub?.subscriptionCode),
+      planCode: sub?.planCode ?? null,
+      currentPeriodEnd: sub?.currentPeriodEnd ?? null,
+    };
+  }
+
+  let customer: PaystackCustomer | null = null;
+  try {
+    const custResp = await paystackGet<PaystackCustomer>(
+      `/customer/${encodeURIComponent(email)}`
+    );
+    customer = custResp.data ?? null;
+  } catch {
+    return {
+      synced: false,
+      customerCode: safeTrim(sub?.customerCode),
+      subscriptionCode: safeTrim(sub?.subscriptionCode),
+      planCode: sub?.planCode ?? null,
+      currentPeriodEnd: sub?.currentPeriodEnd ?? null,
+      note: "paystack_customer_lookup_failed",
+    };
+  }
+
+  if (!customer?.id || !customer?.customer_code) {
+    return {
+      synced: false,
+      customerCode: safeTrim(sub?.customerCode),
+      subscriptionCode: safeTrim(sub?.subscriptionCode),
+      planCode: sub?.planCode ?? null,
+      currentPeriodEnd: sub?.currentPeriodEnd ?? null,
+      note: "paystack_customer_missing",
+    };
+  }
+
+  const customerCode = safeTrim(customer.customer_code);
+
+  let subscriptionCode = safeTrim(sub?.subscriptionCode);
+  let planCode: string | null = sub?.planCode ?? null;
+  let currentPeriodEnd: Date | null = sub?.currentPeriodEnd ?? null;
+
+  try {
+    const subsResp = await paystackGet<PaystackSubscription[]>(
+      `/subscription?customer=${encodeURIComponent(String(customer.id))}`
+    );
+
+    const discovered = pickManageableSubscription(subsResp.data || []);
+    const discoveredCode = safeTrim(discovered?.subscription_code);
+
+    if (discoveredCode) subscriptionCode = discoveredCode;
+
+    const discoveredPlan = safeTrim(discovered?.plan?.plan_code);
+    if (discoveredPlan) planCode = discoveredPlan;
+
+    const discoveredPeriodEnd = safeDate(discovered?.next_payment_date);
+    if (discoveredPeriodEnd) currentPeriodEnd = discoveredPeriodEnd;
+  } catch {
+    // ignore
+  }
+
+  await prisma.subscription.upsert({
+    where: { userId },
+    create: {
+      userId,
+      provider: "paystack",
+      status: "active" as any,
+      customerCode,
+      subscriptionCode: subscriptionCode || undefined,
+      planCode: planCode || undefined,
+      currentPeriodEnd: currentPeriodEnd || undefined,
+    },
+    update: {
+      customerCode,
+      ...(subscriptionCode ? { subscriptionCode } : {}),
+      ...(planCode ? { planCode } : {}),
+      ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
+    },
+  });
+
+  return {
+    synced: true,
+    customerCode,
+    subscriptionCode: subscriptionCode || "",
+    planCode,
+    currentPeriodEnd,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!PAYSTACK_SECRET_KEY) {
@@ -36,7 +208,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Auth
     const cookieName = getSessionCookieName();
     const token = req.cookies.get(cookieName)?.value;
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -49,12 +220,36 @@ export async function POST(req: NextRequest) {
     });
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Body
-    const body = await req.json().catch(() => null);
-    const reference = typeof body?.reference === "string" ? body.reference.trim() : "";
+    // ✅ Important: tolerate empty POST body (billing page calls verify on load)
+    let body: any = null;
+    try {
+      body = await req.json();
+    } catch {
+      body = null;
+    }
+
+    const reference =
+      typeof body?.reference === "string" ? body.reference.trim() : "";
 
     if (!reference) {
-      return NextResponse.json({ error: "Missing reference." }, { status: 400 });
+      const email = toLowerEmail(user.email);
+      const sync = await syncSubscriptionFromPaystack(user.id, email);
+
+      return NextResponse.json(
+        {
+          ok: true,
+          mode: "sync",
+          synced: sync.synced === true,
+          customerCode: sync.customerCode ?? "",
+          subscriptionCode: sync.subscriptionCode ?? "",
+          planCode: sync.planCode ?? null,
+          currentPeriodEnd: sync.currentPeriodEnd
+            ? sync.currentPeriodEnd.toISOString()
+            : null,
+          note: (sync as any).note || null,
+        },
+        { status: 200 }
+      );
     }
 
     // Verify with Paystack (server-side)
@@ -77,7 +272,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = json?.data || {};
-    const payStatus = String(data?.status || "").toLowerCase(); // "success" expected
+    const payStatus = String(data?.status || "").toLowerCase();
     const payReference = String(data?.reference || reference);
     const amountKobo = typeof data?.amount === "number" ? data.amount : undefined;
     const currency = typeof data?.currency === "string" ? data.currency : undefined;
@@ -88,8 +283,6 @@ export async function POST(req: NextRequest) {
       safeDate(data?.created_at) ||
       new Date();
 
-    // Optional safety check: if Paystack returns a different email than the logged-in user,
-    // you can reject to prevent accidental cross-linking.
     const payEmail = toLowerEmail(data?.customer?.email);
     if (payEmail && payEmail !== user.email.toLowerCase()) {
       return NextResponse.json(
@@ -98,7 +291,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upsert payment record regardless of success (useful audit)
     await prisma.payment.upsert({
       where: { reference: payReference },
       create: {
@@ -125,7 +317,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, status: payStatus }, { status: 200 });
     }
 
-    // ✅ Grant entitlement (PRO)
     await prisma.entitlement.upsert({
       where: { userId: user.id },
       create: {
@@ -139,41 +330,22 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    /**
-     * ✅ Keep Subscription record in sync so UI can show renewals.
-     *
-     * If you are using Paystack plan subscriptions:
-     * - Paystack returns fields like `plan`, `subscription`, `authorization`, etc.
-     * - webhook will also keep this accurate over time
-     *
-     * If you are NOT using subscriptions (one-time), we still set a period end
-     * (e.g. 30 days) so the UI has something meaningful.
-     */
     const customerCode: string | undefined = data?.customer?.customer_code || undefined;
 
-    // Sometimes verify payload includes subscription info (not always)
     const subscriptionCode: string | undefined =
-      data?.subscription?.subscription_code ||
-      data?.subscription_code ||
-      undefined;
+      data?.subscription?.subscription_code || data?.subscription_code || undefined;
 
     const planCodeFromPaystack: string | undefined =
-      data?.plan?.plan_code ||
-      data?.plan_code ||
-      undefined;
+      data?.plan?.plan_code || data?.plan_code || undefined;
 
     const planCode = planCodeFromPaystack || (PAYSTACK_PLAN_CODE || undefined);
-
     const isRecurring = Boolean(planCode);
 
     const currentPeriodEnd = isRecurring
-      ? // For recurring: we usually rely on webhook to set true period end.
-        // If payload provides something, prefer it; else set a short future placeholder.
-        safeDate(data?.subscription?.next_payment_date) ||
+      ? safeDate(data?.subscription?.next_payment_date) ||
         safeDate(data?.next_payment_date) ||
         addDays(paidAt, DEFAULT_PRO_PERIOD_DAYS)
-      : // For one-time: simple 30-day access window (adjustable by env)
-        addDays(paidAt, DEFAULT_PRO_PERIOD_DAYS);
+      : addDays(paidAt, DEFAULT_PRO_PERIOD_DAYS);
 
     await prisma.subscription.upsert({
       where: { userId: user.id },
