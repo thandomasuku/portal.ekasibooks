@@ -7,14 +7,21 @@ import { getSessionCookieName, verifySession } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
-
-// If you don’t use plans, this can be blank.
-const PAYSTACK_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || "";
-
-// For non-subscription (one-time) upgrades, we approximate a 30-day period end.
-const DEFAULT_PRO_PERIOD_DAYS = Number(process.env.PRO_PERIOD_DAYS || "30");
-
 const PAYSTACK_BASE = "https://api.paystack.co";
+
+// Legacy single-plan env (backwards compatible)
+const LEGACY_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || "";
+const LEGACY_AMOUNT_KOBO = Number(process.env.PAYSTACK_AMOUNT_KOBO || "0");
+
+// New multi-cycle env (recommended)
+const PLAN_CODE_MONTHLY = process.env.PAYSTACK_PLAN_CODE_MONTHLY || "";
+const PLAN_CODE_ANNUAL = process.env.PAYSTACK_PLAN_CODE_ANNUAL || "";
+const AMOUNT_KOBO_MONTHLY = Number(process.env.PAYSTACK_AMOUNT_KOBO_MONTHLY || "0");
+const AMOUNT_KOBO_ANNUAL = Number(process.env.PAYSTACK_AMOUNT_KOBO_ANNUAL || "0");
+
+// If Paystack doesn’t return next_payment_date (rare), use a sensible fallback.
+const DEFAULT_PRO_PERIOD_DAYS_MONTHLY = Number(process.env.PRO_PERIOD_DAYS || "30");
+const DEFAULT_PRO_PERIOD_DAYS_ANNUAL = Number(process.env.PRO_PERIOD_DAYS_ANNUAL || "365");
 
 type PaystackResponse<T> = {
   status: boolean;
@@ -94,6 +101,24 @@ function pickManageableSubscription(list: PaystackSubscription[]): PaystackSubsc
   return fb ?? list[0] ?? null;
 }
 
+function inferCycle(planCode?: string | null, amountKobo?: number | null): "monthly" | "annual" {
+  const pc = safeTrim(planCode);
+
+  // Prefer explicit plan code match (best signal)
+  if (pc && PLAN_CODE_ANNUAL && pc === PLAN_CODE_ANNUAL) return "annual";
+  if (pc && PLAN_CODE_MONTHLY && pc === PLAN_CODE_MONTHLY) return "monthly";
+
+  // Fallback: amount match (useful if plan codes are missing)
+  if (typeof amountKobo === "number" && amountKobo > 0) {
+    if (AMOUNT_KOBO_ANNUAL > 0 && amountKobo === AMOUNT_KOBO_ANNUAL) return "annual";
+    if (AMOUNT_KOBO_MONTHLY > 0 && amountKobo === AMOUNT_KOBO_MONTHLY) return "monthly";
+    if (LEGACY_AMOUNT_KOBO > 0 && amountKobo === LEGACY_AMOUNT_KOBO) return "monthly";
+  }
+
+  // Default
+  return "monthly";
+}
+
 async function syncSubscriptionFromPaystack(userId: string, email: string) {
   const sub = await prisma.subscription.findUnique({
     where: { userId },
@@ -120,9 +145,7 @@ async function syncSubscriptionFromPaystack(userId: string, email: string) {
 
   let customer: PaystackCustomer | null = null;
   try {
-    const custResp = await paystackGet<PaystackCustomer>(
-      `/customer/${encodeURIComponent(email)}`
-    );
+    const custResp = await paystackGet<PaystackCustomer>(`/customer/${encodeURIComponent(email)}`);
     customer = custResp.data ?? null;
   } catch {
     return {
@@ -159,7 +182,6 @@ async function syncSubscriptionFromPaystack(userId: string, email: string) {
 
     const discovered = pickManageableSubscription(subsResp.data || []);
     const discoveredCode = safeTrim(discovered?.subscription_code);
-
     if (discoveredCode) subscriptionCode = discoveredCode;
 
     const discoveredPlan = safeTrim(discovered?.plan?.plan_code);
@@ -202,10 +224,7 @@ async function syncSubscriptionFromPaystack(userId: string, email: string) {
 export async function POST(req: NextRequest) {
   try {
     if (!PAYSTACK_SECRET_KEY) {
-      return NextResponse.json(
-        { error: "Missing PAYSTACK_SECRET_KEY env var." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Missing PAYSTACK_SECRET_KEY env var." }, { status: 500 });
     }
 
     const cookieName = getSessionCookieName();
@@ -220,7 +239,7 @@ export async function POST(req: NextRequest) {
     });
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // ✅ Important: tolerate empty POST body (billing page calls verify on load)
+    // tolerate empty POST body
     let body: any = null;
     try {
       body = await req.json();
@@ -228,9 +247,9 @@ export async function POST(req: NextRequest) {
       body = null;
     }
 
-    const reference =
-      typeof body?.reference === "string" ? body.reference.trim() : "";
+    const reference = typeof body?.reference === "string" ? body.reference.trim() : "";
 
+    // If no reference, try to sync (useful for existing subscriptions)
     if (!reference) {
       const email = toLowerEmail(user.email);
       const sync = await syncSubscriptionFromPaystack(user.id, email);
@@ -243,9 +262,7 @@ export async function POST(req: NextRequest) {
           customerCode: sync.customerCode ?? "",
           subscriptionCode: sync.subscriptionCode ?? "",
           planCode: sync.planCode ?? null,
-          currentPeriodEnd: sync.currentPeriodEnd
-            ? sync.currentPeriodEnd.toISOString()
-            : null,
+          currentPeriodEnd: sync.currentPeriodEnd ? sync.currentPeriodEnd.toISOString() : null,
           note: (sync as any).note || null,
         },
         { status: 200 }
@@ -253,16 +270,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify with Paystack (server-side)
-    const upstream = await fetch(
-      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const upstream = await fetch(`${PAYSTACK_BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
 
     const json = await upstream.json().catch(() => null);
 
@@ -285,10 +299,7 @@ export async function POST(req: NextRequest) {
 
     const payEmail = toLowerEmail(data?.customer?.email);
     if (payEmail && payEmail !== user.email.toLowerCase()) {
-      return NextResponse.json(
-        { error: "Payment email does not match logged-in user." },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: "Payment email does not match logged-in user." }, { status: 409 });
     }
 
     await prisma.payment.upsert({
@@ -317,17 +328,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, status: payStatus }, { status: 200 });
     }
 
+    // Unlock Pro
     await prisma.entitlement.upsert({
       where: { userId: user.id },
-      create: {
-        userId: user.id,
-        tier: "pro" as any,
-        status: "active" as any,
-      },
-      update: {
-        tier: "pro" as any,
-        status: "active" as any,
-      },
+      create: { userId: user.id, tier: "pro" as any, status: "active" as any },
+      update: { tier: "pro" as any, status: "active" as any },
     });
 
     const customerCode: string | undefined = data?.customer?.customer_code || undefined;
@@ -336,16 +341,19 @@ export async function POST(req: NextRequest) {
       data?.subscription?.subscription_code || data?.subscription_code || undefined;
 
     const planCodeFromPaystack: string | undefined =
-      data?.plan?.plan_code || data?.plan_code || undefined;
+      data?.plan?.plan_code || data?.plan_code || data?.subscription?.plan?.plan_code || undefined;
 
-    const planCode = planCodeFromPaystack || (PAYSTACK_PLAN_CODE || undefined);
-    const isRecurring = Boolean(planCode);
+    // If Paystack didn’t return a plan code, we can fall back to legacy env (still better than blank)
+    const planCode = safeTrim(planCodeFromPaystack) || safeTrim(LEGACY_PLAN_CODE) || undefined;
 
-    const currentPeriodEnd = isRecurring
-      ? safeDate(data?.subscription?.next_payment_date) ||
-        safeDate(data?.next_payment_date) ||
-        addDays(paidAt, DEFAULT_PRO_PERIOD_DAYS)
-      : addDays(paidAt, DEFAULT_PRO_PERIOD_DAYS);
+    const cycle = inferCycle(planCode || null, amountKobo ?? null);
+
+    const nextPayment =
+      safeDate(data?.subscription?.next_payment_date) || safeDate(data?.next_payment_date) || null;
+
+    const fallbackDays = cycle === "annual" ? DEFAULT_PRO_PERIOD_DAYS_ANNUAL : DEFAULT_PRO_PERIOD_DAYS_MONTHLY;
+
+    const currentPeriodEnd = nextPayment ? nextPayment : addDays(paidAt, fallbackDays);
 
     await prisma.subscription.upsert({
       where: { userId: user.id },
@@ -368,11 +376,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ ok: true, status: "success" }, { status: 200 });
-  } catch (e: any) {
     return NextResponse.json(
-      { error: e?.message || "Failed to verify transaction." },
-      { status: 500 }
+      { ok: true, status: "success", cycle, planCode: planCode ?? null },
+      { status: 200 }
     );
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "Failed to verify transaction." }, { status: 500 });
   }
 }

@@ -73,6 +73,59 @@ function statusDotClass(status: string) {
   return "bg-slate-400";
 }
 
+/* ---------------- Billing cycle UI helpers ---------------- */
+
+type BillingCycle = "monthly" | "annual";
+
+function CycleToggle({
+  value,
+  onChange,
+  saveLabel = "Save 10%",
+}: {
+  value: BillingCycle;
+  onChange: (v: BillingCycle) => void;
+  saveLabel?: string;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+      <button
+        type="button"
+        onClick={() => onChange("monthly")}
+        aria-pressed={value === "monthly"}
+        className={[
+          "h-9 rounded-xl px-4 text-sm font-semibold transition",
+          value === "monthly" ? "bg-[#215D63] text-white shadow-sm" : "text-slate-700 hover:bg-slate-50",
+        ].join(" ")}
+      >
+        Monthly
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onChange("annual")}
+        aria-pressed={value === "annual"}
+        className={[
+          "h-9 rounded-xl px-4 text-sm font-semibold transition inline-flex items-center gap-2",
+          value === "annual" ? "bg-[#215D63] text-white shadow-sm" : "text-slate-700 hover:bg-slate-50",
+        ].join(" ")}
+      >
+        Annual
+        <span
+          className={[
+            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-extrabold",
+            value === "annual"
+              ? "bg-white/15 text-white ring-1 ring-white/25"
+              : "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+          ].join(" ")}
+          title="Annual plan discount"
+        >
+          {saveLabel}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export default function BillingPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -97,10 +150,15 @@ export default function BillingPage() {
   const [manageLoading, setManageLoading] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
 
-  // UI-only display price (Paystack remains source of truth)
-  const price = 199;
+  // ✅ new: billing cycle selection for checkout
+  const [cycle, setCycle] = useState<BillingCycle>("monthly");
 
+  // Display prices (UI only — Paystack is the source of truth)
+  const MONTHLY_PRICE = 199;
+  const ANNUAL_PRICE = 2149; // 10% discount
+  const annualSave = MONTHLY_PRICE * 12 - ANNUAL_PRICE; // 2388 - 2149 = 239
 
+  const uiPrice = cycle === "annual" ? ANNUAL_PRICE : MONTHLY_PRICE;
 
   async function verifyReference(reference: string) {
     const ref = String(reference || "").trim();
@@ -187,6 +245,8 @@ export default function BillingPage() {
       const res = await fetch("/api/billing/subscribe", {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cycle }), // ✅ monthly | annual
       });
 
       const data = await res.json().catch(() => null);
@@ -259,7 +319,6 @@ export default function BillingPage() {
       backLabel="Back to overview"
       userEmail={user?.email ?? null}
       planName={planName}
-      // Removed tipText to match "no Quick tips" direction
       headerRight={
         <button onClick={() => refresh()} className={BTN_SECONDARY}>
           Refresh
@@ -331,42 +390,52 @@ export default function BillingPage() {
                 ) : null}
               </div>
 
-            {/* Actions (aligned + compact) */}
-<div className="flex w-full flex-col items-end gap-1 md:w-auto">
-  {/* Buttons row */}
-  <div className="flex flex-wrap items-center justify-end gap-2">
-    {planName === "FREE" ? (
-      <button onClick={onUpgrade} disabled={upgradeLoading} className={BTN_PRIMARY}>
-        <span className={BTN_ICON_PRIMARY}>⟠</span>
-        {upgradeLoading ? "Redirecting..." : `Upgrade to Pro (${moneyZar(price)}/mo)`}
-      </button>
-    ) : (
-      <button
-        onClick={onManagePlan}
-        disabled={manageLoading}
-        className={BTN_PRIMARY}
-        title="Manage subscription on Paystack"
-      >
-        <span className={BTN_ICON_PRIMARY}>⚙</span>
-        {manageLoading ? "Opening..." : "Manage plan"}
-      </button>
-    )}
+              {/* Actions */}
+              <div className="flex w-full flex-col items-end gap-2 md:w-auto">
+                {/* If FREE: show cycle toggle */}
+                {planName === "FREE" ? (
+                  <div className="w-full md:w-auto">
+                    <CycleToggle value={cycle} onChange={setCycle} />
+                    <div className="mt-1 text-[11px] text-slate-200/90">
+                      Annual saves <span className="font-extrabold text-white">R{annualSave}</span> per year.
+                    </div>
+                  </div>
+                ) : null}
 
-    <button onClick={() => refresh()} className={BTN_SECONDARY}>
-      <span className={BTN_ICON_SECONDARY}>↻</span>
-      Refresh status
-    </button>
-  </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {planName === "FREE" ? (
+                    <button onClick={onUpgrade} disabled={upgradeLoading} className={BTN_PRIMARY}>
+                      <span className={BTN_ICON_PRIMARY}>⟠</span>
+                      {upgradeLoading
+                        ? "Redirecting..."
+                        : cycle === "annual"
+                        ? `Upgrade annually (${moneyZar(ANNUAL_PRICE)}/yr)`
+                        : `Upgrade monthly (${moneyZar(MONTHLY_PRICE)}/mo)`}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={onManagePlan}
+                      disabled={manageLoading}
+                      className={BTN_PRIMARY}
+                      title="Manage subscription on Paystack"
+                    >
+                      <span className={BTN_ICON_PRIMARY}>⚙</span>
+                      {manageLoading ? "Opening..." : "Manage plan"}
+                    </button>
+                  )}
 
-  {/* Caption under the row (only for paid plans) */}
-  {planName !== "FREE" ? (
-    <span className="text-[11px] leading-tight text-slate-500">
-  Cancel anytime (secure Paystack portal).
-</span>
+                  <button onClick={() => refresh()} className={BTN_SECONDARY}>
+                    <span className={BTN_ICON_SECONDARY}>↻</span>
+                    Refresh status
+                  </button>
+                </div>
 
-  ) : null}
-</div>
-
+                {planName !== "FREE" ? (
+                  <span className="text-[11px] leading-tight text-slate-200/90">
+                    Cancel anytime (secure Paystack portal).
+                  </span>
+                ) : null}
+              </div>
             </div>
           </PremiumCard>
 
@@ -375,7 +444,11 @@ export default function BillingPage() {
             <KpiCard label="Plan" value={planName} icon="★" />
             <KpiCard label="Status" value={heroStatusLabel} icon="✓" />
             <KpiCard label="Renews" value={planName === "FREE" ? "—" : fmtDate(renewsAt)} icon="⏱" />
-            <KpiCard label="Price" value={planName === "FREE" ? "—" : `${moneyZar(price)}/mo`} icon="R" />
+            <KpiCard
+              label="Price"
+              value={planName === "FREE" ? "—" : cycle === "annual" ? `${moneyZar(ANNUAL_PRICE)}/yr` : `${moneyZar(MONTHLY_PRICE)}/mo`}
+              icon="R"
+            />
           </div>
 
           {/* Notices */}
@@ -415,7 +488,16 @@ export default function BillingPage() {
 
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <DetailTile label="Plan" value={planName} />
-                <DetailTile label="Price" value={planName === "FREE" ? "—" : `${moneyZar(price)}/mo`} />
+                <DetailTile
+                  label="Price"
+                  value={
+                    planName === "FREE"
+                      ? "—"
+                      : cycle === "annual"
+                      ? `${moneyZar(ANNUAL_PRICE)}/yr`
+                      : `${moneyZar(MONTHLY_PRICE)}/mo`
+                  }
+                />
                 <DetailTile label="Renews" value={planName === "FREE" ? "—" : fmtDate(renewsAt)} />
               </div>
 
@@ -466,7 +548,7 @@ export default function BillingPage() {
                     />
                     <PlanCard
                       title="PRO"
-                      price={`${moneyZar(price)}/mo`}
+                      price={cycle === "annual" ? `${moneyZar(ANNUAL_PRICE)}/yr` : `${moneyZar(MONTHLY_PRICE)}/mo`}
                       active={planName !== "FREE"}
                       highlight
                       items={[
@@ -480,7 +562,11 @@ export default function BillingPage() {
                     />
                   </div>
 
-                 
+                  {planName === "FREE" ? (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                      Tip: Choose <span className="font-bold">Annual</span> for best value (Save R{annualSave}/year).
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Paystack flow clarity */}
@@ -600,19 +686,20 @@ export default function BillingPage() {
 
                 <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <div className="text-xs font-medium text-slate-500">Renews on</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">{planName === "FREE" ? "—" : fmtDate(renewsAt)}</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {planName === "FREE" ? "—" : fmtDate(renewsAt)}
+                  </div>
 
                   <div className="mt-4 grid grid-cols-1 gap-3">
                     <MiniStat label="Plan" value={planName} />
-                    <MiniStat label="Monthly price" value={planName === "FREE" ? "—" : `${moneyZar(price)}/mo`} />
+                    <MiniStat
+                      label="Price"
+                      value={planName === "FREE" ? "—" : cycle === "annual" ? `${moneyZar(ANNUAL_PRICE)}/yr` : `${moneyZar(MONTHLY_PRICE)}/mo`}
+                    />
                   </div>
                 </div>
 
-                <button
-                  disabled
-                  className={`${BTN_SECONDARY} mt-6 w-full cursor-not-allowed opacity-60`}
-                  title="Coming next"
-                >
+                <button disabled className={`${BTN_SECONDARY} mt-6 w-full cursor-not-allowed opacity-60`} title="Coming next">
                   View invoices (soon)
                 </button>
               </PremiumCard>
@@ -626,11 +713,7 @@ export default function BillingPage() {
                   <p className="mt-1 text-xs text-slate-500">Once webhooks are live, we’ll show invoices and receipts here.</p>
                 </div>
 
-                <button
-                  disabled
-                  className={`${BTN_SECONDARY} mt-6 w-full cursor-not-allowed opacity-60`}
-                  title="Coming next"
-                >
+                <button disabled className={`${BTN_SECONDARY} mt-6 w-full cursor-not-allowed opacity-60`} title="Coming next">
                   Download latest receipt (soon)
                 </button>
               </PremiumCard>
