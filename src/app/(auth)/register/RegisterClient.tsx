@@ -27,6 +27,10 @@ export default function RegisterPage() {
   const [agree, setAgree] = useState(true); // set false if you want strict checkbox
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
+  const [created, setCreated] = useState(false);
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
+  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const emailOk = useMemo(() => {
     const e = email.trim();
@@ -53,6 +57,8 @@ export default function RegisterPage() {
     if (loading) return;
 
     setMsg(null);
+    setDevVerifyUrl(null);
+    setEmailSent(null);
 
     if (!emailOk) return showError("Please enter a valid email address.");
     if (!password.trim()) return showError("Password is required.");
@@ -80,12 +86,49 @@ export default function RegisterPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Registration failed");
 
-      showSuccess("Account created. Redirecting...");
-      router.replace(nextUrl);
+      setCreated(true);
+      setEmailSent(Boolean(data?.emailSent));
+      setDevVerifyUrl(typeof data?.dev_verifyUrl === "string" ? data.dev_verifyUrl : null);
+
+      if (data?.emailSent) {
+        showSuccess("Account created. We sent you a verification email — please verify your email, then log in.");
+      } else {
+        showSuccess(
+          "Account created. Please verify your email before logging in. If you don’t receive an email, click ‘Resend verification email’."
+        );
+      }
     } catch (e: any) {
       showError(e?.message || "Registration failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function resendVerification() {
+    if (resendLoading) return;
+    const e = email.trim().toLowerCase();
+    if (!e || !e.includes("@")) return showError("Please enter a valid email first.");
+
+    setResendLoading(true);
+    setMsg(null);
+    setDevVerifyUrl(null);
+
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: e }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to resend verification email");
+
+      setEmailSent(Boolean(data?.emailSent));
+      setDevVerifyUrl(typeof data?.dev_verifyUrl === "string" ? data.dev_verifyUrl : null);
+      showSuccess("Verification email sent. Please check your inbox (and spam/promotions).");
+    } catch (e: any) {
+      showError(e?.message || "Failed to resend verification email");
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -174,6 +217,46 @@ export default function RegisterPage() {
                   </div>
                 )}
 
+                {created && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                    <div className="font-semibold">Almost there — verify your email</div>
+                    <div className="mt-1 text-sm text-emerald-900/80">
+                      We require email verification before login.
+                      {emailSent
+                        ? " Check your inbox (and spam/promotions)."
+                        : " If you don’t receive an email, click ‘Resend verification email’."}
+                    </div>
+
+                    {devVerifyUrl && (
+                      <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs text-slate-800 ring-1 ring-emerald-200">
+                        <div className="font-semibold text-slate-900">Dev verify link (SMTP not configured):</div>
+                        <div className="mt-1 break-all">{devVerifyUrl}</div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const qs = new URLSearchParams({ email: email.trim().toLowerCase(), registered: "1" });
+                          router.push(`/login?${qs.toString()}`);
+                        }}
+                        className="inline-flex items-center justify-center rounded-xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        Go to login
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resendVerification}
+                        disabled={resendLoading}
+                        className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-60"
+                      >
+                        {resendLoading ? "Sending…" : "Resend verification email"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <label className="block">
                   <span className="text-sm font-medium text-slate-700">
                     Full name (optional)
@@ -184,7 +267,7 @@ export default function RegisterPage() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Syrus Example"
                     autoComplete="name"
-                    disabled={loading}
+                    disabled={loading || created}
                   />
                 </label>
 
@@ -197,7 +280,7 @@ export default function RegisterPage() {
                     placeholder="you@company.com"
                     autoComplete="email"
                     inputMode="email"
-                    disabled={loading}
+                    disabled={loading || created}
                   />
                 </label>
 
@@ -210,7 +293,7 @@ export default function RegisterPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Minimum 8 characters"
                     autoComplete="new-password"
-                    disabled={loading}
+                    disabled={loading || created}
                   />
                 </label>
 
@@ -225,9 +308,9 @@ export default function RegisterPage() {
                     onChange={(e) => setConfirm(e.target.value)}
                     placeholder="Re-type your password"
                     autoComplete="new-password"
-                    disabled={loading}
+                    disabled={loading || created}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") register();
+                      if (e.key === "Enter" && !created) register();
                     }}
                   />
                 </label>
@@ -237,7 +320,7 @@ export default function RegisterPage() {
                     type="checkbox"
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
-                    disabled={loading}
+                    disabled={loading || created}
                   />
                   Remember me for 7 days
                 </label>
@@ -247,7 +330,7 @@ export default function RegisterPage() {
                     type="checkbox"
                     checked={agree}
                     onChange={(e) => setAgree(e.target.checked)}
-                    disabled={loading}
+                    disabled={loading || created}
                     className="mt-1"
                   />
                   <span>
@@ -258,16 +341,16 @@ export default function RegisterPage() {
                 </label>
 
                 <button
-                  onClick={register}
-                  disabled={loading}
+                  onClick={() => (!created ? register() : undefined)}
+                  disabled={loading || created}
                   className="w-full rounded-xl bg-[#215D63] text-white py-2 font-semibold shadow-sm hover:bg-[#1c4f54] disabled:opacity-60"
                 >
-                  {loading ? "Creating account..." : "Create account"}
+                  {created ? "Account created" : loading ? "Creating account..." : "Create account"}
                 </button>
 
                 <button
                   onClick={() => router.push("/login")}
-                  disabled={loading}
+                  disabled={loading || created}
                   className="w-full rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
                 >
                   Back to login

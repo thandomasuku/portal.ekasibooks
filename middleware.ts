@@ -27,6 +27,8 @@ const PUBLIC_PATHS = new Set<string>([
   "/pricing",
   "/terms",
   "/privacy",
+  "/verify-email", // ✅ allow email verification page
+  "/otp",          // ✅ (optional) if you want OTP page always reachable
 ]);
 
 function isProtectedPath(pathname: string) {

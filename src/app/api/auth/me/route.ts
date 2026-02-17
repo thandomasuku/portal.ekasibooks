@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         email: true,
+        emailVerifiedAt: true,
         createdAt: true,
         lastLoginAt: true,
         fullName: true,
@@ -69,6 +70,10 @@ export async function GET(req: NextRequest) {
       {
         authenticated: true,
 
+        // email verification
+        emailVerified: Boolean(user.emailVerifiedAt),
+        emailVerifiedAt: user.emailVerifiedAt,
+
         // flat fields (easy for UI)
         id: user.id,
         email: user.email,
@@ -86,6 +91,8 @@ export async function GET(req: NextRequest) {
           id: user.id,
           email: user.email,
           displayName,
+          emailVerified: Boolean(user.emailVerifiedAt),
+          emailVerifiedAt: user.emailVerifiedAt,
           createdAt: user.createdAt,
           lastLoginAt: user.lastLoginAt,
 

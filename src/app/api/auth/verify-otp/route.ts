@@ -76,29 +76,38 @@ export async function POST(req: NextRequest) {
       return jsonError("Invalid or expired OTP code.", 401);
     }
 
-    // Mark OTP used (best practice to prevent replay)
+    // ✅ Fix: Prisma types allow userId to be null, guard it
+    if (!otp.userId) {
+      return jsonError("Invalid OTP record.", 400);
+    }
+
+    // Load user (OTP login is ONLY for existing users)
+    const user = await prisma.user.findUnique({
+      where: { id: otp.userId },
+      select: { id: true, email: true, emailVerifiedAt: true },
+    });
+
+    if (!user) {
+      return jsonError("Account not found. Please register first.", 404);
+    }
+
+    // 🚫 Block login until email is verified
+    if (!user.emailVerifiedAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Please verify your email before logging in.",
+          code: "EMAIL_NOT_VERIFIED",
+        },
+        { status: 403 }
+      );
+    }
+
+    // ✅ Mark OTP used ONLY after we know the user exists & is allowed to login
     await prisma.otpCode.update({
       where: { id: otp.id },
       data: { usedAt: new Date() },
     });
-
-    // Load or create user (depends on how you flow OTP)
-    let user = otp.userId
-      ? await prisma.user.findUnique({
-          where: { id: otp.userId },
-          select: { id: true, email: true },
-        })
-      : await prisma.user.findUnique({
-          where: { email },
-          select: { id: true, email: true },
-        });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: { email },
-        select: { id: true, email: true },
-      });
-    }
 
     // ✅ Enforce single active session then create a new session for this login
     await enforceMaxSessions(user.id, 1);

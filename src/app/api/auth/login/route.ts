@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, passwordHash: true },
+      select: { id: true, email: true, passwordHash: true, emailVerifiedAt: true },
     });
 
     if (!user || !user.passwordHash) {
@@ -77,6 +77,18 @@ export async function POST(req: NextRequest) {
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return jsonError("Invalid email or password.", 401);
+
+    // 🚫 Block login until email is verified
+    if (!user.emailVerifiedAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Please verify your email before logging in.",
+          code: "EMAIL_NOT_VERIFIED",
+        },
+        { status: 403 }
+      );
+    }
 
     // ✅ Enforce 1 session/account in portal (last login wins)
     const meta = getClientMeta(req);

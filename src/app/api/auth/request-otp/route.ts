@@ -142,6 +142,29 @@ export async function POST(req: NextRequest) {
 
     const now = new Date();
 
+    // 🚫 Public OTP login is only for existing, email-verified accounts.
+    // (OTP can still be used for password update when already authenticated.)
+    if (resolved.mode === "PUBLIC") {
+      const u = await prisma.user.findUnique({
+        where: { email: e },
+        select: { id: true, emailVerifiedAt: true },
+      });
+
+      if (!u) {
+        return NextResponse.json(
+          { error: "Account not found. Please register first." },
+          { status: 404, headers: noStoreHeaders() }
+        );
+      }
+
+      if (!u.emailVerifiedAt) {
+        return NextResponse.json(
+          { error: "Please verify your email before using OTP login.", code: "EMAIL_NOT_VERIFIED" },
+          { status: 403, headers: noStoreHeaders() }
+        );
+      }
+    }
+
     // Cooldown check
     const latest = await prisma.otpCode.findFirst({
       where: { email: e },
@@ -162,18 +185,19 @@ export async function POST(req: NextRequest) {
     const code = randomCode();
     const expiresAt = new Date(now.getTime() + OTP_TTL_MINUTES * 60 * 1000);
 
-    // Transaction: ensure user exists, clear old unused, create OTP
+    // Transaction: clear old unused, create OTP
     await prisma.$transaction(async (tx) => {
-      const u = await tx.user.upsert({
+      const u = await tx.user.findUnique({
         where: { email: e },
-        update: {},
-        create: { email: e },
-        select: { id: true, email: true },
+        select: { id: true },
       });
 
-      await tx.otpCode.deleteMany({
-        where: { email: e, usedAt: null },
-      });
+      if (!u) {
+        // In PUBLIC mode we already returned above; in SESSION mode, this would be unusual.
+        throw new Error("ACCOUNT_NOT_FOUND");
+      }
+
+      await tx.otpCode.deleteMany({ where: { email: e, usedAt: null } });
 
       await tx.otpCode.create({
         data: { email: e, code, expiresAt, userId: u.id },

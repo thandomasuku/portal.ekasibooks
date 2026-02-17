@@ -18,7 +18,10 @@ export default function LoginClient() {
 
   const [pwLoading, setPwLoading] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
+
+  const [needsVerify, setNeedsVerify] = useState(false);
 
   // Show dev OTP (if API returns devCode in non-prod)
   const [devOtp, setDevOtp] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export default function LoginClient() {
     setPwLoading(true);
     setMsg(null);
     setDevOtp(null);
+    setNeedsVerify(false);
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -67,7 +71,13 @@ export default function LoginClient() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.error || "Login failed");
+      if (!res.ok) {
+        if (res.status === 403 && (data as any)?.code === "EMAIL_NOT_VERIFIED") {
+          setNeedsVerify(true);
+          throw new Error((data as any)?.error || "Please verify your email before logging in.");
+        }
+        throw new Error((data as any)?.error || "Login failed");
+      }
 
       showSuccess("Login successful. Redirecting...");
       router.replace(nextUrl);
@@ -85,6 +95,7 @@ export default function LoginClient() {
     setOtpLoading(true);
     setMsg(null);
     setDevOtp(null);
+    setNeedsVerify(false);
 
     // Set expectations immediately (zero-budget fix for slow SMTP)
     showInfo(
@@ -100,7 +111,13 @@ export default function LoginClient() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.error || "OTP request failed");
+      if (!res.ok) {
+        if (res.status === 403 && (data as any)?.code === "EMAIL_NOT_VERIFIED") {
+          setNeedsVerify(true);
+          throw new Error((data as any)?.error || "Please verify your email before using OTP login.");
+        }
+        throw new Error((data as any)?.error || "OTP request failed");
+      }
 
       // If API returns devCode in non-prod, show it to speed up testing
       if (!isProd && (data as any)?.devCode) {
@@ -122,6 +139,29 @@ export default function LoginClient() {
       showError(e?.message || "OTP request failed");
     } finally {
       setOtpLoading(false);
+    }
+  }
+
+  async function resendVerification() {
+    if (resendLoading) return;
+    if (!emailOk) return showError("Please enter a valid email address first.");
+
+    setResendLoading(true);
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as any)?.error || "Resend failed");
+
+      showSuccess("Verification email sent. Please check your inbox (and spam/promotions).");
+      setNeedsVerify(false);
+    } catch (e: any) {
+      showError(e?.message || "Resend failed");
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -201,7 +241,20 @@ export default function LoginClient() {
               <div className="mt-8 space-y-4">
                 {msg && (
                   <div className={`rounded-xl border px-3 py-2 text-sm ${msgClass(msg)}`}>
-                    {msg.text}
+                    <div className="flex flex-col gap-2">
+                      <div>{msg.text}</div>
+
+                      {needsVerify && (
+                        <button
+                          type="button"
+                          onClick={resendVerification}
+                          disabled={resendLoading}
+                          className="w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          {resendLoading ? "Sending…" : "Resend verification email"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 

@@ -3,47 +3,97 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/db";
-import { buildSessionCookie, signSession } from "@/lib/auth";
+import { generateToken, sha256 } from "@/lib/token";
+// NOTE: Registration does NOT create a login session.
+// Users must verify email before they can log in.
 
-const SESSION_DAYS = 7;
+// Email verification config
+const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "";
+const EMAIL_VERIFY_TTL_HOURS = Number(process.env.EMAIL_VERIFY_TTL_HOURS || "24");
+
+// Optional email sender env (won’t break if missing)
+// Support both EMAIL_FROM and MAIL_FROM (your OTP flow uses MAIL_FROM)
+const EMAIL_FROM = process.env.EMAIL_FROM || process.env.MAIL_FROM || "";
+const SMTP_HOST = process.env.SMTP_HOST || "";
+const SMTP_PORT = Number(process.env.SMTP_PORT || "587");
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status });
 }
 
-function getClientMeta(req: NextRequest) {
-  const userAgent = req.headers.get("user-agent") || "";
-  const ip =
-    req.headers.get("x-forwarded-for") ||
-    req.headers.get("x-real-ip") ||
-    "";
-  return { userAgent, ip };
+function cleanBaseUrl(url: string) {
+  return url.replace(/\/$/, "");
 }
 
-async function enforceMaxSessions(userId: string, max = 1) {
-  const sessions = await prisma.session.findMany({
-    where: { userId, revokedAt: null },
-    orderBy: [{ lastSeenAt: "asc" }, { createdAt: "asc" }],
-    select: { id: true },
+function getBaseUrl(req: NextRequest) {
+  const base =
+    APP_URL && APP_URL.trim() ? cleanBaseUrl(APP_URL.trim()) : req.nextUrl.origin;
+  return base;
+}
+
+// (intentionally no session creation here)
+
+function addHours(d: Date, hours: number) {
+  return new Date(d.getTime() + hours * 60 * 60 * 1000);
+}
+
+/**
+ * Optional SMTP email sender (only used if SMTP env vars exist).
+ * Won't throw if not configured; returns {sent:false}.
+ */
+async function sendVerificationEmail(toEmail: string, verifyUrl: string) {
+  const configured =
+    EMAIL_FROM && SMTP_HOST && SMTP_USER && SMTP_PASS && Number.isFinite(SMTP_PORT);
+
+  if (!configured) {
+    return { sent: false as const, reason: "smtp_not_configured" as const };
+  }
+
+  // Lazy import so we don’t require nodemailer unless you actually configure SMTP
+  const nodemailer = await import("nodemailer").catch(() => null);
+  if (!nodemailer?.createTransport) {
+    return { sent: false as const, reason: "nodemailer_missing" as const };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
   });
 
-  if (sessions.length < max) return;
+  const subject = "Verify your email for eKasiBooks";
+  const text = `Welcome to eKasiBooks!\n\nVerify your email by clicking:\n${verifyUrl}\n\nThis link expires in ${EMAIL_VERIFY_TTL_HOURS} hours.`;
+  const html = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5">
+      <h2 style="margin:0 0 12px">Verify your email</h2>
+      <p style="margin:0 0 12px">Welcome to eKasiBooks 👋</p>
+      <p style="margin:0 0 18px">Click the button below to verify your email address:</p>
+      <p style="margin:0 0 18px">
+        <a href="${verifyUrl}" style="display:inline-block;background:#215D63;color:#fff;text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:700">
+          Verify email
+        </a>
+      </p>
+      <p style="margin:0;color:#475569;font-size:12px">This link expires in ${EMAIL_VERIFY_TTL_HOURS} hours.</p>
+    </div>
+  `;
 
-  // revoke oldest until there's room (keep newest max-1 before creating new)
-  const toRevokeCount = sessions.length - (max - 1);
-  const toRevoke = sessions.slice(0, Math.max(0, toRevokeCount));
+  await transporter.sendMail({
+    from: EMAIL_FROM,
+    to: toEmail,
+    subject,
+    text,
+    html,
+  });
 
-  if (toRevoke.length) {
-    await prisma.session.updateMany({
-      where: { id: { in: toRevoke.map((s) => s.id) } },
-      data: { revokedAt: new Date() },
-    });
-  }
+  return { sent: true as const };
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, remember } = await req.json().catch(() => ({}));
+    const { email, password } = await req.json().catch(() => ({}));
 
     const e = String(email || "").trim().toLowerCase();
     const pw = String(password || "");
@@ -62,45 +112,60 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await bcrypt.hash(pw, 12);
 
-    // Create user
+    // 1) Create user
     const user = await prisma.user.create({
-      data: { email: e, passwordHash },
+      data: {
+        email: e,
+        passwordHash,
+        // If you added emailVerifiedAt, it will default null anyway.
+        // emailVerifiedAt: null,
+      },
       select: { id: true, email: true },
     });
 
-    // ✅ Enforce 1 active session per account (consistent with login route)
-    await enforceMaxSessions(user.id, 1);
+    // 2) Create/replace email verification token
+    const token = generateToken(32);
+    const tokenHash = sha256(token);
+    const expiresAt = addHours(new Date(), Math.max(1, EMAIL_VERIFY_TTL_HOURS));
 
-    // Create session row (auto-login after register)
-    const meta = getClientMeta(req);
-    const session = await prisma.session.create({
-      data: {
+    // If your model uses userId UNIQUE (one active token per user), upsert is ideal.
+    // If your schema allows multiple tokens, switch this to create + cleanup old.
+    await prisma.emailVerificationToken.upsert({
+      where: { userId: user.id },
+      create: {
         userId: user.id,
-        userAgent: meta.userAgent,
-        ip: String(meta.ip || "").slice(0, 190),
-        createdAt: new Date(),
-        lastSeenAt: new Date(),
-        revokedAt: null,
+        tokenHash,
+        expiresAt,
       },
-      select: { id: true },
+      update: {
+        tokenHash,
+        expiresAt,
+      },
     });
 
-    // Sign JWT with userId + sessionId (new auth model)
-    const token = await signSession(user.id, session.id);
+    const baseUrl = getBaseUrl(req);
+    const verifyUrl = `${baseUrl}/verify-email?token=${encodeURIComponent(token)}`;
 
-    // Cookie maxAge: 1 day vs 7 days (remember me)
-    const maxAgeSeconds = (remember ? SESSION_DAYS : 1) * 24 * 60 * 60;
+    // 3) Try send email (optional)
+    const emailSend = await sendVerificationEmail(user.email, verifyUrl).catch((err) => {
+      console.warn("[auth/register] sendVerificationEmail failed:", err?.message || err);
+      return { sent: false as const, reason: "send_failed" as const };
+    });
 
-    const res = NextResponse.json(
-      { success: true, user: { id: user.id, email: user.email } },
-      { status: 200 }
-    );
+    // 4) Response (no session cookie)
+    const resBody: any = {
+      success: true,
+      user: { id: user.id, email: user.email },
+      emailVerificationRequired: true,
+      emailSent: emailSend.sent === true,
+    };
 
-    // build default cookie then override maxAge if needed
-    const cookie = buildSessionCookie(token);
-    res.cookies.set({ ...cookie, maxAge: maxAgeSeconds });
+    // Helpful for dev/testing (don’t leak in production)
+    if (process.env.NODE_ENV !== "production" && emailSend.sent !== true) {
+      resBody.dev_verifyUrl = verifyUrl;
+    }
 
-    return res;
+    return NextResponse.json(resBody, { status: 200 });
   } catch (err: any) {
     console.error("[auth/register] error", err?.message || err);
     return NextResponse.json({ success: false, error: "Registration failed" }, { status: 500 });

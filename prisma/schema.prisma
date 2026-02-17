@@ -34,18 +34,18 @@ enum EntitlementStatus {
 }
 
 model Session {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
 
   // optional diagnostics
-  userAgent String   @default("")
-  ip        String   @default("")
+  userAgent String @default("")
+  ip        String @default("")
 
-  createdAt DateTime @default(now())
-  lastSeenAt DateTime @default(now())
-  revokedAt DateTime?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
 
   @@index([userId])
   @@index([userId, revokedAt])
@@ -53,27 +53,43 @@ model Session {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String    @id @default(cuid())
+  email        String    @unique
   passwordHash String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   lastLoginAt  DateTime?
 
-  // ✅ Editable profile fields
-  fullName     String?
-  companyName  String?
-  phone        String?
+  fullName    String?
+  companyName String?
+  phone       String?
+
+  emailVerifiedAt DateTime?
+  verifySentAt    DateTime?
 
   otpCodes     OtpCode[]
   payments     Payment[]
   subscription Subscription?
   entitlement  Entitlement?
-
-  // ✅ NEW: server-tracked sessions (for max 2 sessions enforcement)
   sessions     Session[]
+
+  // ✅ add this
+  emailVerificationToken EmailVerificationToken?
 }
 
+model EmailVerificationToken {
+  id String @id @default(cuid())
+
+  // ✅ relation now has an opposite field on User
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
 
 model OtpCode {
   id        String    @id @default(cuid())
