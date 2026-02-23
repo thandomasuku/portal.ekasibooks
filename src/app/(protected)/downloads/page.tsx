@@ -27,7 +27,6 @@ function safeCopy(text: string) {
   } catch {
     // ignore
   }
-  // fallback
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.style.position = "fixed";
@@ -45,6 +44,15 @@ function safeCopy(text: string) {
   return Promise.resolve();
 }
 
+/** Page-level UI primitives (keeps pages consistent) */
+const BTN_BASE =
+  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition " +
+  "hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
+  "disabled:opacity-60 disabled:hover:translate-y-0";
+
+const BTN_PRIMARY = cx(BTN_BASE, "text-white");
+const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
+
 export default function DownloadsPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -57,13 +65,11 @@ export default function DownloadsPage() {
   }, [sp]);
 
   const [openId, setOpenId] = useState<string>("latest");
-
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
   const planName = normalizePlan(entitlement?.plan);
   const isPaid = planName !== "FREE";
 
-  // ✅ The important part: the actual download URL (env-driven, with safe fallback)
   const downloadUrl =
     (process.env.NEXT_PUBLIC_DESKTOP_WIN_LATEST_URL ?? "").trim() ||
     "https://ekasibooks.co.za/downloads/desktop/eKasiBooks-Setup.exe";
@@ -120,14 +126,13 @@ export default function DownloadsPage() {
   ];
 
   function onDownload() {
-    // New tab is the most reliable for big downloads + avoids blocking portal navigation
     window.open(latest.url, "_blank", "noopener,noreferrer");
   }
 
   async function onCopyLink() {
     setCopyMsg(null);
     await safeCopy(latest.url);
-    setCopyMsg("Link copied");
+    setCopyMsg("Copied");
     window.setTimeout(() => setCopyMsg(null), 1200);
   }
 
@@ -140,7 +145,6 @@ export default function DownloadsPage() {
       backLabel="Back to overview"
       userEmail={user?.email ?? null}
       planName={planName}
-      // Removed tipText to match "remove tip blocks everywhere"
       footerRight={
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline text-xs text-slate-500">Desktop: Windows</span>
@@ -152,32 +156,18 @@ export default function DownloadsPage() {
       }
     >
       {state === "loading" ? (
-        <div className="space-y-5">
-          <PremiumCard>
-            <div className="h-5 w-64 rounded-lg bg-slate-200 animate-pulse" />
-            <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
-            <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-              <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-              <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-              <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-            </div>
-          </PremiumCard>
-        </div>
+        <DownloadsSkeleton />
       ) : state === "error" ? (
         <PremiumCard>
           <h2 className="text-base font-semibold text-slate-900">Session check failed</h2>
           <p className="mt-2 text-sm text-slate-600">{error ?? "Something went wrong. Please try again."}</p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={() => refresh()}
-              className="rounded-2xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1c4f54]"
-            >
+            <button onClick={() => refresh()} className={BTN_PRIMARY} style={{ background: "var(--primary)" }}>
               Retry
             </button>
             <button
               onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              className={BTN_SECONDARY}
             >
               Go to login
             </button>
@@ -189,75 +179,75 @@ export default function DownloadsPage() {
           <p className="mt-2 text-sm text-slate-600">Your session isn’t active. Taking you to login.</p>
         </PremiumCard>
       ) : (
-        <div className="space-y-5">
-          {/* Hero */}
-          <PremiumCard tone="brand">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <Chip tone={isPaid ? "success" : "neutral"}>
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Access: {isPaid ? "Active subscription" : "FREE plan"}
-                </Chip>
+        <div className="space-y-6">
+          {/* Top “product” card (Stripe-ish: simple, clear, no heavy gradients) */}
+          <PremiumCard>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Chip tone={isPaid ? "success" : "neutral"}>
+                    <span className={cx("h-2 w-2 rounded-full", isPaid ? "bg-emerald-500" : "bg-slate-400")} />
+                    {isPaid ? "Subscription active" : "FREE plan"}
+                  </Chip>
 
-                <h2 className="mt-2 text-lg font-semibold text-slate-900">{latest.name}</h2>
-                <p className="mt-1 text-sm text-slate-600">Latest stable release (installer download).</p>
+                  <span className="text-xs text-slate-500">•</span>
 
-                <div className="mt-2 break-all text-xs text-slate-500">
-                  Source: <span className="font-medium text-slate-700">{latest.url}</span>
+                  <span className="text-xs font-semibold text-slate-700">
+                    {latest.channel} channel
+                  </span>
+                </div>
+
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">{latest.name}</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Latest stable release for Windows.
+                </p>
+
+                <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                  <span className="font-semibold text-slate-700">Download URL:</span>{" "}
+                  <span className="break-all">{latest.url}</span>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button
-                  onClick={onDownload}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-[#1c4f54]"
-                  title="Download installer"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/15 text-[12px]">⇩</span>
+              <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
+                <button onClick={onDownload} className={BTN_PRIMARY} style={{ background: "var(--primary)" }}>
+                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-[12px]">⇩</span>
                   Download
                 </button>
 
-                <button
-                  onClick={onCopyLink}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
-                  title="Copy download link"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
+                <button onClick={onCopyLink} className={BTN_SECONDARY}>
+                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
                     ⧉
                   </span>
                   {copyMsg ?? "Copy link"}
                 </button>
 
-                <button
-                  disabled
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 opacity-60"
-                  title="Coming soon"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
+                <button disabled className={cx(BTN_SECONDARY, "opacity-60")} title="Coming soon">
+                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
                     ⋯
                   </span>
-                  View all versions (soon)
+                  Versions (soon)
                 </button>
               </div>
             </div>
           </PremiumCard>
 
           {/* KPIs */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard label="Version" value={latest.version} icon="v" />
             <KpiCard label="Released" value={latest.releaseDate ? fmtDate(latest.releaseDate) : "—"} icon="⏱" />
             <KpiCard label="Platform" value="Windows 10/11" icon="⊞" />
             <KpiCard label="Channel" value={latest.channel} icon="★" />
           </div>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {/* Main grid */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Left */}
-            <div className="lg:col-span-2 space-y-5">
+            <div className="lg:col-span-2 space-y-6">
               <PremiumCard>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Latest installer</h3>
-                    <p className="mt-1 text-sm text-slate-600">Download the newest stable version.</p>
+                    <p className="mt-1 text-sm text-slate-600">Version details and compatibility.</p>
                   </div>
                   <Chip tone="success">Live</Chip>
                 </div>
@@ -271,7 +261,7 @@ export default function DownloadsPage() {
                 <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <p className="text-sm text-slate-700">
                     <span className="font-semibold">Access:</span>{" "}
-                    {isPaid ? "You have an active subscription." : "You are on the FREE plan."}
+                    {isPaid ? "You have an active subscription." : "You’re on the FREE plan."}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     This portal manages your account and subscription. The accounting work happens in the desktop app.
@@ -283,7 +273,7 @@ export default function DownloadsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Changelog</h3>
-                    <p className="mt-1 text-sm text-slate-600">Release notes and improvements over time.</p>
+                    <p className="mt-1 text-sm text-slate-600">Release notes and improvements.</p>
                   </div>
                   <span className="text-xs text-slate-500">{changelog.length} entries</span>
                 </div>
@@ -292,14 +282,11 @@ export default function DownloadsPage() {
                   {changelog.map((c) => {
                     const open = openId === c.id;
                     return (
-                      <div
-                        key={c.id}
-                        className={cx("rounded-2xl border border-slate-200 bg-white", open ? "shadow-sm" : "")}
-                      >
+                      <div key={c.id} className={cx("rounded-2xl border border-slate-200 bg-white", open && "shadow-sm")}>
                         <button
                           type="button"
                           onClick={() => setOpenId(open ? "" : c.id)}
-                          className="flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-2.5 text-left transition hover:bg-slate-50"
+                          className="flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left transition hover:bg-slate-50"
                         >
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
@@ -337,12 +324,12 @@ export default function DownloadsPage() {
             </div>
 
             {/* Right */}
-            <div className="space-y-5">
+            <div className="space-y-6">
               <PremiumCard tone="soft">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">What’s included</h3>
-                    <p className="mt-1 text-sm text-slate-600">Highlights of the desktop experience.</p>
+                    <p className="mt-1 text-sm text-slate-600">Desktop highlights.</p>
                   </div>
                   <Chip tone="success">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -366,7 +353,7 @@ export default function DownloadsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Integrity & system info</h3>
-                    <p className="mt-1 text-sm text-slate-600">Verify the installer and check compatibility.</p>
+                    <p className="mt-1 text-sm text-slate-600">Compatibility details.</p>
                   </div>
                   <Chip tone="success">Secure</Chip>
                 </div>
@@ -376,8 +363,6 @@ export default function DownloadsPage() {
                   <MiniRow label="Windows" value="10 / 11 (64-bit)" />
                   <MiniRow label="Recommended RAM" value="4GB+" />
                 </div>
-
-                {/* Removed the "downloads go live / checksum / smartscreen" notice block */}
               </PremiumCard>
 
               <PremiumCard tone="soft">
@@ -390,11 +375,7 @@ export default function DownloadsPage() {
                   <MiniRow label="Alpha" value="Experimental (internal)" />
                 </div>
 
-                <button
-                  disabled
-                  className="mt-5 w-full rounded-2xl border border-slate-200 bg-white py-2 text-sm font-semibold text-slate-900 opacity-60"
-                  title="Coming soon"
-                >
+                <button disabled className={cx(BTN_SECONDARY, "mt-5 w-full opacity-60")} title="Coming soon">
                   Join beta channel (soon)
                 </button>
               </PremiumCard>
@@ -403,5 +384,44 @@ export default function DownloadsPage() {
         </div>
       )}
     </PortalShell>
+  );
+}
+
+function DownloadsSkeleton() {
+  return (
+    <div className="space-y-6">
+      <PremiumCard>
+        <div className="h-5 w-64 rounded-lg bg-slate-200 animate-pulse" />
+        <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+        </div>
+      </PremiumCard>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+          <div className="h-5 w-44 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-3 h-4 w-72 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
+            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
+            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+          <div className="h-5 w-40 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-3 h-4 w-56 rounded-lg bg-slate-200 animate-pulse" />
+          <div className="mt-5 space-y-2">
+            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
+            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
+            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

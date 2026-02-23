@@ -2,12 +2,56 @@
 
 /* =========================
    Global theme + typography
+   Desktop-style: dark sidebar + light airy content
+   SINGLE THEME ONLY (no dark mode toggle)
    ========================= */
 
 /* Theme tokens */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ✅ Content area (light + airy like desktop dashboard) */
+  --background: #f6f7fb; /* soft porcelain */
+  --foreground: #0f172a; /* slate-900 */
+
+  /* Surfaces */
+  --surface: #f6f7fb; /* page surface */
+  --surface-2: #eef2f8; /* slightly lifted section bg */
+  --card: #ffffff; /* cards stay white */
+
+  /* Borders + dividers (softer, less “boxed”) */
+  --border: rgba(15, 23, 42, 0.08);
+  --border-soft: rgba(15, 23, 42, 0.05);
+
+  /* Text */
+  --muted: #64748b; /* slate-500 */
+  --muted-2: #94a3b8; /* slate-400 */
+
+  /* ✅ Brand accents (teal) */
+  --primary: #11b3a3;
+  --primary-foreground: #ffffff;
+
+  /* Focus ring */
+  --ring: rgba(17, 179, 163, 0.22);
+
+  /* Shadows (lighter + calmer) */
+  --shadow-sm: 0 1px 10px rgba(15, 23, 42, 0.05);
+  --shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+
+  /* ✅ Sidebar tokens (FLAT, modern) */
+  --sidebar-bg-1: #0b1220; /* flat background */
+  --sidebar-text: rgba(255, 255, 255, 0.72);
+  --sidebar-text-strong: rgba(255, 255, 255, 0.92);
+  --sidebar-divider: rgba(255, 255, 255, 0.10);
+
+  /* Accent */
+  --accent: #0bb69a;
+  --accent-soft: rgba(11, 182, 154, 0.14);
+
+  /* Active state (calmer) */
+  --sidebar-active: rgba(11, 182, 154, 0.12);
+  --sidebar-active-border: rgba(11, 182, 154, 0.24);
+
+  /* Hover (subtle) */
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
 
   /* ✅ Primary UI font (DM Sans) */
   --font-sans: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -15,7 +59,7 @@
 
   /* ✅ Portal compact tokens */
   --portal-card-radius: 16px;
-  --portal-card-pad: 16px;
+  --portal-card-pad: 18px;
   --portal-kpi-height: 64px;
   --portal-body: 14px;
   --portal-small: 12px;
@@ -27,27 +71,207 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  /* ✅ IMPORTANT: do NOT override --font-sans back to Geist here */
+  /* Expose extra tokens (useful for custom utilities/classes) */
+  --color-muted: var(--muted);
+  --color-border: var(--border);
 
-  /* Keep mono mapping (Geist Mono variable still provided in layout.tsx) */
+  /* ✅ IMPORTANT: do NOT override --font-sans back to Geist here */
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base */
+html,
+body {
+  height: 100%;
 }
 
-/* Base */
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 800px at 15% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 60%),
+    radial-gradient(900px 600px at 95% 0%, rgba(15, 23, 42, 0.06), transparent 55%),
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
 
   /* ✅ Nice for tables + money columns (aligned numbers) */
   font-variant-numeric: tabular-nums;
+
+  /* Make text rendering feel a bit more premium */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Better defaults */
+a {
+  color: var(--primary);
+}
+
+a:hover {
+  opacity: 0.92;
+}
+
+/* Selection feels nicer */
+::selection {
+  background: rgba(17, 179, 163, 0.18);
+}
+
+
+/* Main scroll surface background */
+.portal-main {
+  background:
+    radial-gradient(1000px 700px at 10% 0%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--surface), var(--surface-2));
+}
+/* =========================
+   Portal utility classes
+   Use these to rapidly align portal with desktop style
+   ========================= */
+
+/* Whole page surface */
+.portal-surface {
+  background: var(--surface);
+}
+
+/* Card look (white, soft border, gentle shadow) */
+.portal-card {
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--portal-card-radius);
+}
+
+/* Stronger “panel” / section (e.g., table containers) */
+.portal-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  border-radius: calc(var(--portal-card-radius) + 4px);
+}
+
+/* Muted text */
+.portal-muted {
+  color: var(--muted);
+}
+
+/* ✅ Sidebar background (apply to <aside>) - FLAT */
+.portal-sidebar {
+  color: var(--sidebar-text);
+  background: var(--sidebar-bg-1);
+  border-right: 1px solid var(--sidebar-divider);
+  box-shadow: none;
+}
+
+/* Divider line inside sidebar */
+.portal-sidebar-divider {
+  border-color: var(--sidebar-divider);
+}
+
+/* =========================
+   Sidebar nav (row items)
+   Calmer, more “Stripe discipline”
+   ========================= */
+
+.portal-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  width: calc(100% - 24px);
+  margin: 0 12px 6px 12px;
+
+  padding: 10px 14px 10px 18px;
+  border-radius: 12px;
+
+  text-align: left;
+  cursor: pointer;
+
+  background: transparent;
+  border: 1px solid transparent;
+
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.portal-nav-item:hover {
+  background: var(--sidebar-hover);
+  border-color: rgba(255, 255, 255, 0.10);
+  color: var(--sidebar-text-strong);
+  box-shadow: none;
+  transform: none;
+}
+
+.portal-nav-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(11, 182, 154, 0.30);
+}
+
+/* Active state: NO glow, clear + premium */
+.portal-nav-item-active {
+  background: var(--sidebar-active);
+  border-color: var(--sidebar-active-border);
+  box-shadow: none;
+  color: var(--sidebar-text-strong);
+}
+
+/* Left accent bar (keep, but calmer) */
+.portal-nav-accent {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+
+  background: var(--accent);
+  opacity: 0;
+
+  transition: opacity 160ms ease;
+}
+
+.portal-nav-item:hover .portal-nav-accent {
+  opacity: 0.35;
+}
+
+.portal-nav-item-active .portal-nav-accent {
+  opacity: 1;
+}
+
+/* Icon chip (simpler) */
+.portal-nav-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.90);
+}
+
+.portal-nav-item-active .portal-nav-icon {
+  background: rgba(11, 182, 154, 0.10);
+  border-color: rgba(11, 182, 154, 0.22);
+}
+
+/* Label + hint */
+.portal-nav-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sidebar-text-strong);
+  line-height: 1.2;
+}
+
+.portal-nav-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--sidebar-text);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* =========================
@@ -68,6 +292,7 @@ body {
 
 .portal-compact h1 {
   font-size: var(--portal-h1) !important;
+  letter-spacing: -0.01em;
 }
 
 /* Card rounding + padding */
@@ -75,8 +300,9 @@ body {
   border-radius: var(--portal-card-radius) !important;
 }
 
+/* Keep your “big card” padding comfy */
 .portal-compact .p-8 {
-  padding: 20px !important;
+  padding: 24px !important;
 }
 
 .portal-compact .p-6 {
@@ -85,13 +311,13 @@ body {
 
 /* Buttons / rows */
 .portal-compact .py-3 {
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
 }
 
 .portal-compact .py-2\.5 {
-  padding-top: 9px !important;
-  padding-bottom: 9px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
 }
 
 /* KPI tiles tend to be too tall */
@@ -99,15 +325,22 @@ body {
   height: var(--portal-kpi-height) !important;
 }
 
-/* Reduce overall spacing */
+/* Reduce overall spacing (but keep breathing room) */
 .portal-compact .space-y-6 > :not([hidden]) ~ :not([hidden]) {
-  margin-top: 18px !important;
+  margin-top: 22px !important;
 }
 
 .portal-compact .gap-6 {
-  gap: 18px !important;
+  gap: 22px !important;
 }
 
 .portal-compact .gap-4 {
-  gap: 12px !important;
+  gap: 16px !important;
+}
+
+/* Subtle border / focus helpers that work across the portal */
+.portal-compact :focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 4px var(--ring);
+  border-radius: 10px;
 }

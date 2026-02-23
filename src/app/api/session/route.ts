@@ -60,13 +60,36 @@ function normalizeStatus(raw?: string | null) {
   return s;
 }
 
+function isPlainObject(v: unknown): v is Record<string, any> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function parseIsoDate(v: unknown): Date | null {
+  if (typeof v !== "string" || !v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function stripGraceFields(prev: unknown) {
+  const base = isPlainObject(prev) ? { ...(prev as Record<string, any>) } : {};
+  delete base.graceUntil;
+  delete base.graceReason;
+  delete base.graceSetAt;
+  base.downgradedAt = new Date().toISOString();
+  base.downgradeReason = "grace_expired";
+  return base;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const cookieName = getSessionCookieName();
     const token = req.cookies.get(cookieName)?.value;
 
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStoreHeaders() });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: noStoreHeaders() }
+      );
     }
 
     const { userId } = await verifySession(token);
@@ -95,37 +118,93 @@ export async function GET(req: NextRequest) {
     ]);
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStoreHeaders() });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: noStoreHeaders() }
+      );
     }
 
-    const tier = (ent?.tier as "none" | "free" | "pro" | undefined) ?? "free";
-    const entStatus = (ent?.status as "none" | "active" | "grace" | "blocked" | undefined) ?? "active";
+    // Use let so we can reflect a lazy downgrade within the SAME response
+    let tier = (ent?.tier as "none" | "free" | "pro" | undefined) ?? "free";
+    let entStatus =
+      (ent?.status as "none" | "active" | "grace" | "blocked" | undefined) ?? "active";
 
-    const plan = tier === "pro" ? "PRO" : "FREE";
+    // ✅ Prisma JsonValue-safe features handling
+    const rawFeatures: unknown = ent?.features ?? null;
+    let featuresObj: Record<string, any> | null = isPlainObject(rawFeatures)
+      ? (rawFeatures as Record<string, any>)
+      : null;
+
+    // Prefer subscription status if present, else entitlement status
     const status = normalizeStatus(sub?.status ?? entStatus);
     const currentPeriodEnd = sub?.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null;
-    const graceUntil =
-      entStatus === "grace" && ent?.updatedAt
-        ? new Date(ent.updatedAt.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        : null;
+
+    // ✅ Real grace window: stored in entitlement.features.graceUntil
+    let graceUntil: string | null = null;
+    if (entStatus === "grace") {
+      const d = parseIsoDate(featuresObj?.["graceUntil"]);
+      graceUntil = d ? d.toISOString() : null;
+    }
+
+    // ✅ Enforce grace expiry (lazy downgrade):
+    // If grace ended, downgrade to FREE immediately.
+    if (entStatus === "grace" && graceUntil) {
+      const graceDate = new Date(graceUntil);
+      if (!Number.isNaN(graceDate.getTime()) && Date.now() > graceDate.getTime()) {
+        const nextFeatures = stripGraceFields(featuresObj);
+
+        await prisma.entitlement.update({
+          where: { userId },
+          data: {
+            tier: "free" as any,
+            status: "active" as any,
+            features: nextFeatures as any,
+          },
+        });
+
+        // Optional: mark subscription as past_due (helps UI & debugging)
+        await prisma.subscription
+          .update({
+            where: { userId },
+            data: { status: "past_due" as any },
+          })
+          .catch(() => null);
+
+        // reflect downgrade in response
+        tier = "free";
+        entStatus = "active";
+        graceUntil = null;
+        featuresObj = nextFeatures;
+      }
+    }
 
     const defaultFreeLimits = { invoice: 5, quote: 5, purchase_order: 5 };
     const defaultProLimits = { invoice: 999999, quote: 999999, purchase_order: 999999 };
-    const rawFeatures: any = ent?.features ?? null;
     const computedLimits = tier === "pro" ? defaultProLimits : defaultFreeLimits;
 
     const limits = {
-      invoice: typeof rawFeatures?.limits?.invoice === "number" ? rawFeatures.limits.invoice : computedLimits.invoice,
-      quote: typeof rawFeatures?.limits?.quote === "number" ? rawFeatures.limits.quote : computedLimits.quote,
+      invoice:
+        typeof featuresObj?.["limits"]?.invoice === "number"
+          ? (featuresObj["limits"].invoice as number)
+          : computedLimits.invoice,
+      quote:
+        typeof featuresObj?.["limits"]?.quote === "number"
+          ? (featuresObj["limits"].quote as number)
+          : computedLimits.quote,
       purchase_order:
-        typeof rawFeatures?.limits?.purchase_order === "number"
-          ? rawFeatures.limits.purchase_order
+        typeof featuresObj?.["limits"]?.purchase_order === "number"
+          ? (featuresObj["limits"].purchase_order as number)
           : computedLimits.purchase_order,
     };
 
+    // ✅ Bug fix: readOnly must respect blocked. Grace stays PRO (not read-only).
+    const isBlocked = entStatus === "blocked";
     const readOnly =
-      tier !== "pro" &&
-      (rawFeatures?.readOnly === true || rawFeatures?.readOnly === "true" || false);
+      isBlocked ||
+      (tier !== "pro" &&
+        (featuresObj?.["readOnly"] === true || featuresObj?.["readOnly"] === "true"));
+
+    const plan = tier === "pro" ? "PRO" : "FREE";
 
     const payload: SessionPayload = {
       user: {
@@ -152,6 +231,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(payload, { status: 200, headers: noStoreHeaders() });
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStoreHeaders() });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: noStoreHeaders() }
+    );
   }
 }

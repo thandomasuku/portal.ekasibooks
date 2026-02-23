@@ -7,7 +7,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 /* =========================
-   PremiumCard (GLOBAL SCALE DOWN)
+   PremiumCard (Token-driven)
    ========================= */
 export function PremiumCard({
   children,
@@ -20,23 +20,39 @@ export function PremiumCard({
 }) {
   const toneBg =
     tone === "brand"
-      ? "bg-gradient-to-br from-white via-white to-[#215D63]/[0.05]"
+      ? "bg-[color:var(--card)]"
       : tone === "soft"
-      ? "bg-white/85"
-      : "bg-white";
+      ? "bg-[color:var(--card)]"
+      : "bg-[color:var(--card)]";
 
   return (
     <div
       className={cx(
         "relative overflow-hidden rounded-2xl p-4",
-        "shadow-[0_10px_30px_rgba(15,23,42,0.06)] ring-1 ring-slate-200",
+        "ring-1",
+        "shadow-[var(--shadow-sm)]",
         toneBg,
         className
       )}
+      style={{
+        borderColor: tone === "default" ? "var(--border-soft)" : "var(--border)",
+        background:
+          tone === "brand"
+            ? "linear-gradient(135deg, var(--card), var(--card), color-mix(in srgb, var(--primary) 7%, white))"
+            : tone === "soft"
+            ? "linear-gradient(180deg, var(--card), color-mix(in srgb, var(--surface) 55%, white))"
+            : "var(--card)",
+      }}
     >
-      {/* softer ambient blobs */}
-      <div className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full bg-[#215D63]/8 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-24 -left-24 h-56 w-56 rounded-full bg-slate-900/4 blur-3xl" />
+      {/* subtle ambient blobs (brand + neutral), token-driven */}
+      <div
+        className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full blur-3xl"
+        style={{ background: "color-mix(in srgb, var(--primary) 14%, transparent)" }}
+      />
+      <div
+        className="pointer-events-none absolute -bottom-24 -left-24 h-56 w-56 rounded-full blur-3xl"
+        style={{ background: "rgba(15,23,42,0.05)" }}
+      />
 
       <div className="relative">{children}</div>
     </div>
@@ -44,7 +60,7 @@ export function PremiumCard({
 }
 
 /* =========================
-   KPI CARD (LESS CHUNKY)
+   KPI CARD (Token-driven, clean)
    ========================= */
 export function KpiCard({
   label,
@@ -58,22 +74,41 @@ export function KpiCard({
   hint?: string;
 }) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] ring-1 ring-slate-200 transition hover:-translate-y-[1px]">
+    <div
+      className={cx(
+        "rounded-2xl p-4 ring-1 transition",
+        "hover:-translate-y-[1px]"
+      )}
+      style={{
+        background: "var(--card)",
+        borderColor: "var(--border-soft)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted)]">
             {label}
           </div>
-          <div className="mt-1.5 text-sm font-semibold text-slate-900 break-all">
+
+          <div className="mt-1.5 text-sm font-semibold text-[color:var(--foreground)] break-all">
             {value}
           </div>
+
           {hint ? (
-            <div className="mt-1 text-xs text-slate-500">{hint}</div>
+            <div className="mt-1 text-xs text-[color:var(--muted)]">{hint}</div>
           ) : null}
         </div>
 
         {icon ? (
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900/5 ring-1 ring-slate-200 text-slate-700 text-sm">
+          <div
+            className="grid h-9 w-9 place-items-center rounded-xl ring-1 text-sm"
+            style={{
+              background: "color-mix(in srgb, var(--surface-2) 70%, white)",
+              borderColor: "var(--border-soft)",
+              color: "color-mix(in srgb, var(--foreground) 75%, transparent)",
+            }}
+          >
             {icon}
           </div>
         ) : null}
@@ -83,13 +118,19 @@ export function KpiCard({
 }
 
 /* =========================
-   DETAIL TILE (TIGHTER)
+   DETAIL TILE (Token-driven)
    ========================= */
 export function DetailTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-slate-50/80 p-3 ring-1 ring-slate-200">
-      <div className="text-[11px] font-medium text-slate-500">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-slate-900 break-all">
+    <div
+      className="rounded-xl p-3 ring-1"
+      style={{
+        background: "color-mix(in srgb, var(--surface-2) 70%, white)",
+        borderColor: "var(--border-soft)",
+      }}
+    >
+      <div className="text-[11px] font-medium text-[color:var(--muted)]">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-[color:var(--foreground)] break-all">
         {value}
       </div>
     </div>
@@ -97,13 +138,19 @@ export function DetailTile({ label, value }: { label: string; value: string }) {
 }
 
 /* =========================
-   MINI ROW (COMPACT LIST ITEM)
+   MINI ROW (Token-driven)
    ========================= */
 export function MiniRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="text-sm font-semibold text-slate-900 break-all">
+    <div
+      className="flex items-start justify-between gap-3 rounded-xl px-3 py-2.5 ring-1"
+      style={{
+        background: "var(--card)",
+        borderColor: "var(--border-soft)",
+      }}
+    >
+      <div className="text-sm text-[color:var(--muted)]">{label}</div>
+      <div className="text-sm font-semibold text-[color:var(--foreground)] break-all">
         {value}
       </div>
     </div>
@@ -111,7 +158,7 @@ export function MiniRow({ label, value }: { label: string; value: string }) {
 }
 
 /* =========================
-   CHIP (ALREADY FINE, SLIGHT TWEAK)
+   CHIP (Token-driven)
    ========================= */
 export function Chip({
   children,
@@ -120,19 +167,31 @@ export function Chip({
   children: React.ReactNode;
   tone?: "neutral" | "brand" | "success";
 }) {
-  const cls =
+  const style =
     tone === "brand"
-      ? "bg-[#215D63]/10 text-slate-800 ring-[#215D63]/20"
+      ? {
+          background: "color-mix(in srgb, var(--primary) 12%, white)",
+          color: "color-mix(in srgb, var(--foreground) 80%, transparent)",
+          borderColor: "color-mix(in srgb, var(--primary) 22%, transparent)",
+        }
       : tone === "success"
-      ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-      : "bg-slate-900/5 text-slate-700 ring-slate-200";
+      ? {
+          background: "rgba(16, 185, 129, 0.12)", // emerald tint, safe + subtle
+          color: "rgb(6, 95, 70)",
+          borderColor: "rgba(16, 185, 129, 0.22)",
+        }
+      : {
+          background: "rgba(15, 23, 42, 0.05)",
+          color: "color-mix(in srgb, var(--foreground) 75%, transparent)",
+          borderColor: "var(--border-soft)",
+        };
 
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1",
-        cls
+        "inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1"
       )}
+      style={style}
     >
       {children}
     </span>

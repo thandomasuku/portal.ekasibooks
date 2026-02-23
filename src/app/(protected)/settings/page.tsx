@@ -6,16 +6,6 @@ import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 
-type LoadState = "loading" | "ready" | "unauth" | "error";
-
-type Entitlement = {
-  plan: "FREE" | "PRO" | string;
-  status: string;
-  currentPeriodEnd: string | null;
-  graceUntil: string | null;
-  features: { readOnly: boolean; limits: any };
-};
-
 type UserProfile = {
   id?: string | null;
   email?: string | null;
@@ -40,6 +30,21 @@ function normalizePlan(plan?: string | null) {
 function cleanStr(v: any, max: number) {
   const s = String(v ?? "").trim();
   return s ? s.slice(0, max) : "";
+}
+
+function displayNameFromEmail(email?: string | null) {
+  if (!email) return null;
+  const local = String(email).split("@")[0] ?? "";
+  const cleaned = local.replace(/[._-]+/g, " ").trim();
+  return cleaned || null;
+}
+
+function capitalizeWords(s: string) {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 export default function SettingsPage() {
@@ -90,13 +95,18 @@ export default function SettingsPage() {
     });
   }, [sessionUser]);
 
-  const planName = normalizePlan(ent?.plan);
+  const planName = normalizePlan((ent as any)?.plan);
 
   // Prefer optimistic local user, fallback to session user, then empty object
   const u: UserProfile = userLocal ?? sessionUser ?? {};
 
   const userEmail = String(u.email ?? "—");
   const userId = String(u.id ?? "—");
+
+  const userName =
+    (u.fullName && String(u.fullName).trim()) ||
+    (u.email ? capitalizeWords(displayNameFromEmail(u.email) ?? "") : "") ||
+    null;
 
   const subtitle =
     state === "ready"
@@ -107,8 +117,8 @@ export default function SettingsPage() {
       ? "We couldn’t confirm your session."
       : "Loading account details...";
 
-  const canEditProfile = state === "ready" && !(ent?.features?.readOnly);
-  const canManageSecurity = state === "ready" && !(ent?.features?.readOnly);
+  const canEditProfile = state === "ready" && !((ent as any)?.features?.readOnly);
+  const canManageSecurity = state === "ready" && !((ent as any)?.features?.readOnly);
 
   function openEdit() {
     setFormMsg(null);
@@ -261,9 +271,11 @@ export default function SettingsPage() {
       badge="Settings"
       title="Profile & Security"
       subtitle={subtitle}
+      backHref="/dashboard"
+      backLabel="Back to overview"
       userEmail={sessionUser?.email ?? null}
+      userName={userName}
       planName={planName}
-      // tipText removed (we're removing quick-tip blocks globally)
       headerRight={
         <button
           onClick={() => refresh()}

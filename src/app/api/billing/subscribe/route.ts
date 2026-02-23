@@ -18,8 +18,9 @@ const LEGACY_AMOUNT_KOBO = Number(process.env.PAYSTACK_AMOUNT_KOBO || "0");
 const PLAN_CODE_MONTHLY = process.env.PAYSTACK_PLAN_CODE_MONTHLY || "";
 const PLAN_CODE_ANNUAL = process.env.PAYSTACK_PLAN_CODE_ANNUAL || "";
 
-const AMOUNT_KOBO_MONTHLY = Number(process.env.PAYSTACK_AMOUNT_KOBO_MONTHLY || "0");
-const AMOUNT_KOBO_ANNUAL = Number(process.env.PAYSTACK_AMOUNT_KOBO_ANNUAL || "0");
+// Defaults to your known prices; env can override
+const AMOUNT_KOBO_MONTHLY = Number(process.env.PAYSTACK_AMOUNT_KOBO_MONTHLY || "19900"); // R199
+const AMOUNT_KOBO_ANNUAL = Number(process.env.PAYSTACK_AMOUNT_KOBO_ANNUAL || "214900"); // R2149
 
 type BillingCycle = "monthly" | "annual";
 
@@ -35,13 +36,25 @@ function safeBillingCycle(v: unknown): BillingCycle {
 function resolvePaystackConfig(cycle: BillingCycle) {
   // Prefer new env vars. Fallback to legacy single-plan vars.
   if (cycle === "annual") {
-    const amount = AMOUNT_KOBO_ANNUAL > 0 ? AMOUNT_KOBO_ANNUAL : LEGACY_AMOUNT_KOBO;
+    const amount =
+      AMOUNT_KOBO_ANNUAL > 0
+        ? AMOUNT_KOBO_ANNUAL
+        : LEGACY_AMOUNT_KOBO > 0
+        ? LEGACY_AMOUNT_KOBO
+        : 214900;
+
     const plan = PLAN_CODE_ANNUAL || LEGACY_PLAN_CODE;
     return { amountKobo: amount, planCode: plan };
   }
 
   // monthly
-  const amount = AMOUNT_KOBO_MONTHLY > 0 ? AMOUNT_KOBO_MONTHLY : LEGACY_AMOUNT_KOBO;
+  const amount =
+    AMOUNT_KOBO_MONTHLY > 0
+      ? AMOUNT_KOBO_MONTHLY
+      : LEGACY_AMOUNT_KOBO > 0
+      ? LEGACY_AMOUNT_KOBO
+      : 19900;
+
   const plan = PLAN_CODE_MONTHLY || LEGACY_PLAN_CODE;
   return { amountKobo: amount, planCode: plan };
 }
@@ -70,6 +83,23 @@ export async function POST(req: NextRequest) {
     }
 
     /* -------------------------------------------------
+     * 1.5) Prevent duplicate active subscriptions
+     * ------------------------------------------------- */
+    // If user is already active Pro, don’t let them start another subscription.
+    // If they’re in grace, allow (so they can fix payment).
+    const ent = await prisma.entitlement.findUnique({
+      where: { userId: user.id },
+      select: { tier: true, status: true },
+    });
+
+    if (ent?.tier === "pro" && ent?.status === "active") {
+      return NextResponse.json(
+        { error: "You already have an active Pro subscription." },
+        { status: 400 }
+      );
+    }
+
+    /* -------------------------------------------------
      * 2) Determine billing cycle from request body
      * ------------------------------------------------- */
     let cycle: BillingCycle = "monthly";
@@ -86,14 +116,28 @@ export async function POST(req: NextRequest) {
      * 3) Environment sanity checks
      * ------------------------------------------------- */
     if (!PAYSTACK_SECRET_KEY) {
-      return NextResponse.json({ error: "Missing PAYSTACK_SECRET_KEY env var." }, { status: 500 });
+      return NextResponse.json(
+        { error: "Missing PAYSTACK_SECRET_KEY env var." },
+        { status: 500 }
+      );
     }
 
     if (!amountKobo || amountKobo <= 0) {
       return NextResponse.json(
         {
           error:
-            "Missing/invalid Paystack amount env var. Set PAYSTACK_AMOUNT_KOBO_MONTHLY / PAYSTACK_AMOUNT_KOBO_ANNUAL (or legacy PAYSTACK_AMOUNT_KOBO).",
+            "Missing/invalid Paystack amount. Set PAYSTACK_AMOUNT_KOBO_MONTHLY / PAYSTACK_AMOUNT_KOBO_ANNUAL (or legacy PAYSTACK_AMOUNT_KOBO).",
+        },
+        { status: 500 }
+      );
+    }
+
+    // You said: Paystack subscriptions (plan codes) — require plan code.
+    if (!planCode) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing Paystack plan code. Set PAYSTACK_PLAN_CODE_MONTHLY and PAYSTACK_PLAN_CODE_ANNUAL (or legacy PAYSTACK_PLAN_CODE).",
         },
         { status: 500 }
       );
@@ -108,7 +152,7 @@ export async function POST(req: NextRequest) {
       email: user.email,
       amount: amountKobo, // kobo (e.g. 19900 / 214900)
       currency: PAYSTACK_CURRENCY,
-      callback_url: `${baseUrl}/billing`, // 🔥 IMPORTANT
+      callback_url: `${baseUrl}/billing`, // IMPORTANT
       metadata: {
         userId: user.id,
         source: "ekasi-portal",
@@ -117,12 +161,9 @@ export async function POST(req: NextRequest) {
         selectedPlanCode: planCode || null,
         selectedAmountKobo: amountKobo,
       },
+      // Recurring plan (subscription)
+      plan: planCode,
     };
-
-    // Optional recurring plan (subscription)
-    if (planCode) {
-      payload.plan = planCode;
-    }
 
     const upstream = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
