@@ -294,7 +294,7 @@ export function PortalShell({
   const SIDEBAR_DIV = "rgba(255,255,255,0.08)";
 
   return (
-    <div className={cx("h-screen w-full overflow-hidden portal-surface", compact && "portal-compact")}>
+    <div className={cx("h-screen w-full overflow-hidden", compact && "portal-compact")}>
       {/* Mobile top bar */}
       <div className="fixed left-0 top-0 z-30 w-full border-b border-slate-200/70 bg-white/70 backdrop-blur lg:hidden">
         <div className="flex w-full items-center justify-between px-3 py-2">
@@ -514,17 +514,13 @@ export function PortalShell({
         ) : null}
 
         {/* Right column scroll area */}
-        <main
-          className={cx(
-            "h-full overflow-y-auto overscroll-contain",
-            "portal-main",
-                        "px-3 py-4 lg:px-10 lg:py-8",
-            "pt-[calc(var(--mobileTopOffsetPx)_+_8px)] lg:pt-8"
-          )}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          style={{
-            ["--mobileTopOffsetPx" as any]: `${mobileTopOffsetPx}px`,          }}
-        >
+ <main
+  className={cx(
+    "h-full overflow-y-auto overscroll-contain",
+    "px-3 py-4 lg:px-10 lg:py-8",
+    "pt-[calc(var(--mobileTopOffsetPx)_+_8px)] lg:pt-8"
+  )}
+>
           <div className="mx-auto flex min-h-full max-w-[1600px] flex-col">
             <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
               <div>

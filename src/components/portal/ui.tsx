@@ -44,7 +44,7 @@ export function PremiumCard({
             : "var(--card)",
       }}
     >
-      {/* subtle ambient blobs (brand + neutral), token-driven */}
+      {/* subtle ambient blobs (brand + neutral), token-driven */}      
       <div
         className="pointer-events-none absolute -top-24 -right-24 h-56 w-56 rounded-full blur-3xl"
         style={{ background: "color-mix(in srgb, var(--primary) 14%, transparent)" }}
@@ -123,7 +123,7 @@ export function KpiCard({
 export function DetailTile({ label, value }: { label: string; value: string }) {
   return (
     <div
-      className="rounded-xl p-3 ring-1"
+      className="rounded-xl px-3 py-2.5 ring-1"
       style={{
         background: "color-mix(in srgb, var(--surface-2) 70%, white)",
         borderColor: "var(--border-soft)",

@@ -1,10 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, MiniRow, Chip } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
+
+type LatestManifest = {
+  name?: string;
+  version?: string;
+  channel?: string;
+  releaseDate?: string | null;
+  sizeBytes?: number | null;
+  sha256?: string | null;
+  url?: string;
+  highlights?: string[];
+};
 
 function fmtDate(d?: string | null) {
   if (!d) return "—";
@@ -44,6 +55,19 @@ function safeCopy(text: string) {
   return Promise.resolve();
 }
 
+function formatBytes(bytes?: number | null) {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let v = bytes;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const dp = i === 0 ? 0 : i === 1 ? 0 : 1; // KB no decimals, MB/GB 1 decimal
+  return `${v.toFixed(dp)} ${units[i]}`;
+}
+
 /** Page-level UI primitives (keeps pages consistent) */
 const BTN_BASE =
   "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition " +
@@ -67,43 +91,97 @@ export default function DownloadsPage() {
   const [openId, setOpenId] = useState<string>("latest");
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
+  // ✅ Manifest state (wired to /api/desktop/latest)
+  const [manifest, setManifest] = useState<LatestManifest | null>(null);
+  const [manifestError, setManifestError] = useState<string | null>(null);
+  const [manifestLoading, setManifestLoading] = useState<boolean>(true);
+
   const planName = normalizePlan(entitlement?.plan);
   const isPaid = planName !== "FREE";
 
-  const downloadUrl =
+  // Fallback URL if manifest fails / missing
+  const fallbackDownloadUrl =
     (process.env.NEXT_PUBLIC_DESKTOP_WIN_LATEST_URL ?? "").trim() ||
     "https://ekasibooks.co.za/downloads/desktop/eKasiBooks-Setup.exe";
 
-  const latest = {
-    name: "eKasiBooks Desktop (Windows)",
-    version: "v1.0.0",
-    releaseDate: null as string | null,
-    size: "—",
-    checksum: "—",
-    channel: "Stable",
-    url: downloadUrl,
-    highlights: [
-      "Offline-first accounting experience",
-      "Secure login with OTP option",
-      "Branded invoices and customer management",
-    ],
-  };
+  // ✅ Fetch manifest once when page is usable
+  useEffect(() => {
+    let alive = true;
+
+    async function load() {
+      setManifestLoading(true);
+      setManifestError(null);
+
+      try {
+        const res = await fetch("/api/desktop/latest", { cache: "no-store" });
+        const data = (await res.json().catch(() => ({}))) as LatestManifest & { error?: string };
+
+        if (!res.ok) {
+          throw new Error(data?.error || `Failed to load latest manifest (${res.status})`);
+        }
+
+        if (!alive) return;
+
+        setManifest({
+          name: data?.name ?? "eKasiBooks Desktop (Windows)",
+          version: data?.version ?? "—",
+          channel: data?.channel ?? "Stable",
+          releaseDate: data?.releaseDate ?? null,
+          sizeBytes: typeof data?.sizeBytes === "number" ? data.sizeBytes : null,
+          sha256: data?.sha256 ?? null,
+          url: (data?.url ?? "").trim() || fallbackDownloadUrl,
+          highlights: Array.isArray(data?.highlights) ? data.highlights : [],
+        });
+      } catch (e: any) {
+        if (!alive) return;
+        setManifest(null);
+        setManifestError(e?.message || "Failed to load latest manifest");
+      } finally {
+        if (!alive) return;
+        setManifestLoading(false);
+      }
+    }
+
+    // even if session is loading, we can fetch manifest; but keep it simple:
+    load();
+
+    return () => {
+      alive = false;
+    };
+  }, [fallbackDownloadUrl]);
+
+  const latest = useMemo(() => {
+    // Defaults (so UI always renders)
+    const m = manifest ?? {};
+    return {
+      name: m.name ?? "eKasiBooks Desktop (Windows)",
+      version: m.version ?? "—",
+      releaseDate: m.releaseDate ?? null,
+      size: formatBytes(m.sizeBytes ?? null),
+      checksum: (m.sha256 ?? "—").trim() || "—",
+      channel: m.channel ?? "Stable",
+      url: (m.url ?? "").trim() || fallbackDownloadUrl,
+      highlights: Array.isArray(m.highlights) && m.highlights.length > 0
+        ? m.highlights
+        : [
+            "Offline-first accounting experience",
+            "Secure login with OTP option",
+            "Branded invoices and customer management",
+          ],
+    };
+  }, [manifest, fallbackDownloadUrl]);
 
   const changelog = [
     {
       id: "latest",
-      version: "v1.0.0",
-      date: "Coming soon",
+      version: latest.version || "Latest",
+      date: latest.releaseDate ? fmtDate(latest.releaseDate) : "Latest release",
       badge: "Latest",
-      items: [
-        "Initial public release for Windows",
-        "OTP login option + password login",
-        "Account portal integration for subscription management",
-      ],
+      items: latest.highlights,
     },
     {
       id: "beta",
-      version: "v0.9.0",
+      version: "Beta",
       date: "Internal beta",
       badge: "Beta",
       items: [
@@ -114,7 +192,7 @@ export default function DownloadsPage() {
     },
     {
       id: "alpha",
-      version: "v0.8.0",
+      version: "Alpha",
       date: "Internal alpha",
       badge: "Alpha",
       items: [
@@ -180,7 +258,18 @@ export default function DownloadsPage() {
         </PremiumCard>
       ) : (
         <div className="space-y-6">
-          {/* Top “product” card (Stripe-ish: simple, clear, no heavy gradients) */}
+          {/* Manifest status strip (quiet + helpful) */}
+          {manifestLoading ? (
+            <div className="text-xs text-slate-600">
+              Loading latest build info…
+            </div>
+          ) : manifestError ? (
+            <div className="text-xs text-amber-700">
+              Couldn’t load latest manifest — using fallback values. ({manifestError})
+            </div>
+          ) : null}
+
+          {/* Top “product” card */}
           <PremiumCard>
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
@@ -235,7 +324,7 @@ export default function DownloadsPage() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard label="Version" value={latest.version} icon="v" />
             <KpiCard label="Released" value={latest.releaseDate ? fmtDate(latest.releaseDate) : "—"} icon="⏱" />
-            <KpiCard label="Platform" value="Windows 10/11" icon="⊞" />
+            <KpiCard label="Size" value={latest.size} icon="⬇" />
             <KpiCard label="Channel" value={latest.channel} icon="★" />
           </div>
 

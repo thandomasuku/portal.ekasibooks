@@ -350,7 +350,7 @@ export default function DashboardPage() {
           </PremiumCard>
 
           {/* KPI row */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-start">
             <KpiCard label="Plan" value={planUpper} icon="★" />
             <KpiCard label="Email" value={String(user?.email ?? "—")} icon="✉" />
             <KpiCard label="Created" value={fmtDate((user as any)?.createdAt)} icon="⏱" />
@@ -358,7 +358,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Main grid */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 xl:items-start">
             {/* Left: Subscription / entitlement */}
             <PremiumCard className="xl:col-span-2">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -393,14 +393,8 @@ export default function DashboardPage() {
                 </p>
 
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <DetailTile
-                    label="Invoices"
-                    value={String(entitlement?.features?.limits?.invoice ?? 5)}
-                  />
-                  <DetailTile
-                    label="Quotes"
-                    value={String(entitlement?.features?.limits?.quote ?? 5)}
-                  />
+                  <DetailTile label="Invoices" value={String(entitlement?.features?.limits?.invoice ?? 5)} />
+                  <DetailTile label="Quotes" value={String(entitlement?.features?.limits?.quote ?? 5)} />
                   <DetailTile
                     label="Purchase orders"
                     value={String(entitlement?.features?.limits?.purchase_order ?? 5)}
@@ -409,8 +403,8 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-5">
-                <div className="text-xs font-semibold text-slate-700 mb-2">Entitlement snapshot</div>
-                <pre className="max-h-[280px] overflow-auto rounded-2xl bg-slate-900 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
+                <div className="mb-2 text-xs font-semibold text-slate-700">Entitlement snapshot</div>
+                <pre className="max-h-[200px] overflow-auto rounded-2xl bg-slate-900 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
                   {safeJson(entitlementSnapshot)}
                 </pre>
               </div>
