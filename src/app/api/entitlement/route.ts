@@ -46,6 +46,9 @@ function stripGraceFields(prev: unknown) {
   return base;
 }
 
+const GRACE_DAYS = 7;
+const MS_DAY = 24 * 60 * 60 * 1000;
+
 export async function GET(req: NextRequest) {
   try {
     const cookieName = getSessionCookieName();
@@ -72,7 +75,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Pull both entitlement + subscription (subscription gives you period end when you start tracking it)
+    // Pull both entitlement + subscription
     const [ent, sub] = await Promise.all([
       prisma.entitlement.findUnique({
         where: { userId },
@@ -84,10 +87,11 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // Use let so we can reflect a lazy downgrade within the SAME response
+    // Use let so we can reflect state changes in the SAME response
     let tier = (ent?.tier as "none" | "free" | "pro" | undefined) ?? "free";
     let entStatus =
-      (ent?.status as "none" | "active" | "grace" | "blocked" | undefined) ?? "active";
+      (ent?.status as "none" | "active" | "grace" | "blocked" | undefined) ??
+      "active";
 
     // ✅ Prisma JsonValue-safe features handling
     const rawFeatures: unknown = ent?.features ?? null;
@@ -95,24 +99,50 @@ export async function GET(req: NextRequest) {
       ? (rawFeatures as Record<string, any>)
       : null;
 
-    // Prefer subscription status if present, else entitlement status
-    const status = normalizeStatus(sub?.status ?? entStatus);
-
     // Subscription period end if known (nullable)
-    const currentPeriodEnd = sub?.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null;
+    const currentPeriodEndDate: Date | null = sub?.currentPeriodEnd ?? null;
+    const currentPeriodEnd = currentPeriodEndDate
+      ? currentPeriodEndDate.toISOString()
+      : null;
 
-    // ✅ Real grace window: stored in entitlement.features.graceUntil
+    // ✅ Grace window (computed from subscription.currentPeriodEnd)
+    // - If period ended and user is PRO, they enter grace for 7 days.
+    // - Persist to entitlement so UI and desktop stay consistent.
     let graceUntil: string | null = null;
-    if (entStatus === "grace") {
-      const d = parseIsoDate(featuresObj?.["graceUntil"]);
-      graceUntil = d ? d.toISOString() : null;
-    }
 
-    // ✅ Enforce grace expiry (lazy downgrade):
-    // If grace ended, downgrade to FREE immediately.
-    if (entStatus === "grace" && graceUntil) {
-      const graceDate = new Date(graceUntil);
-      if (!Number.isNaN(graceDate.getTime()) && Date.now() > graceDate.getTime()) {
+    if (tier === "pro" && currentPeriodEndDate) {
+      const nowMs = Date.now();
+      const cpeMs = currentPeriodEndDate.getTime();
+      const graceEndMs = cpeMs + GRACE_DAYS * MS_DAY;
+
+      // In grace window
+      if (nowMs > cpeMs && nowMs <= graceEndMs) {
+        graceUntil = new Date(graceEndMs).toISOString();
+
+        // Ensure entitlement reflects grace (and store graceUntil once)
+        if (entStatus !== "grace" || !featuresObj?.graceUntil) {
+          const nextFeatures = isPlainObject(featuresObj) ? { ...featuresObj } : {};
+          nextFeatures.graceUntil = graceUntil;
+          nextFeatures.graceReason = "period_ended";
+          nextFeatures.graceSetAt = new Date().toISOString();
+
+          await prisma.entitlement
+            .update({
+              where: { userId },
+              data: { status: "grace" as any, features: nextFeatures as any },
+            })
+            .catch(() => null);
+
+          entStatus = "grace";
+          featuresObj = nextFeatures;
+        } else {
+          // Keep response aligned even if we already had it stored
+          entStatus = "grace";
+        }
+      }
+
+      // Past grace window -> downgrade immediately (no waiting for anything else)
+      if (nowMs > graceEndMs) {
         const nextFeatures = stripGraceFields(featuresObj);
 
         await prisma.entitlement.update({
@@ -132,13 +162,25 @@ export async function GET(req: NextRequest) {
           })
           .catch(() => null);
 
-        // reflect downgrade in response
         tier = "free";
         entStatus = "active";
         graceUntil = null;
         featuresObj = nextFeatures;
       }
     }
+
+    // ✅ Back-compat: if entitlement was already grace, read stored graceUntil
+    // (Only used if compute block above didn't set it, e.g. if sub.currentPeriodEnd is null)
+    if (!graceUntil && entStatus === "grace") {
+      const d = parseIsoDate(featuresObj?.["graceUntil"]);
+      graceUntil = d ? d.toISOString() : null;
+    }
+
+    // ✅ Determine the effective status AFTER we may have changed entStatus above.
+    // Subscription status is useful, but must not mask entitlement state (grace/blocked).
+    let effectiveStatus = normalizeStatus(sub?.status ?? entStatus);
+    if (entStatus === "grace") effectiveStatus = "grace";
+    if (entStatus === "blocked") effectiveStatus = "blocked";
 
     // Default limits (FREE)
     const defaultFreeLimits = {
@@ -178,12 +220,12 @@ export async function GET(req: NextRequest) {
       (tier !== "pro" &&
         (featuresObj?.["readOnly"] === true || featuresObj?.["readOnly"] === "true"));
 
-    // Map tier -> UI plan string (compute AFTER any downgrade)
+    // Map tier -> UI plan string
     const plan: BillingEntitlementResponse["plan"] = tier === "pro" ? "PRO" : "FREE";
 
     const payload: BillingEntitlementResponse = {
       plan,
-      status: plan === "FREE" ? "free" : status || "active",
+      status: plan === "FREE" ? "free" : effectiveStatus || "active",
       currentPeriodEnd,
       graceUntil,
       features: {

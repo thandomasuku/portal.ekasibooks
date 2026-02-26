@@ -5,21 +5,6 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 export type SessionLoadState = "loading" | "ready" | "unauth" | "error";
 
-export type Entitlement = {
-  plan: "FREE" | "PRO" | string;
-  status: string;
-  currentPeriodEnd: string | null;
-  graceUntil: string | null;
-  features: {
-    readOnly: boolean;
-    limits: {
-      invoice: number;
-      quote: number;
-      purchase_order: number;
-    };
-  };
-};
-
 export type SessionUser = {
   id: string;
   email: string;
@@ -33,14 +18,12 @@ export type SessionUser = {
 
 type SessionResponse = {
   user: SessionUser;
-  entitlement: Entitlement;
 };
 
 type SessionContextValue = {
   state: SessionLoadState;
   error: string | null;
   user: SessionUser | null;
-  entitlement: Entitlement | null;
   refresh: () => Promise<void>;
 };
 
@@ -51,16 +34,19 @@ async function fetchSession(): Promise<SessionResponse> {
     credentials: "include",
     cache: "no-store",
   });
+
   if (res.status === 401 || res.status === 403) {
     throw Object.assign(new Error("unauth"), { code: "unauth" });
   }
+
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     const msg = data?.error || data?.message || `Session failed (${res.status}).`;
     throw new Error(msg);
   }
+
   const data = await res.json().catch(() => null);
-  if (!data?.user || !data?.entitlement) throw new Error("Invalid session response.");
+  if (!data?.user) throw new Error("Invalid session response.");
   return data as SessionResponse;
 }
 
@@ -72,7 +58,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<SessionLoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -80,13 +65,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await fetchSession();
       setUser(data.user);
-      setEntitlement(data.entitlement);
       setState("ready");
     } catch (e: any) {
       const code = e?.code || (e?.message === "unauth" ? "unauth" : null);
       if (code === "unauth") {
         setUser(null);
-        setEntitlement(null);
         setState("unauth");
         return;
       }
@@ -109,10 +92,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     router.push(`/login?next=${encodeURIComponent(next)}`);
   }, [state, router, pathname, sp]);
 
-  const value = useMemo<SessionContextValue>(
-    () => ({ state, error, user, entitlement, refresh }),
-    [state, error, user, entitlement, refresh]
-  );
+  const value = useMemo<SessionContextValue>(() => ({ state, error, user, refresh }), [state, error, user, refresh]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

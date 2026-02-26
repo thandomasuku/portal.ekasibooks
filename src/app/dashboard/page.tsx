@@ -1,10 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
+
+/* =========================
+   Types (matches /api/entitlement)
+   ========================= */
+
+type Entitlement = {
+  plan: "FREE" | "PRO" | string;
+  status: string;
+  currentPeriodEnd: string | null;
+  graceUntil: string | null;
+  features: {
+    readOnly: boolean;
+    limits: {
+      invoice: number;
+      quote: number;
+      purchase_order: number;
+    };
+  };
+};
 
 /* =========================
    Helpers
@@ -142,6 +161,41 @@ function statusFromEntitlement(ent: any) {
 }
 
 /* =========================
+   Entitlement fetch (single source of truth)
+   ========================= */
+
+function usePortalEntitlement(enabled: boolean, refreshKey: number) {
+  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let cancelled = false;
+    setError(null);
+
+    fetch("/api/entitlement", { cache: "no-store", credentials: "include" })
+      .then(async (r) => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(data?.error || data?.message || `HTTP ${r.status}`);
+        return data as Entitlement;
+      })
+      .then((data) => {
+        if (!cancelled) setEntitlement(data);
+      })
+      .catch((e: any) => {
+        if (!cancelled) setError(String(e?.message || "Failed to load entitlement"));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, refreshKey]);
+
+  return { entitlement, entitlementError: error };
+}
+
+/* =========================
    Page-level UI primitives
    ========================= */
 
@@ -182,11 +236,20 @@ export default function DashboardPage() {
     return next && next.startsWith("/") ? next : "/dashboard";
   }, [sp]);
 
-  const { state, user, entitlement, error, refresh } = useSession();
+  const { state, user, entitlement: sessionEntitlement, error, refresh } = useSession();
+
+  // Single-source entitlement from /api/entitlement (same as desktop)
+  const [entRefreshKey, setEntRefreshKey] = useState(0);
+  const { entitlement: apiEntitlement, entitlementError } = usePortalEntitlement(state === "ready", entRefreshKey);
+
+  // Fallback to session entitlement during migration (should match, but keeps UI resilient)
+  const entitlement = apiEntitlement ?? (sessionEntitlement as any);
 
   const subtitle =
     state === "ready"
-      ? "Manage your account, subscription and downloads."
+      ? entitlementError
+        ? `Session ok, but entitlement failed: ${entitlementError}`
+        : "Manage your account, subscription and downloads."
       : state === "unauth"
       ? "Your session has expired."
       : state === "error"
@@ -206,7 +269,7 @@ export default function DashboardPage() {
   }, [status.countdownTargetMs]);
 
   const entitlementSnapshot = useMemo(() => {
-    // This matches what the desktop consumes from /api/entitlement (via /api/session in portal)
+    // This matches what the desktop consumes from /api/entitlement
     return {
       plan: entitlement?.plan ?? null,
       status: entitlement?.status ?? null,
@@ -229,7 +292,13 @@ export default function DashboardPage() {
       headerRight={
         state === "ready" ? (
           <div className="flex items-center gap-2">
-            <button onClick={() => refresh()} className={BTN_SECONDARY}>
+            <button
+              onClick={() => {
+                refresh(); // refresh session/user
+                setEntRefreshKey((n) => n + 1); // refresh entitlement
+              }}
+              className={BTN_SECONDARY}
+            >
               Refresh
             </button>
 
@@ -364,9 +433,7 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <h3 className="text-base font-semibold text-slate-900">Subscription & access</h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    This is the effective entitlement the desktop app will apply.
-                  </p>
+                  <p className="mt-1 text-sm text-slate-600">This is the effective entitlement the desktop app will apply.</p>
                 </div>
 
                 <div className="flex items-center gap-2">
