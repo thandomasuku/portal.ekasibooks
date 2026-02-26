@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
@@ -89,7 +89,6 @@ function statusTone(status: string): "success" | "brand" | "neutral" {
   if (s === "active") return "success";
   if (s === "trial" || s === "trialing") return "brand";
   if (s === "grace") return "brand";
-  // read_only / blocked should feel “neutral but important”
   if (s === "read_only" || s === "readonly" || s === "blocked") return "neutral";
   return "neutral";
 }
@@ -201,7 +200,42 @@ export default function BillingPage() {
     return next && next.startsWith("/") ? next : "/billing";
   }, [sp]);
 
-  const { state, user, entitlement: ent, error: sessionError, refresh } = useSession();
+  const { state, user, error: sessionError, refresh } = useSession();
+
+  // ✅ entitlement now comes from /api/entitlement (single source of truth)
+  const [ent, setEnt] = useState<any>(null);
+  const [entError, setEntError] = useState<string | null>(null);
+
+  const fetchEntitlement = useCallback(async () => {
+    setEntError(null);
+    try {
+      const r = await fetch(`/api/entitlement?ts=${Date.now()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) {
+        throw new Error(data?.error || data?.message || `Entitlement failed (${r.status}).`);
+      }
+      setEnt(data);
+    } catch (e: any) {
+      setEntError(e?.message || "Failed to load entitlement.");
+    }
+  }, []);
+
+  // initial entitlement load once session is ready
+  useEffect(() => {
+    if (state !== "ready") return;
+    void fetchEntitlement();
+  }, [state, fetchEntitlement]);
+
+  const onRefreshAll = useCallback(async () => {
+    await refresh();
+    // after refresh, if still authenticated, refresh entitlement too
+    if (state === "ready") {
+      await fetchEntitlement();
+    }
+  }, [refresh, fetchEntitlement, state]);
 
   // Entitlement may not be fully typed (amount/interval/etc). Use a safe view.
   const entAny = (ent ?? {}) as any;
@@ -262,7 +296,9 @@ export default function BillingPage() {
         setVerifyNote(`Payment status: ${st}`);
       }
 
+      // ✅ refresh both session and entitlement
       await refresh();
+      await fetchEntitlement();
     } catch (e: any) {
       setVerifyNote(e?.message || "Failed to verify payment.");
     } finally {
@@ -439,7 +475,7 @@ export default function BillingPage() {
       userName={derivedName}
       planName={planName}
       headerRight={
-        <button onClick={() => refresh()} className={BTN_SECONDARY}>
+        <button onClick={onRefreshAll} className={BTN_SECONDARY}>
           Refresh
         </button>
       }
@@ -469,7 +505,7 @@ export default function BillingPage() {
           title="Billing could not load"
           body={sessionError ?? "Something went wrong. Please try again."}
           primaryLabel="Retry"
-          onPrimary={() => refresh()}
+          onPrimary={() => onRefreshAll()}
           secondaryLabel="Go to login"
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />
@@ -547,7 +583,7 @@ export default function BillingPage() {
                     </button>
                   )}
 
-                  <button onClick={() => refresh()} className={BTN_SECONDARY}>
+                  <button onClick={onRefreshAll} className={BTN_SECONDARY}>
                     <span className={BTN_ICON_SECONDARY}>↻</span>
                     Refresh status
                   </button>
@@ -591,7 +627,7 @@ export default function BillingPage() {
                   <span className={BTN_ICON_SECONDARY}>⚙</span>
                   {manageLoading ? "Opening..." : "Update payment method"}
                 </button>
-                <button onClick={() => refresh()} className={BTN_SECONDARY}>
+                <button onClick={onRefreshAll} className={BTN_SECONDARY}>
                   <span className={BTN_ICON_SECONDARY}>↻</span>
                   Refresh
                 </button>
@@ -600,6 +636,10 @@ export default function BillingPage() {
           ) : null}
 
           {/* Notices */}
+          {entError ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{entError}</div>
+          ) : null}
+
           {upgradeError ? (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{upgradeError}</div>
           ) : null}
@@ -817,9 +857,7 @@ export default function BillingPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-semibold text-slate-900">Entitlement snapshot</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      This is what the desktop app will consume.
-                    </p>
+                    <p className="mt-1 text-sm text-slate-600">This is what the desktop app will consume.</p>
                   </div>
                   <CopyButton text={safeJson(entitlementSnapshot)} />
                 </div>
@@ -829,8 +867,7 @@ export default function BillingPage() {
                 </pre>
 
                 <div className="mt-3 text-[11px] text-slate-500">
-                  Effective status:{" "}
-                  <span className="font-semibold text-slate-700">{heroStatusLabel}</span>
+                  Effective status: <span className="font-semibold text-slate-700">{heroStatusLabel}</span>
                 </div>
               </PremiumCard>
             </div>
@@ -884,7 +921,9 @@ function PlanCard({
           <div className="mt-1 text-xs text-slate-500">{price}</div>
         </div>
         {active ? (
-          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">Current</span>
+          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+            Current
+          </span>
         ) : null}
       </div>
 

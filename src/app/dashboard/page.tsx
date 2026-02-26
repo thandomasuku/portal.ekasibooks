@@ -236,14 +236,11 @@ export default function DashboardPage() {
     return next && next.startsWith("/") ? next : "/dashboard";
   }, [sp]);
 
-  const { state, user, entitlement: sessionEntitlement, error, refresh } = useSession();
+  const { state, user, error, refresh } = useSession();
 
-  // Single-source entitlement from /api/entitlement (same as desktop)
-  const [entRefreshKey, setEntRefreshKey] = useState(0);
-  const { entitlement: apiEntitlement, entitlementError } = usePortalEntitlement(state === "ready", entRefreshKey);
-
-  // Fallback to session entitlement during migration (should match, but keeps UI resilient)
-  const entitlement = apiEntitlement ?? (sessionEntitlement as any);
+ // ✅ Single-source entitlement from /api/entitlement (same as desktop)
+const [entRefreshKey, setEntRefreshKey] = useState(0);
+const { entitlement, entitlementError } = usePortalEntitlement(state === "ready", entRefreshKey);
 
   const subtitle =
     state === "ready"

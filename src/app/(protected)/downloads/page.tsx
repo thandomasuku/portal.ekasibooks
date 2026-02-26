@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, MiniRow, Chip } from "@/components/portal/ui";
@@ -15,6 +15,22 @@ type LatestManifest = {
   sha256?: string | null;
   url?: string;
   highlights?: string[];
+};
+
+// matches /api/entitlement response shape (at least the fields we use)
+type Entitlement = {
+  plan?: "FREE" | "PRO" | string;
+  status?: string;
+  currentPeriodEnd?: string | null;
+  graceUntil?: string | null;
+  features?: {
+    readOnly?: boolean;
+    limits?: {
+      invoice?: number;
+      quote?: number;
+      purchase_order?: number;
+    };
+  };
 };
 
 function fmtDate(d?: string | null) {
@@ -81,7 +97,8 @@ export default function DownloadsPage() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const { state, user, entitlement, error, refresh } = useSession();
+  // ✅ Session context no longer provides entitlement — only state/user/error/refresh
+  const { state, user, error, refresh } = useSession();
 
   const nextUrl = useMemo(() => {
     const next = sp.get("next");
@@ -91,20 +108,57 @@ export default function DownloadsPage() {
   const [openId, setOpenId] = useState<string>("latest");
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
+  // ✅ Entitlement state (single source of truth: /api/entitlement)
+  const [ent, setEnt] = useState<Entitlement | null>(null);
+  const [entError, setEntError] = useState<string | null>(null);
+  const [entLoading, setEntLoading] = useState<boolean>(true);
+
+  const fetchEntitlement = useCallback(async () => {
+    setEntLoading(true);
+    setEntError(null);
+
+    try {
+      const res = await fetch(`/api/entitlement?ts=${Date.now()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.status === 401 || res.status === 403) {
+        // session provider will handle redirect; just clear entitlement
+        setEnt(null);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data?.error || data?.message || `Entitlement failed (${res.status})`);
+      }
+
+      setEnt((data ?? null) as Entitlement);
+    } catch (e: any) {
+      setEnt(null);
+      setEntError(e?.message || "Failed to load entitlement.");
+    } finally {
+      setEntLoading(false);
+    }
+  }, []);
+
+  // ✅ Fetch entitlement once the session is ready
+  useEffect(() => {
+    if (state !== "ready") return;
+    void fetchEntitlement();
+  }, [state, fetchEntitlement]);
+
   // ✅ Manifest state (wired to /api/desktop/latest)
   const [manifest, setManifest] = useState<LatestManifest | null>(null);
   const [manifestError, setManifestError] = useState<string | null>(null);
   const [manifestLoading, setManifestLoading] = useState<boolean>(true);
 
-  const planName = normalizePlan(entitlement?.plan);
-  const isPaid = planName !== "FREE";
-
-  // Fallback URL if manifest fails / missing
   const fallbackDownloadUrl =
     (process.env.NEXT_PUBLIC_DESKTOP_WIN_LATEST_URL ?? "").trim() ||
     "https://ekasibooks.co.za/downloads/desktop/eKasiBooks-Setup.exe";
 
-  // ✅ Fetch manifest once when page is usable
+  // ✅ Fetch manifest once when page mounts
   useEffect(() => {
     let alive = true;
 
@@ -142,7 +196,6 @@ export default function DownloadsPage() {
       }
     }
 
-    // even if session is loading, we can fetch manifest; but keep it simple:
     load();
 
     return () => {
@@ -150,8 +203,10 @@ export default function DownloadsPage() {
     };
   }, [fallbackDownloadUrl]);
 
+  const planName = normalizePlan(ent?.plan ?? "FREE");
+  const isPaid = planName !== "FREE";
+
   const latest = useMemo(() => {
-    // Defaults (so UI always renders)
     const m = manifest ?? {};
     return {
       name: m.name ?? "eKasiBooks Desktop (Windows)",
@@ -161,13 +216,10 @@ export default function DownloadsPage() {
       checksum: (m.sha256 ?? "—").trim() || "—",
       channel: m.channel ?? "Stable",
       url: (m.url ?? "").trim() || fallbackDownloadUrl,
-      highlights: Array.isArray(m.highlights) && m.highlights.length > 0
-        ? m.highlights
-        : [
-            "Offline-first accounting experience",
-            "Secure login with OTP option",
-            "Branded invoices and customer management",
-          ],
+      highlights:
+        Array.isArray(m.highlights) && m.highlights.length > 0
+          ? m.highlights
+          : ["Offline-first accounting experience", "Secure login with OTP option", "Branded invoices and customer management"],
     };
   }, [manifest, fallbackDownloadUrl]);
 
@@ -184,22 +236,14 @@ export default function DownloadsPage() {
       version: "Beta",
       date: "Internal beta",
       badge: "Beta",
-      items: [
-        "Performance improvements for invoice lists",
-        "Improved PDF export formatting",
-        "Stability fixes and installer refinements",
-      ],
+      items: ["Performance improvements for invoice lists", "Improved PDF export formatting", "Stability fixes and installer refinements"],
     },
     {
       id: "alpha",
       version: "Alpha",
       date: "Internal alpha",
       badge: "Alpha",
-      items: [
-        "Core invoicing + customer management",
-        "Basic settings & branding support",
-        "Local data storage and backups groundwork",
-      ],
+      items: ["Core invoicing + customer management", "Basic settings & branding support", "Local data storage and backups groundwork"],
     },
   ];
 
@@ -214,6 +258,14 @@ export default function DownloadsPage() {
     window.setTimeout(() => setCopyMsg(null), 1200);
   }
 
+  // ✅ Refresh button should refresh BOTH session + entitlement
+  const onRefreshAll = useCallback(async () => {
+    await refresh();
+    if (state === "ready") {
+      await fetchEntitlement();
+    }
+  }, [refresh, fetchEntitlement, state]);
+
   return (
     <PortalShell
       badge="Downloads"
@@ -223,6 +275,13 @@ export default function DownloadsPage() {
       backLabel="Back to overview"
       userEmail={user?.email ?? null}
       planName={planName}
+      headerRight={
+        state === "ready" ? (
+          <button onClick={onRefreshAll} className={BTN_SECONDARY}>
+            Refresh
+          </button>
+        ) : null
+      }
       footerRight={
         <div className="flex items-center gap-2">
           <span className="hidden sm:inline text-xs text-slate-500">Desktop: Windows</span>
@@ -258,12 +317,12 @@ export default function DownloadsPage() {
         </PremiumCard>
       ) : (
         <div className="space-y-6">
-          {/* Manifest status strip (quiet + helpful) */}
-          {manifestLoading ? (
-            <div className="text-xs text-slate-600">
-              Loading latest build info…
-            </div>
-          ) : manifestError ? (
+          {/* Entitlement / manifest status strips */}
+          {entLoading ? <div className="text-xs text-slate-600">Loading entitlement…</div> : null}
+          {entError ? <div className="text-xs text-amber-700">Couldn’t load entitlement. ({entError})</div> : null}
+
+          {manifestLoading ? <div className="text-xs text-slate-600">Loading latest build info…</div> : null}
+          {manifestError ? (
             <div className="text-xs text-amber-700">
               Couldn’t load latest manifest — using fallback values. ({manifestError})
             </div>
@@ -281,15 +340,11 @@ export default function DownloadsPage() {
 
                   <span className="text-xs text-slate-500">•</span>
 
-                  <span className="text-xs font-semibold text-slate-700">
-                    {latest.channel} channel
-                  </span>
+                  <span className="text-xs font-semibold text-slate-700">{latest.channel} channel</span>
                 </div>
 
                 <h2 className="mt-3 text-lg font-semibold text-slate-900">{latest.name}</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Latest stable release for Windows.
-                </p>
+                <p className="mt-1 text-sm text-slate-600">Latest stable release for Windows.</p>
 
                 <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
                   <span className="font-semibold text-slate-700">Download URL:</span>{" "}

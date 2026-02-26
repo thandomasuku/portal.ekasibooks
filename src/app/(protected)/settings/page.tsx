@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
@@ -14,6 +14,21 @@ type UserProfile = {
   phone?: string | null;
   lastLoginAt?: string | null;
   createdAt?: string | null;
+};
+
+type Entitlement = {
+  plan?: "FREE" | "PRO" | string;
+  status?: string;
+  currentPeriodEnd?: string | null;
+  graceUntil?: string | null;
+  features?: {
+    readOnly?: boolean;
+    limits?: {
+      invoice?: number;
+      quote?: number;
+      purchase_order?: number;
+    };
+  };
 };
 
 function fmtDate(d?: string | null) {
@@ -56,7 +71,49 @@ export default function SettingsPage() {
     return next && next.startsWith("/") ? next : "/settings";
   }, [sp]);
 
-  const { state, user, entitlement: ent, error, refresh } = useSession();
+  // ✅ Session no longer provides entitlement
+  const { state, user, error, refresh } = useSession();
+
+  // ✅ Entitlement comes from /api/entitlement (single source of truth)
+  const [ent, setEnt] = useState<Entitlement | null>(null);
+  const [entLoading, setEntLoading] = useState(false);
+  const [entError, setEntError] = useState<string | null>(null);
+
+  const fetchEntitlement = useCallback(async () => {
+    setEntLoading(true);
+    setEntError(null);
+
+    try {
+      const res = await fetch(`/api/entitlement?ts=${Date.now()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.status === 401 || res.status === 403) {
+        setEnt(null);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data?.error || data?.message || `Entitlement failed (${res.status}).`);
+      }
+
+      setEnt((data ?? null) as Entitlement);
+    } catch (e: any) {
+      setEnt(null);
+      setEntError(e?.message || "Failed to load entitlement.");
+    } finally {
+      setEntLoading(false);
+    }
+  }, []);
+
+  // load entitlement once session is ready
+  useEffect(() => {
+    if (state !== "ready") return;
+    void fetchEntitlement();
+  }, [state, fetchEntitlement]);
 
   // Treat session.user as a loosely typed profile object (UI-only typing fix)
   const sessionUser = (user as UserProfile | null) ?? null;
@@ -95,7 +152,7 @@ export default function SettingsPage() {
     });
   }, [sessionUser]);
 
-  const planName = normalizePlan((ent as any)?.plan);
+  const planName = normalizePlan(ent?.plan ?? "FREE");
 
   // Prefer optimistic local user, fallback to session user, then empty object
   const u: UserProfile = userLocal ?? sessionUser ?? {};
@@ -117,8 +174,10 @@ export default function SettingsPage() {
       ? "We couldn’t confirm your session."
       : "Loading account details...";
 
-  const canEditProfile = state === "ready" && !((ent as any)?.features?.readOnly);
-  const canManageSecurity = state === "ready" && !((ent as any)?.features?.readOnly);
+  const readOnly = !!ent?.features?.readOnly;
+
+  const canEditProfile = state === "ready" && !readOnly;
+  const canManageSecurity = state === "ready" && !readOnly;
 
   function openEdit() {
     setFormMsg(null);
@@ -266,11 +325,22 @@ export default function SettingsPage() {
       ? "border-red-200 bg-red-50 text-red-800"
       : "border-sky-200 bg-sky-50 text-sky-800";
 
+  const onRefreshAll = useCallback(async () => {
+    await refresh();
+    if (state === "ready") await fetchEntitlement();
+  }, [refresh, state, fetchEntitlement]);
+
   return (
     <PortalShell
       badge="Settings"
       title="Profile & Security"
-      subtitle={subtitle}
+      subtitle={
+        entLoading && state === "ready"
+          ? "Loading account details..."
+          : entError
+          ? `Account loaded, but entitlement failed (${entError})`
+          : subtitle
+      }
       backHref="/dashboard"
       backLabel="Back to overview"
       userEmail={sessionUser?.email ?? null}
@@ -278,7 +348,7 @@ export default function SettingsPage() {
       planName={planName}
       headerRight={
         <button
-          onClick={() => refresh()}
+          onClick={onRefreshAll}
           className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
         >
           Refresh
@@ -326,6 +396,12 @@ export default function SettingsPage() {
                 <p className="mt-1 text-sm text-slate-600">
                   Review your profile info and security options. Password changes are protected by OTP verification.
                 </p>
+
+                {readOnly ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Your account is currently read-only. Profile and security updates are disabled.
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -351,9 +427,9 @@ export default function SettingsPage() {
 
           {/* KPI row */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Email" value={userEmail} icon="✉" />
+            <KpiCard label="Email" value={String(userEmail)} icon="✉" />
             <KpiCard label="Plan" value={planName} icon="★" />
-            <KpiCard label="Account ID" value={userId} icon="ID" />
+            <KpiCard label="Account ID" value={String(userId)} icon="ID" />
             <KpiCard label="Last login" value={fmtDate(sessionUser?.lastLoginAt)} icon="✓" />
           </div>
 
@@ -374,9 +450,9 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <DetailTile label="Email" value={userEmail} />
+                <DetailTile label="Email" value={String(userEmail)} />
                 <DetailTile label="Plan" value={planName} />
-                <DetailTile label="Account ID" value={userId} />
+                <DetailTile label="Account ID" value={String(userId)} />
                 <DetailTile label="Last login" value={fmtDate(sessionUser?.lastLoginAt)} />
 
                 <DetailTile label="Full name" value={String(sessionUser?.fullName ?? "—")} />
