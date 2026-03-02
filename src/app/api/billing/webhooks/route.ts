@@ -11,25 +11,89 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 
 // For one-time upgrades (or when Paystack doesn't supply next payment date),
 // we approximate a period end for UI + entitlement checks.
-const DEFAULT_PRO_PERIOD_DAYS = Number(process.env.PRO_PERIOD_DAYS || "30");
+const DEFAULT_PERIOD_DAYS = Number(process.env.PRO_PERIOD_DAYS || "30");
 
 // ✅ Grace period (failed payment -> grace -> downgrade later)
-const PRO_GRACE_DAYS = Number(process.env.PRO_GRACE_DAYS || "7");
+const GRACE_DAYS = Number(process.env.PRO_GRACE_DAYS || "7");
 
-// Plan codes & amounts (lowest denomination) for validation
-const LEGACY_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || "";
-const PLAN_CODE_MONTHLY =
-  process.env.PAYSTACK_PLAN_CODE_MONTHLY || process.env.PAYSTACK_PLAN_CODE || "";
-const PLAN_CODE_ANNUAL = process.env.PAYSTACK_PLAN_CODE_ANNUAL || "";
+/**
+ * ✅ NEW: Multi-plan mapping
+ * We rely primarily on plan_code (best), and optionally validate amounts.
+ */
+type Tier = "none" | "free" | "starter" | "growth" | "pro";
+type EntStatus = "none" | "active" | "grace" | "blocked";
+type Cycle = "monthly" | "annual";
 
-const AMOUNT_KOBO_MONTHLY = Number(
-  process.env.PAYSTACK_AMOUNT_KOBO_MONTHLY || process.env.PAYSTACK_AMOUNT_KOBO || "19900"
-);
-const AMOUNT_KOBO_ANNUAL = Number(process.env.PAYSTACK_AMOUNT_KOBO_ANNUAL || "214900");
+type PlanMeta = {
+  tier: Exclude<Tier, "none" | "free">;
+  cycle: Cycle;
+  companies: number;
+  amountKobo?: number; // optional strict validation
+};
 
-// Fallback amounts: Monthly R199 -> 19900, Annual R2149 -> 214900
-const FALLBACK_MONTHLY_AMOUNT = 19900;
-const FALLBACK_ANNUAL_AMOUNT = 214900;
+const PLAN_MAP: Record<string, PlanMeta> = {
+  // Starter
+  [String(process.env.PAYSTACK_STARTER_MONTHLY_PLAN_CODE || "").trim()]: {
+    tier: "starter",
+    cycle: "monthly",
+    companies: 1,
+    amountKobo: Number(process.env.PAYSTACK_STARTER_MONTHLY_AMOUNT_KOBO || "19900"),
+  },
+  [String(process.env.PAYSTACK_STARTER_ANNUAL_PLAN_CODE || "").trim()]: {
+    tier: "starter",
+    cycle: "annual",
+    companies: 1,
+    amountKobo: Number(process.env.PAYSTACK_STARTER_ANNUAL_AMOUNT_KOBO || "214900"),
+  },
+
+  // Growth
+  [String(process.env.PAYSTACK_GROWTH_MONTHLY_PLAN_CODE || "").trim()]: {
+    tier: "growth",
+    cycle: "monthly",
+    companies: 3,
+    amountKobo: Number(process.env.PAYSTACK_GROWTH_MONTHLY_AMOUNT_KOBO || "39900"),
+  },
+  [String(process.env.PAYSTACK_GROWTH_ANNUAL_PLAN_CODE || "").trim()]: {
+    tier: "growth",
+    cycle: "annual",
+    companies: 3,
+    amountKobo: Number(process.env.PAYSTACK_GROWTH_ANNUAL_AMOUNT_KOBO || "430900"),
+  },
+
+  // Pro
+  [String(process.env.PAYSTACK_PRO_MONTHLY_PLAN_CODE || "").trim()]: {
+    tier: "pro",
+    cycle: "monthly",
+    companies: 5,
+    amountKobo: Number(process.env.PAYSTACK_PRO_MONTHLY_AMOUNT_KOBO || "59900"),
+  },
+  [String(process.env.PAYSTACK_PRO_ANNUAL_PLAN_CODE || "").trim()]: {
+    tier: "pro",
+    cycle: "annual",
+    companies: 5,
+    amountKobo: Number(process.env.PAYSTACK_PRO_ANNUAL_AMOUNT_KOBO || "646900"),
+  },
+};
+
+// Remove empty-key entries (in case env vars aren't set yet)
+for (const k of Object.keys(PLAN_MAP)) {
+  if (!k) delete PLAN_MAP[k];
+}
+
+// FREE limits (trial)
+const FREE_LIMITS = {
+  companies: 1,
+  invoice: 5,
+  quote: 5,
+  purchase_order: 5,
+};
+
+// Paid limits
+const PAID_LIMITS_UNLIMITED = {
+  invoice: 999999,
+  quote: 999999,
+  purchase_order: 999999,
+};
 
 function timingSafeEqualHex(a: string, b: string) {
   const aBuf = Buffer.from(a, "hex");
@@ -58,61 +122,6 @@ function addDays(d: Date, days: number) {
 
 function safeTrim(v: unknown) {
   return typeof v === "string" ? v.trim() : "";
-}
-
-function expectedAmountKobo(cycle: "monthly" | "annual") {
-  const monthly = AMOUNT_KOBO_MONTHLY > 0 ? AMOUNT_KOBO_MONTHLY : FALLBACK_MONTHLY_AMOUNT;
-  const annual = AMOUNT_KOBO_ANNUAL > 0 ? AMOUNT_KOBO_ANNUAL : FALLBACK_ANNUAL_AMOUNT;
-  return cycle === "annual" ? annual : monthly;
-}
-
-function inferCycle(planCode?: string | null, amountKobo?: number | null): "monthly" | "annual" {
-  const pc = safeTrim(planCode);
-
-  if (pc && PLAN_CODE_ANNUAL && pc === PLAN_CODE_ANNUAL) return "annual";
-  if (pc && PLAN_CODE_MONTHLY && pc === PLAN_CODE_MONTHLY) return "monthly";
-
-  if (typeof amountKobo === "number" && amountKobo > 0) {
-    if (AMOUNT_KOBO_ANNUAL > 0 && amountKobo === AMOUNT_KOBO_ANNUAL) return "annual";
-    if (AMOUNT_KOBO_MONTHLY > 0 && amountKobo === AMOUNT_KOBO_MONTHLY) return "monthly";
-    if (amountKobo === FALLBACK_ANNUAL_AMOUNT) return "annual";
-    if (amountKobo === FALLBACK_MONTHLY_AMOUNT) return "monthly";
-  }
-
-  return "monthly";
-}
-
-function validatePaymentSignals(opts: { planCode?: string | null; amountKobo?: number | null }) {
-  const planCode = safeTrim(opts.planCode);
-  const amountKobo = typeof opts.amountKobo === "number" ? opts.amountKobo : null;
-
-  const allowedPlans = new Set(
-    [PLAN_CODE_MONTHLY, PLAN_CODE_ANNUAL, LEGACY_PLAN_CODE].map(safeTrim).filter(Boolean)
-  );
-
-  if (planCode) {
-    if (allowedPlans.size > 0 && !allowedPlans.has(planCode)) {
-      return { ok: false as const, reason: "unknown_plan" as const, cycle: null as any };
-    }
-
-    const cycle = inferCycle(planCode, amountKobo);
-    const expected = expectedAmountKobo(cycle);
-
-    if (amountKobo != null && amountKobo > 0 && amountKobo !== expected) {
-      return { ok: false as const, reason: "amount_mismatch" as const, cycle };
-    }
-
-    return { ok: true as const, cycle };
-  }
-
-  if (amountKobo != null && amountKobo > 0) {
-    const monthlyExpected = expectedAmountKobo("monthly");
-    const annualExpected = expectedAmountKobo("annual");
-    if (amountKobo === monthlyExpected) return { ok: true as const, cycle: "monthly" as const };
-    if (amountKobo === annualExpected) return { ok: true as const, cycle: "annual" as const };
-  }
-
-  return { ok: false as const, reason: "unrecognized_payment" as const, cycle: null as any };
 }
 
 function isPlainObject(v: unknown): v is Record<string, any> {
@@ -162,6 +171,33 @@ function extractPlanCodeFromEvent(data: any): string | null {
   return null;
 }
 
+/**
+ * ✅ Resolve our plan meta from plan_code (authoritative)
+ */
+function resolvePlanMeta(planCode: string | null): PlanMeta | null {
+  const code = safeTrim(planCode);
+  if (!code) return null;
+  return PLAN_MAP[code] ?? null;
+}
+
+/**
+ * ✅ Optional amount validation
+ * If the plan meta has amountKobo, and event includes amount, we enforce match.
+ */
+function validatePlanPayment(opts: { planCode?: string | null; amountKobo?: number | null }) {
+  const meta = resolvePlanMeta(opts.planCode ?? null);
+  if (!meta) return { ok: false as const, reason: "unknown_plan" as const, meta: null as any };
+
+  const amt = typeof opts.amountKobo === "number" ? opts.amountKobo : null;
+  const expected = Number(meta.amountKobo || 0);
+
+  if (amt != null && amt > 0 && expected > 0 && amt !== expected) {
+    return { ok: false as const, reason: "amount_mismatch" as const, meta };
+  }
+
+  return { ok: true as const, meta };
+}
+
 async function resolveUserIdFromEvent(data: any): Promise<string | null> {
   // Preferred: metadata.userId (we set this during initialize)
   const metaUserId = data?.metadata?.userId;
@@ -181,12 +217,7 @@ async function resolveUserIdFromEvent(data: any): Promise<string | null> {
   return user?.id ?? null;
 }
 
-async function setEntitlement(
-  userId: string,
-  tier: "none" | "free" | "pro",
-  status: "none" | "active" | "grace" | "blocked",
-  features?: unknown
-) {
+async function setEntitlement(userId: string, tier: Tier, status: EntStatus, features?: unknown) {
   await prisma.entitlement.upsert({
     where: { userId },
     create: {
@@ -203,27 +234,27 @@ async function setEntitlement(
   });
 }
 
-async function putProOnGrace(userId: string, reason: string) {
+async function putPaidOnGrace(userId: string, reason: string) {
   const ent = await prisma.entitlement.findUnique({
     where: { userId },
     select: { tier: true, status: true, features: true },
   });
 
-  const tier = (ent?.tier as any) ?? "free";
-  const status = (ent?.status as any) ?? "active";
+  const tier = (ent?.tier as Tier) ?? "free";
+  const status = (ent?.status as EntStatus) ?? "active";
 
-  // Only PRO can enter grace. Don't override a blocked user.
-  if (tier !== "pro") return;
+  // Only paid tiers can enter grace. Don't override a blocked user.
+  if (tier === "free" || tier === "none") return;
   if (status === "blocked") return;
 
   const now = new Date();
 
-  // ✅ Prisma JsonValue-safe read (no `.graceUntil` property access)
+  // Prisma JsonValue-safe read
   const existingGraceUntil = isPlainObject(ent?.features)
     ? (ent!.features as Record<string, unknown>)["graceUntil"]
     : undefined;
 
-  const graceUntil = computeGraceUntil(existingGraceUntil, now, PRO_GRACE_DAYS);
+  const graceUntil = computeGraceUntil(existingGraceUntil, now, GRACE_DAYS);
 
   const nextFeatures = mergeFeatures(ent?.features, {
     graceUntil,
@@ -231,7 +262,26 @@ async function putProOnGrace(userId: string, reason: string) {
     graceSetAt: now.toISOString(),
   });
 
-  await setEntitlement(userId, "pro", "grace", nextFeatures);
+  await setEntitlement(userId, tier, "grace", nextFeatures);
+}
+
+function buildPaidFeatures(tier: "starter" | "growth" | "pro", companies: number) {
+  return {
+    readOnly: false,
+    limits: {
+      ...PAID_LIMITS_UNLIMITED,
+      companies,
+    },
+    tier,
+  };
+}
+
+function buildFreeFeatures() {
+  return {
+    readOnly: false,
+    limits: { ...FREE_LIMITS },
+    tier: "free",
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -248,10 +298,7 @@ export async function POST(req: NextRequest) {
     // ✅ Use raw body as-is (critical for signature verification)
     const rawBody = await req.text();
 
-    const computed = crypto
-      .createHmac("sha512", PAYSTACK_SECRET_KEY)
-      .update(rawBody)
-      .digest("hex");
+    const computed = crypto.createHmac("sha512", PAYSTACK_SECRET_KEY).update(rawBody).digest("hex");
 
     const ok = timingSafeEqualHex(computed, signature);
     if (!ok) {
@@ -287,7 +334,6 @@ export async function POST(req: NextRequest) {
       sha256Hex(rawBody);
 
     // Record webhook event (idempotent)
-    // If it already exists, we ACK immediately.
     try {
       await prisma.webhookEvent.create({
         data: {
@@ -299,15 +345,13 @@ export async function POST(req: NextRequest) {
         },
       });
     } catch {
-      // Likely unique constraint hit => already processed
       return NextResponse.json({ received: true, deduped: true }, { status: 200 });
     }
 
     // Resolve user
     const userId = await resolveUserIdFromEvent(data);
 
-    // If we can't link the event to a user, we still ACK (webhook was valid),
-    // but it won't affect entitlements.
+    // If we can't link the event to a user, we still ACK (webhook was valid)
     if (!userId) {
       return NextResponse.json({ received: true, userLinked: false }, { status: 200 });
     }
@@ -320,7 +364,7 @@ export async function POST(req: NextRequest) {
     const nextPaymentDate =
       safeDate(data?.subscription?.next_payment_date) || safeDate(data?.next_payment_date) || null;
 
-    const computedPeriodEnd = nextPaymentDate ?? addDays(paidAt, DEFAULT_PRO_PERIOD_DAYS);
+    const computedPeriodEnd = nextPaymentDate ?? addDays(paidAt, DEFAULT_PERIOD_DAYS);
 
     // === Event handling ===
 
@@ -331,8 +375,8 @@ export async function POST(req: NextRequest) {
         const amountKobo = typeof data?.amount === "number" ? data.amount : undefined;
         const currency = typeof data?.currency === "string" ? data.currency : undefined;
 
-        const validation = validatePaymentSignals({
-          planCode: planCode,
+        const validation = validatePlanPayment({
+          planCode,
           amountKobo: amountKobo ?? null,
         });
 
@@ -358,8 +402,10 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // Only upgrade if payment is for OUR plan/amount
+        // Only upgrade if payment matches one of OUR plan codes (and amount if supplied)
         if (validation.ok) {
+          const meta = validation.meta;
+
           await prisma.subscription.upsert({
             where: { userId },
             create: {
@@ -370,6 +416,7 @@ export async function POST(req: NextRequest) {
               subscriptionCode: subscriptionCode ?? undefined,
               planCode: planCode ?? undefined,
               currentPeriodEnd: computedPeriodEnd,
+              canceledAt: null,
             },
             update: {
               status: "active" as any,
@@ -381,11 +428,16 @@ export async function POST(req: NextRequest) {
             },
           });
 
-          // Grant PRO entitlement (clears grace by forcing active)
-          await setEntitlement(userId, "pro", "active");
+          // ✅ Grant entitlement for the correct tier + limits
+          await setEntitlement(
+            userId,
+            meta.tier,
+            "active",
+            buildPaidFeatures(meta.tier, meta.companies)
+          );
         } else {
-          // Payment succeeded, but it doesn't match our plan codes/amounts.
-          // Keep a record of the payment but do NOT upgrade access.
+          // Payment succeeded, but doesn't match our plan codes/amounts.
+          // We keep the payment record but do NOT upgrade access.
         }
 
         return NextResponse.json({ received: true }, { status: 200 });
@@ -426,14 +478,20 @@ export async function POST(req: NextRequest) {
       });
 
       if (nextStatus === "active") {
-        // Subscription became active: only upgrade if plan code is one of ours.
-        const validation = validatePaymentSignals({ planCode, amountKobo: null });
+        // Subscription became active: upgrade only if plan code matches one of ours.
+        const validation = validatePlanPayment({ planCode, amountKobo: null });
         if (validation.ok) {
-          await setEntitlement(userId, "pro", "active");
+          const meta = validation.meta;
+          await setEntitlement(
+            userId,
+            meta.tier,
+            "active",
+            buildPaidFeatures(meta.tier, meta.companies)
+          );
         }
       } else {
-        // ✅ Subscription disabled/canceled => put PRO on grace (do NOT downgrade immediately)
-        await putProOnGrace(userId, "subscription_inactive");
+        // Subscription disabled/canceled => put paid tier on grace (do NOT downgrade immediately)
+        await putPaidOnGrace(userId, "subscription_inactive");
       }
 
       return NextResponse.json({ received: true }, { status: 200 });
@@ -457,8 +515,8 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // ✅ Failed payment => put PRO on grace for 7 days
-      await putProOnGrace(userId, "charge_failed");
+      // Failed payment => put paid tier on grace
+      await putPaidOnGrace(userId, "charge_failed");
 
       return NextResponse.json({ received: true }, { status: 200 });
     }

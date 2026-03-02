@@ -5,8 +5,13 @@ import { getSessionCookieName, verifySession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+type Plan = "FREE" | "STARTER" | "GROWTH" | "PRO";
+
+type Tier = "none" | "free" | "starter" | "growth" | "pro";
+type EntStatus = "none" | "active" | "grace" | "blocked";
+
 type BillingEntitlementResponse = {
-  plan: "FREE" | "PRO" | string;
+  plan: Plan | string;
   status: string;
   currentPeriodEnd: string | null;
   graceUntil: string | null;
@@ -16,6 +21,7 @@ type BillingEntitlementResponse = {
       invoice: number;
       quote: number;
       purchase_order: number;
+      companies: number;
     };
   };
 };
@@ -48,6 +54,36 @@ function stripGraceFields(prev: unknown) {
 
 const GRACE_DAYS = 7;
 const MS_DAY = 24 * 60 * 60 * 1000;
+
+function tierToPlan(tier: Tier): Plan {
+  if (tier === "pro") return "PRO";
+  if (tier === "growth") return "GROWTH";
+  if (tier === "starter") return "STARTER";
+  return "FREE";
+}
+
+function isPaidTier(tier: Tier) {
+  return tier === "starter" || tier === "growth" || tier === "pro";
+}
+
+function normalizeTier(raw: unknown): Tier {
+  const t = String(raw ?? "").toLowerCase().trim();
+  if (t === "pro") return "pro";
+  if (t === "growth") return "growth";
+  if (t === "starter") return "starter";
+  if (t === "free") return "free";
+  if (t === "none") return "none";
+  return "free";
+}
+
+function normalizeEntStatus(raw: unknown): EntStatus {
+  const s = String(raw ?? "").toLowerCase().trim();
+  if (s === "active") return "active";
+  if (s === "grace") return "grace";
+  if (s === "blocked") return "blocked";
+  if (s === "none") return "none";
+  return "active";
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -88,16 +124,21 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Use let so we can reflect state changes in the SAME response
-    let tier = (ent?.tier as "none" | "free" | "pro" | undefined) ?? "free";
-    let entStatus =
-      (ent?.status as "none" | "active" | "grace" | "blocked" | undefined) ??
-      "active";
+    let tier = normalizeTier(ent?.tier);
+    let entStatus = normalizeEntStatus(ent?.status);
 
     // ✅ Prisma JsonValue-safe features handling
     const rawFeatures: unknown = ent?.features ?? null;
-    let featuresObj: Record<string, any> | null = isPlainObject(rawFeatures)
-      ? (rawFeatures as Record<string, any>)
-      : null;
+let featuresObj: Record<string, any> = isPlainObject(rawFeatures)
+  ? (rawFeatures as Record<string, any>)
+  : {};
+
+// Ensure nested shape exists (prevents future null/undefined issues)
+if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
+
+    // Ensure nested shape exists (so reads like featuresObj.limits.companies don't explode)
+    if (!featuresObj) featuresObj = {};
+    if (!isPlainObject(featuresObj["limits"])) featuresObj["limits"] = {};
 
     // Subscription period end if known (nullable)
     const currentPeriodEndDate: Date | null = sub?.currentPeriodEnd ?? null;
@@ -106,11 +147,11 @@ export async function GET(req: NextRequest) {
       : null;
 
     // ✅ Grace window (computed from subscription.currentPeriodEnd)
-    // - If period ended and user is PRO, they enter grace for 7 days.
+    // - If period ended and user is on a PAID tier, they enter grace for 7 days.
     // - Persist to entitlement so UI and desktop stay consistent.
     let graceUntil: string | null = null;
 
-    if (tier === "pro" && currentPeriodEndDate) {
+    if (isPaidTier(tier) && currentPeriodEndDate) {
       const nowMs = Date.now();
       const cpeMs = currentPeriodEndDate.getTime();
       const graceEndMs = cpeMs + GRACE_DAYS * MS_DAY;
@@ -120,11 +161,14 @@ export async function GET(req: NextRequest) {
         graceUntil = new Date(graceEndMs).toISOString();
 
         // Ensure entitlement reflects grace (and store graceUntil once)
-        if (entStatus !== "grace" || !featuresObj?.graceUntil) {
+        if (entStatus !== "grace" || !featuresObj?.["graceUntil"]) {
           const nextFeatures = isPlainObject(featuresObj) ? { ...featuresObj } : {};
           nextFeatures.graceUntil = graceUntil;
           nextFeatures.graceReason = "period_ended";
           nextFeatures.graceSetAt = new Date().toISOString();
+
+          // keep limits object present
+          if (!isPlainObject(nextFeatures["limits"])) nextFeatures["limits"] = {};
 
           await prisma.entitlement
             .update({
@@ -136,12 +180,11 @@ export async function GET(req: NextRequest) {
           entStatus = "grace";
           featuresObj = nextFeatures;
         } else {
-          // Keep response aligned even if we already had it stored
           entStatus = "grace";
         }
       }
 
-      // Past grace window -> downgrade immediately (no waiting for anything else)
+      // Past grace window -> downgrade immediately
       if (nowMs > graceEndMs) {
         const nextFeatures = stripGraceFields(featuresObj);
 
@@ -154,7 +197,6 @@ export async function GET(req: NextRequest) {
           },
         });
 
-        // Optional: mark subscription as past_due (helps UI & debugging)
         await prisma.subscription
           .update({
             where: { userId },
@@ -165,38 +207,43 @@ export async function GET(req: NextRequest) {
         tier = "free";
         entStatus = "active";
         graceUntil = null;
-        featuresObj = nextFeatures;
+        featuresObj = isPlainObject(nextFeatures) ? (nextFeatures as any) : {};
+        if (!isPlainObject(featuresObj["limits"])) featuresObj["limits"] = {};
       }
     }
 
     // ✅ Back-compat: if entitlement was already grace, read stored graceUntil
-    // (Only used if compute block above didn't set it, e.g. if sub.currentPeriodEnd is null)
     if (!graceUntil && entStatus === "grace") {
       const d = parseIsoDate(featuresObj?.["graceUntil"]);
       graceUntil = d ? d.toISOString() : null;
     }
 
     // ✅ Determine the effective status AFTER we may have changed entStatus above.
-    // Subscription status is useful, but must not mask entitlement state (grace/blocked).
     let effectiveStatus = normalizeStatus(sub?.status ?? entStatus);
     if (entStatus === "grace") effectiveStatus = "grace";
     if (entStatus === "blocked") effectiveStatus = "blocked";
 
-    // Default limits (FREE)
+    // Defaults
     const defaultFreeLimits = {
       invoice: 5,
       quote: 5,
       purchase_order: 5,
+      companies: 1,
     };
 
-    // Default limits (PRO)
-    const defaultProLimits = {
-      invoice: 999999,
-      quote: 999999,
-      purchase_order: 999999,
+    const defaultPaidLimitsByTier: Record<
+      Exclude<Tier, "none" | "free">,
+      typeof defaultFreeLimits
+    > = {
+      starter: { invoice: 999999, quote: 999999, purchase_order: 999999, companies: 1 },
+      growth: { invoice: 999999, quote: 999999, purchase_order: 999999, companies: 3 },
+      pro: { invoice: 999999, quote: 999999, purchase_order: 999999, companies: 5 },
     };
 
-    const computedLimits = tier === "pro" ? defaultProLimits : defaultFreeLimits;
+    const computedLimits =
+      tier === "starter" || tier === "growth" || tier === "pro"
+        ? defaultPaidLimitsByTier[tier]
+        : defaultFreeLimits;
 
     const limits = {
       invoice:
@@ -211,17 +258,20 @@ export async function GET(req: NextRequest) {
         typeof featuresObj?.["limits"]?.purchase_order === "number"
           ? (featuresObj["limits"].purchase_order as number)
           : computedLimits.purchase_order,
+      companies:
+        typeof featuresObj?.["limits"]?.companies === "number"
+          ? (featuresObj["limits"].companies as number)
+          : computedLimits.companies,
     };
 
-    // ✅ Bug fix: readOnly must respect blocked. Grace stays PRO (not read-only).
+    // ✅ readOnly must respect blocked.
     const isBlocked = entStatus === "blocked";
     const readOnly =
       isBlocked ||
-      (tier !== "pro" &&
+      (!isPaidTier(tier) &&
         (featuresObj?.["readOnly"] === true || featuresObj?.["readOnly"] === "true"));
 
-    // Map tier -> UI plan string
-    const plan: BillingEntitlementResponse["plan"] = tier === "pro" ? "PRO" : "FREE";
+    const plan: BillingEntitlementResponse["plan"] = tierToPlan(tier);
 
     const payload: BillingEntitlementResponse = {
       plan,
