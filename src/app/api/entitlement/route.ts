@@ -9,12 +9,21 @@ type Plan = "FREE" | "STARTER" | "GROWTH" | "PRO";
 
 type Tier = "none" | "free" | "starter" | "growth" | "pro";
 type EntStatus = "none" | "active" | "grace" | "blocked";
+type BillingCycle = "monthly" | "annual";
 
 type BillingEntitlementResponse = {
+  // legacy fields your UI already uses
   plan: Plan | string;
   status: string;
   currentPeriodEnd: string | null;
   graceUntil: string | null;
+
+  // ✅ new fields (safe additions — won’t break older clients)
+  tier: Tier; // "free" | "starter" | "growth" | "pro"
+  interval: BillingCycle | null; // inferred from planCode if possible
+  amount: number | null; // Rands (e.g. 199, 4309)
+  planCode: string | null; // subscription plan code (useful for debugging)
+
   features: {
     readOnly: boolean;
     limits: {
@@ -85,6 +94,78 @@ function normalizeEntStatus(raw: unknown): EntStatus {
   return "active";
 }
 
+/* =========================================================
+   ✅ Pricing + plan-code inference (matches subscribe route)
+   ========================================================= */
+
+const PLAN_CODES = {
+  starter: {
+    monthly: process.env.PAYSTACK_PLAN_CODE_STARTER_MONTHLY || "",
+    annual: process.env.PAYSTACK_PLAN_CODE_STARTER_ANNUAL || "",
+  },
+  growth: {
+    monthly: process.env.PAYSTACK_PLAN_CODE_GROWTH_MONTHLY || "",
+    annual: process.env.PAYSTACK_PLAN_CODE_GROWTH_ANNUAL || "",
+  },
+  pro: {
+    monthly: process.env.PAYSTACK_PLAN_CODE_PRO_MONTHLY || "",
+    annual: process.env.PAYSTACK_PLAN_CODE_PRO_ANNUAL || "",
+  },
+} as const;
+
+const AMOUNTS_KOBO = {
+  starter: {
+    monthly: Number(process.env.PAYSTACK_AMOUNT_KOBO_STARTER_MONTHLY || "19900"),
+    annual: Number(process.env.PAYSTACK_AMOUNT_KOBO_STARTER_ANNUAL || "214900"),
+  },
+  growth: {
+    monthly: Number(process.env.PAYSTACK_AMOUNT_KOBO_GROWTH_MONTHLY || "39900"),
+    annual: Number(process.env.PAYSTACK_AMOUNT_KOBO_GROWTH_ANNUAL || "430900"),
+  },
+  pro: {
+    monthly: Number(process.env.PAYSTACK_AMOUNT_KOBO_PRO_MONTHLY || "59900"),
+    annual: Number(process.env.PAYSTACK_AMOUNT_KOBO_PRO_ANNUAL || "646900"),
+  },
+} as const;
+
+function safeTrim(v: unknown) {
+  return typeof v === "string" ? v.trim() : "";
+}
+
+function inferIntervalFromPlanCode(tier: Tier, planCode: string | null): BillingCycle | null {
+  const pc = safeTrim(planCode);
+  if (!pc) return null;
+
+  if (tier === "starter") {
+    if (PLAN_CODES.starter.annual && pc === PLAN_CODES.starter.annual) return "annual";
+    if (PLAN_CODES.starter.monthly && pc === PLAN_CODES.starter.monthly) return "monthly";
+  }
+  if (tier === "growth") {
+    if (PLAN_CODES.growth.annual && pc === PLAN_CODES.growth.annual) return "annual";
+    if (PLAN_CODES.growth.monthly && pc === PLAN_CODES.growth.monthly) return "monthly";
+  }
+  if (tier === "pro") {
+    if (PLAN_CODES.pro.annual && pc === PLAN_CODES.pro.annual) return "annual";
+    if (PLAN_CODES.pro.monthly && pc === PLAN_CODES.pro.monthly) return "monthly";
+  }
+
+  return null;
+}
+
+function amountRandFor(tier: Tier, interval: BillingCycle | null): number | null {
+  if (!isPaidTier(tier)) return null;
+  const cyc = interval ?? "monthly"; // if unknown, default display (UI-only)
+  const kobo =
+    tier === "starter"
+      ? AMOUNTS_KOBO.starter[cyc]
+      : tier === "growth"
+      ? AMOUNTS_KOBO.growth[cyc]
+      : AMOUNTS_KOBO.pro[cyc];
+
+  // convert to rands (19900 -> 199)
+  return Math.round((kobo || 0) / 100);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const cookieName = getSessionCookieName();
@@ -119,7 +200,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.subscription.findUnique({
         where: { userId },
-        select: { status: true, currentPeriodEnd: true, canceledAt: true },
+        select: { status: true, currentPeriodEnd: true, canceledAt: true, planCode: true },
       }),
     ]);
 
@@ -127,28 +208,16 @@ export async function GET(req: NextRequest) {
     let tier = normalizeTier(ent?.tier);
     let entStatus = normalizeEntStatus(ent?.status);
 
-    // ✅ Prisma JsonValue-safe features handling
+    // ✅ Prisma JsonValue-safe features handling (single clean init)
     const rawFeatures: unknown = ent?.features ?? null;
-let featuresObj: Record<string, any> = isPlainObject(rawFeatures)
-  ? (rawFeatures as Record<string, any>)
-  : {};
-
-// Ensure nested shape exists (prevents future null/undefined issues)
-if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
-
-    // Ensure nested shape exists (so reads like featuresObj.limits.companies don't explode)
-    if (!featuresObj) featuresObj = {};
-    if (!isPlainObject(featuresObj["limits"])) featuresObj["limits"] = {};
+    let featuresObj: Record<string, any> = isPlainObject(rawFeatures) ? { ...(rawFeatures as any) } : {};
+    if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
 
     // Subscription period end if known (nullable)
     const currentPeriodEndDate: Date | null = sub?.currentPeriodEnd ?? null;
-    const currentPeriodEnd = currentPeriodEndDate
-      ? currentPeriodEndDate.toISOString()
-      : null;
+    const currentPeriodEnd = currentPeriodEndDate ? currentPeriodEndDate.toISOString() : null;
 
     // ✅ Grace window (computed from subscription.currentPeriodEnd)
-    // - If period ended and user is on a PAID tier, they enter grace for 7 days.
-    // - Persist to entitlement so UI and desktop stay consistent.
     let graceUntil: string | null = null;
 
     if (isPaidTier(tier) && currentPeriodEndDate) {
@@ -160,15 +229,12 @@ if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
       if (nowMs > cpeMs && nowMs <= graceEndMs) {
         graceUntil = new Date(graceEndMs).toISOString();
 
-        // Ensure entitlement reflects grace (and store graceUntil once)
-        if (entStatus !== "grace" || !featuresObj?.["graceUntil"]) {
-          const nextFeatures = isPlainObject(featuresObj) ? { ...featuresObj } : {};
+        if (entStatus !== "grace" || !featuresObj.graceUntil) {
+          const nextFeatures = { ...featuresObj };
           nextFeatures.graceUntil = graceUntil;
           nextFeatures.graceReason = "period_ended";
           nextFeatures.graceSetAt = new Date().toISOString();
-
-          // keep limits object present
-          if (!isPlainObject(nextFeatures["limits"])) nextFeatures["limits"] = {};
+          if (!isPlainObject(nextFeatures.limits)) nextFeatures.limits = {};
 
           await prisma.entitlement
             .update({
@@ -208,13 +274,13 @@ if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
         entStatus = "active";
         graceUntil = null;
         featuresObj = isPlainObject(nextFeatures) ? (nextFeatures as any) : {};
-        if (!isPlainObject(featuresObj["limits"])) featuresObj["limits"] = {};
+        if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
       }
     }
 
     // ✅ Back-compat: if entitlement was already grace, read stored graceUntil
     if (!graceUntil && entStatus === "grace") {
-      const d = parseIsoDate(featuresObj?.["graceUntil"]);
+      const d = parseIsoDate(featuresObj.graceUntil);
       graceUntil = d ? d.toISOString() : null;
     }
 
@@ -231,14 +297,11 @@ if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
       companies: 1,
     };
 
-    const defaultPaidLimitsByTier: Record<
-      Exclude<Tier, "none" | "free">,
-      typeof defaultFreeLimits
-    > = {
+    const defaultPaidLimitsByTier = {
       starter: { invoice: 999999, quote: 999999, purchase_order: 999999, companies: 1 },
       growth: { invoice: 999999, quote: 999999, purchase_order: 999999, companies: 3 },
       pro: { invoice: 999999, quote: 999999, purchase_order: 999999, companies: 5 },
-    };
+    } as const;
 
     const computedLimits =
       tier === "starter" || tier === "growth" || tier === "pro"
@@ -246,21 +309,15 @@ if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
         : defaultFreeLimits;
 
     const limits = {
-      invoice:
-        typeof featuresObj?.["limits"]?.invoice === "number"
-          ? (featuresObj["limits"].invoice as number)
-          : computedLimits.invoice,
-      quote:
-        typeof featuresObj?.["limits"]?.quote === "number"
-          ? (featuresObj["limits"].quote as number)
-          : computedLimits.quote,
+      invoice: typeof featuresObj?.limits?.invoice === "number" ? (featuresObj.limits.invoice as number) : computedLimits.invoice,
+      quote: typeof featuresObj?.limits?.quote === "number" ? (featuresObj.limits.quote as number) : computedLimits.quote,
       purchase_order:
-        typeof featuresObj?.["limits"]?.purchase_order === "number"
-          ? (featuresObj["limits"].purchase_order as number)
+        typeof featuresObj?.limits?.purchase_order === "number"
+          ? (featuresObj.limits.purchase_order as number)
           : computedLimits.purchase_order,
       companies:
-        typeof featuresObj?.["limits"]?.companies === "number"
-          ? (featuresObj["limits"].companies as number)
+        typeof featuresObj?.limits?.companies === "number"
+          ? (featuresObj.limits.companies as number)
           : computedLimits.companies,
     };
 
@@ -268,16 +325,24 @@ if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
     const isBlocked = entStatus === "blocked";
     const readOnly =
       isBlocked ||
-      (!isPaidTier(tier) &&
-        (featuresObj?.["readOnly"] === true || featuresObj?.["readOnly"] === "true"));
+      (!isPaidTier(tier) && (featuresObj?.readOnly === true || featuresObj?.readOnly === "true"));
 
     const plan: BillingEntitlementResponse["plan"] = tierToPlan(tier);
 
+    // ✅ interval + amount for the portal UI
+    const planCode = safeTrim(sub?.planCode) || null;
+    const interval = isPaidTier(tier) ? inferIntervalFromPlanCode(tier, planCode) : null;
+    const amount = isPaidTier(tier) ? amountRandFor(tier, interval) : null;
+
     const payload: BillingEntitlementResponse = {
       plan,
+      tier,
       status: plan === "FREE" ? "free" : effectiveStatus || "active",
       currentPeriodEnd,
       graceUntil,
+      interval,
+      amount,
+      planCode,
       features: {
         readOnly,
         limits,

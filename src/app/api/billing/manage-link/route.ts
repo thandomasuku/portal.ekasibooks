@@ -27,7 +27,6 @@ type PaystackSubscription = {
   subscription_code: string;
   next_payment_date?: string | null;
 
-  // Paystack sometimes includes these, sometimes not
   customer?: {
     id: number;
     email: string;
@@ -44,7 +43,7 @@ function lower(v: unknown) {
 }
 
 function safeTrim(v: unknown) {
-  return String(v ?? "").trim();
+  return typeof v === "string" ? v.trim() : String(v ?? "").trim();
 }
 
 function safeDate(value?: string | null): Date | null {
@@ -53,8 +52,8 @@ function safeDate(value?: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-async function paystackFetch<T>(url: string): Promise<PaystackResponse<T>> {
-  const res = await fetch(url, {
+async function paystackGet<T>(path: string): Promise<PaystackResponse<T>> {
+  const res = await fetch(`${PAYSTACK_BASE}${path}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
@@ -76,32 +75,51 @@ async function paystackFetch<T>(url: string): Promise<PaystackResponse<T>> {
   return json;
 }
 
-function pickManageableSubscription(list: PaystackSubscription[]): PaystackSubscription | null {
+async function paystackManageLink(subscriptionCode: string): Promise<string> {
+  const res = await paystackGet<{ link?: string; url?: string }>(
+    `/subscription/${encodeURIComponent(subscriptionCode)}/manage/link`
+  );
+
+  const url = safeTrim((res as any)?.data?.link || (res as any)?.data?.url);
+  if (!url) throw new Error("Paystack response missing manage link URL.");
+  return url;
+}
+
+function pickPrimarySubscription(list: PaystackSubscription[]): PaystackSubscription | null {
   if (!Array.isArray(list) || list.length === 0) return null;
 
   // Prefer active
   const active = list.find((s) => lower(s?.status) === "active");
   if (active) return active;
 
-  // Fallbacks that can still exist and be manageable
+  // Fallbacks that are still “manageable”
   const fallbacks = new Set(["trialing", "non-renewing", "paused", "attention"]);
   const fb = list.find((s) => fallbacks.has(lower(s?.status)));
   return fb ?? list[0] ?? null;
 }
 
+function isManageableStatus(status: unknown) {
+  const s = lower(status);
+  if (s === "active") return true;
+  const fallbacks = new Set(["trialing", "non-renewing", "paused", "attention"]);
+  return fallbacks.has(s);
+}
+
 export async function GET(req: NextRequest) {
   try {
     if (!PAYSTACK_SECRET_KEY) {
-      return NextResponse.json(
-        { error: "Missing PAYSTACK_SECRET_KEY env var." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Missing PAYSTACK_SECRET_KEY env var." }, { status: 500 });
     }
 
     // 1) Auth (cookie-based session)
     const cookieName = getSessionCookieName();
     const token = req.cookies.get(cookieName)?.value;
-    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401, headers: { "Cache-Control": "no-store" } }
+      );
+    }
 
     const { userId } = await verifySession(token);
 
@@ -115,12 +133,12 @@ export async function GET(req: NextRequest) {
     if (!email) {
       return NextResponse.json(
         { error: "User email not found for this session." },
-        { status: 500 }
+        { status: 500, headers: { "Cache-Control": "no-store" } }
       );
     }
 
-    // 3) Load local subscription (unique by userId in your current code)
-    const sub = await prisma.subscription.findUnique({
+    // 3) Load local subscription (optional hints)
+    const localSub = await prisma.subscription.findUnique({
       where: { userId },
       select: {
         subscriptionCode: true,
@@ -131,127 +149,114 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    let subscriptionCode = safeTrim(sub?.subscriptionCode);
-    let customerCode = safeTrim(sub?.customerCode);
-    const localStatus = sub?.status; // could be enum in Prisma, but treat as unknown/string-safe
-    const localPlanCode = sub?.planCode ?? null;
-
-    // 4) If subscriptionCode missing locally, discover from Paystack and backfill
-    if (!subscriptionCode) {
-      // 4.1) Fetch Paystack customer by email (authoritative for customer_code)
-      const cust = await paystackFetch<PaystackCustomer>(
-        `${PAYSTACK_BASE}/customer/${encodeURIComponent(email)}`
+    const localStatus = lower(localSub?.status);
+    // If locally canceled, don't pretend “manage” will help — user must resubscribe
+    if (localStatus === "canceled" || localStatus === "cancelled" || localStatus === "inactive") {
+      return NextResponse.json(
+        { error: "Subscription is not active. Subscribe again to manage billing." },
+        { status: 409, headers: { "Cache-Control": "no-store" } }
       );
-      const customer = cust.data;
+    }
 
-      if (!customer?.id || !customer?.customer_code) {
-        return NextResponse.json(
-          { error: "Paystack customer lookup returned no customer record." },
-          { status: 404 }
-        );
-      }
+    // 4) Always fetch Paystack customer + subscriptions (authoritative)
+    const custResp = await paystackGet<PaystackCustomer>(`/customer/${encodeURIComponent(email)}`);
+    const customer = custResp.data;
 
-      // Always take customerCode from customer lookup (subscription list may omit hydration)
-      customerCode = safeTrim(customer.customer_code);
-
-      // 4.2) List subscriptions for that customer (Paystack filter expects customer ID)
-      const subs = await paystackFetch<PaystackSubscription[]>(
-        `${PAYSTACK_BASE}/subscription?customer=${encodeURIComponent(String(customer.id))}`
+    if (!customer?.id || !customer?.customer_code) {
+      return NextResponse.json(
+        { error: "Paystack customer lookup returned no customer record." },
+        { status: 404, headers: { "Cache-Control": "no-store" } }
       );
+    }
 
-      const discovered = pickManageableSubscription(subs.data || []);
-      const discoveredCode = safeTrim(discovered?.subscription_code);
+    const customerCode = safeTrim(customer.customer_code);
 
-      if (!discoveredCode) {
-        return NextResponse.json(
-          { error: "No active subscription found for this account." },
-          { status: 409 }
-        );
-      }
+    const subsResp = await paystackGet<PaystackSubscription[]>(
+      `/subscription?customer=${encodeURIComponent(String(customer.id))}`
+    );
 
-      subscriptionCode = discoveredCode;
+    const list = Array.isArray(subsResp.data) ? subsResp.data : [];
+    const primary = pickPrimarySubscription(list);
 
-      const planCode = discovered?.plan?.plan_code ?? localPlanCode;
+    if (!primary?.subscription_code) {
+      return NextResponse.json(
+        { error: "No active subscription found for this account." },
+        { status: 409, headers: { "Cache-Control": "no-store" } }
+      );
+    }
 
-      // Map Paystack next_payment_date -> currentPeriodEnd when present
-      const currentPeriodEnd = safeDate(discovered?.next_payment_date);
+    const primaryCode = safeTrim(primary.subscription_code);
+    const primaryPlanCode = safeTrim(primary?.plan?.plan_code) || (localSub?.planCode ?? "");
+    const primaryPeriodEnd = safeDate(primary?.next_payment_date);
 
-      // 4.3) Backfill into DB (create row if missing)
-      // IMPORTANT: We do NOT write `status` here because your schema uses an enum and
-      // we don't want to guess enum names/values in this file. Webhooks/verify can own status.
-      await prisma.subscription.upsert({
+    // 5) Backfill DB with the primary subscription (do NOT guess enum status)
+    await prisma.subscription
+      .upsert({
         where: { userId },
         create: {
           userId,
           customerCode,
-          subscriptionCode,
-          ...(planCode ? { planCode } : {}),
-          ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
+          subscriptionCode: primaryCode,
+          ...(primaryPlanCode ? { planCode: primaryPlanCode } : {}),
+          ...(primaryPeriodEnd ? { currentPeriodEnd: primaryPeriodEnd } : {}),
         },
         update: {
           customerCode,
-          subscriptionCode,
-          ...(planCode ? { planCode } : {}),
-          ...(currentPeriodEnd ? { currentPeriodEnd } : {}),
+          subscriptionCode: primaryCode,
+          ...(primaryPlanCode ? { planCode: primaryPlanCode } : {}),
+          ...(primaryPeriodEnd ? { currentPeriodEnd: primaryPeriodEnd } : {}),
         },
-      });
-    }
+      })
+      .catch(() => null);
 
-    // 5) Still missing? then we can't manage billing
-    if (!subscriptionCode) {
-      return NextResponse.json(
-        { error: "No active subscription found for this account." },
-        { status: 409 }
-      );
-    }
+    // 6) Generate manage link for primary subscription
+    const url = await paystackManageLink(primaryCode);
 
-    // Optional: block if already canceled (string-safe)
-    const st = lower(localStatus);
-    if (st === "canceled" || st === "cancelled" || st === "inactive") {
-      return NextResponse.json(
-        { error: "Subscription is not active. Upgrade again to manage billing." },
-        { status: 409 }
-      );
-    }
+    /**
+     * 7) ALSO return extra manage links (up to 3) if multiple subscriptions exist.
+     * This helps plan-changes where users accidentally end up with 2 subs and need to cancel the old one.
+     */
+    const manageable = list
+      .filter((s) => s?.subscription_code && isManageableStatus(s?.status))
+      .slice(0, 3);
 
-    // 6) Ask Paystack for a manage link
-    // Endpoint: GET /subscription/:code/manage/link
-    const upstream = await fetch(
-      `${PAYSTACK_BASE}/subscription/${encodeURIComponent(subscriptionCode)}/manage/link`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-      }
+    const extra = await Promise.all(
+      manageable
+        .map(async (s) => {
+          const code = safeTrim(s.subscription_code);
+          if (!code) return null;
+          try {
+            const link = await paystackManageLink(code);
+            return {
+              subscriptionCode: code,
+              status: safeTrim(s.status) || "unknown",
+              planCode: safeTrim(s?.plan?.plan_code) || null,
+              nextPaymentDate: s?.next_payment_date ?? null,
+              url: link,
+            };
+          } catch {
+            // If a specific link fails, just omit it.
+            return null;
+          }
+        })
+        .filter(Boolean) as any
     );
 
-    const json = await upstream.json().catch(() => null);
-
-    if (!upstream.ok || !json?.status) {
-      const msg =
-        json?.message ||
-        json?.error ||
-        `Paystack manage link failed (${upstream.status}).`;
-      return NextResponse.json({ error: msg }, { status: 502 });
-    }
-
-    const url: string | undefined = json?.data?.link || json?.data?.url;
-
-    if (!url) {
-      return NextResponse.json(
-        { error: "Paystack response missing manage link URL." },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json({ url }, { status: 200 });
+    return NextResponse.json(
+      {
+        url, // primary (active) manage link
+        customerCode,
+        subscriptionCode: primaryCode,
+        planCode: primaryPlanCode || null,
+        nextPaymentDate: primary?.next_payment_date ?? null,
+        extraManageLinks: extra, // optional helpers for multi-subscription cleanup
+      },
+      { status: 200, headers: { "Cache-Control": "no-store" } }
+    );
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message || "Failed to generate manage link." },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

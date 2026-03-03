@@ -109,6 +109,7 @@ function statusDotClass(status: string) {
 /* ---------------- Billing cycle UI helpers ---------------- */
 
 type BillingCycle = "monthly" | "annual";
+type PaidTier = "starter" | "growth" | "pro";
 
 function CycleToggle({
   value,
@@ -161,6 +162,37 @@ function CycleToggle({
   );
 }
 
+function TierToggle({ value, onChange }: { value: PaidTier; onChange: (v: PaidTier) => void }) {
+  const tiers: Array<{ key: PaidTier; label: string }> = [
+    { key: "starter", label: "Starter" },
+    { key: "growth", label: "Growth" },
+    { key: "pro", label: "Pro" },
+  ];
+
+  return (
+    <div className="inline-flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+      {tiers.map((t) => {
+        const active = value === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onChange(t.key)}
+            aria-pressed={active}
+            className={[
+              "h-9 rounded-xl px-4 text-sm font-semibold transition",
+              active ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50",
+            ].join(" ")}
+            style={active ? { background: "var(--primary)" } : undefined}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ---------------- Small utilities ---------------- */
 
 function safeJson(v: any) {
@@ -191,6 +223,32 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/* ---------------- Pricing model (UI only) ---------------- */
+
+const PRICE_TABLE: Record<
+  PaidTier,
+  { title: string; monthly: number; annual: number; companies: number; badge?: string }
+> = {
+  starter: { title: "Starter", monthly: 199, annual: 2149, companies: 1 },
+  growth: { title: "Growth", monthly: 399, annual: 4309, companies: 3, badge: "Most popular" },
+  pro: { title: "Pro", monthly: 599, annual: 6469, companies: 5 },
+};
+
+function planLabelFromEnt(planUpper: string) {
+  const p = String(planUpper || "FREE").toUpperCase();
+  if (p === "STARTER") return "STARTER";
+  if (p === "GROWTH") return "GROWTH";
+  if (p === "PRO") return "PRO";
+  return "FREE";
+}
+
+function entToPaidTier(planUpper: string): PaidTier {
+  const p = String(planUpper || "").toUpperCase();
+  if (p === "GROWTH") return "growth";
+  if (p === "PRO") return "pro";
+  return "starter";
+}
+
 export default function BillingPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -202,7 +260,6 @@ export default function BillingPage() {
 
   const { state, user, error: sessionError, refresh } = useSession();
 
-  // ✅ entitlement now comes from /api/entitlement (single source of truth)
   const [ent, setEnt] = useState<any>(null);
   const [entError, setEntError] = useState<string | null>(null);
 
@@ -223,7 +280,6 @@ export default function BillingPage() {
     }
   }, []);
 
-  // initial entitlement load once session is ready
   useEffect(() => {
     if (state !== "ready") return;
     void fetchEntitlement();
@@ -231,13 +287,10 @@ export default function BillingPage() {
 
   const onRefreshAll = useCallback(async () => {
     await refresh();
-    // after refresh, if still authenticated, refresh entitlement too
-    if (state === "ready") {
-      await fetchEntitlement();
-    }
-  }, [refresh, fetchEntitlement, state]);
+    // ✅ always try entitlement refresh after session refresh (avoids stale `state` closure)
+    await fetchEntitlement();
+  }, [refresh, fetchEntitlement]);
 
-  // Entitlement may not be fully typed (amount/interval/etc). Use a safe view.
   const entAny = (ent ?? {}) as any;
 
   const derivedName = useMemo(() => {
@@ -259,13 +312,8 @@ export default function BillingPage() {
   const [manageLoading, setManageLoading] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
 
-  // billing cycle selection for checkout (UI only)
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
-
-  // Display prices (UI only — Paystack is the source of truth)
-  const MONTHLY_PRICE = 199;
-  const ANNUAL_PRICE = 2149; // ~10% discount
-  const annualSave = MONTHLY_PRICE * 12 - ANNUAL_PRICE;
+  const [selectedTier, setSelectedTier] = useState<PaidTier>("starter");
 
   async function verifyReference(reference: string) {
     const ref = String(reference || "").trim();
@@ -296,7 +344,6 @@ export default function BillingPage() {
         setVerifyNote(`Payment status: ${st}`);
       }
 
-      // ✅ refresh both session and entitlement
       await refresh();
       await fetchEntitlement();
     } catch (e: any) {
@@ -323,14 +370,21 @@ export default function BillingPage() {
   }, [sp]);
 
   const planName = String(entAny?.plan ?? "FREE").toUpperCase();
-  const isPaid = planName !== "FREE";
+  const planLabel = planLabelFromEnt(planName);
+  const isPaid = planLabel !== "FREE";
 
   const renewsAt = (entAny?.currentPeriodEnd as string | null) ?? null;
   const graceUntil = (entAny?.graceUntil as string | null) ?? null;
 
   const featureReadOnly = !!entAny?.features?.readOnly;
 
-  // Grace is date-driven (matches desktop semantics)
+  // ✅ Keep tier toggle aligned ONLY once you're paid (avoid overriding user's choice on FREE)
+  useEffect(() => {
+    if (!isPaid) return;
+    setSelectedTier(entToPaidTier(planName));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPaid, planName]);
+
   const withinGrace = useMemo(() => {
     if (!graceUntil) return false;
     const t = Date.parse(graceUntil);
@@ -338,7 +392,6 @@ export default function BillingPage() {
     return Date.now() <= t;
   }, [graceUntil]);
 
-  // Effective status (what the desktop should apply)
   const effectiveStatus = useMemo(() => {
     if (!isPaid) return "free";
     if (featureReadOnly) return "read_only";
@@ -351,6 +404,7 @@ export default function BillingPage() {
       invoice: 5,
       quote: 5,
       purchase_order: 5,
+      companies: 1,
     };
 
   const subtitle =
@@ -361,6 +415,11 @@ export default function BillingPage() {
       : state === "error"
       ? "We couldn’t load billing details right now."
       : "Preparing billing...";
+
+  const selected = PRICE_TABLE[selectedTier];
+  const priceForSelected =
+    cycle === "annual" ? `${moneyZar(selected.annual)}/yr` : `${moneyZar(selected.monthly)}/mo`;
+  const annualSaveForSelected = selected.monthly * 12 - selected.annual;
 
   async function onUpgrade() {
     if (upgradeLoading) return;
@@ -373,7 +432,7 @@ export default function BillingPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cycle }),
+        body: JSON.stringify({ cycle, tier: selectedTier }),
       });
 
       const data = await res.json().catch(() => null);
@@ -440,9 +499,9 @@ export default function BillingPage() {
     ? entAny?.interval === "annual" || entAny?.interval === "yearly"
       ? `${moneyZar(entAny.amount)}/yr`
       : `${moneyZar(entAny.amount)}/mo`
-    : "R 199/mo";
+    : priceForSelected;
 
-  const kpiPrice = planName === "FREE" ? "—" : priceLabelForPaid;
+  const kpiPrice = planLabel === "FREE" ? "—" : priceLabelForPaid;
 
   const graceCountdown = useMemo(() => {
     if (!graceUntil) return null;
@@ -464,6 +523,8 @@ export default function BillingPage() {
     };
   }, [entAny]);
 
+  const companyLimit = Number(limits?.companies ?? 1);
+
   return (
     <PortalShell
       badge="Billing"
@@ -473,7 +534,7 @@ export default function BillingPage() {
       backLabel="Back to overview"
       userEmail={(user as any)?.email ?? null}
       userName={derivedName}
-      planName={planName}
+      planName={planLabel}
       headerRight={
         <button onClick={onRefreshAll} className={BTN_SECONDARY}>
           Refresh
@@ -511,52 +572,55 @@ export default function BillingPage() {
         />
       ) : (
         <div className="space-y-6">
-          {/* Compact Header Card */}
           <PremiumCard>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <Chip tone={heroTone === "success" ? "success" : heroTone === "brand" ? "brand" : "neutral"}>
                   <span className={`h-2 w-2 rounded-full ${heroDot}`} />
-                  {planName} • {heroStatusLabel}
+                  {planLabel} • {heroStatusLabel}
                 </Chip>
 
                 <h2 className="mt-3 text-xl font-semibold text-slate-900">
-                  {planName === "FREE"
-                    ? "Upgrade to Pro when you're ready"
+                  {planLabel === "FREE"
+                    ? "Choose a plan when you’re ready"
                     : effectiveStatus === "read_only"
                     ? "Your account is in read-only mode"
                     : "Your subscription is active"}
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-600">
-                  {planName === "FREE"
-                    ? "Unlock unlimited invoices, branding, and priority support."
+                  {planLabel === "FREE"
+                    ? "Paid plans unlock more companies. Everything else stays the same."
                     : effectiveStatus === "read_only"
                     ? "Your subscription is not active. The desktop app will be read-only until billing is resolved."
                     : "Manage billing securely on Paystack — update your card, cancel anytime."}
                 </p>
 
-                {planName !== "FREE" && graceUntil ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Company limit: <span className="font-semibold text-slate-700">{companyLimit}</span>
+                </p>
+
+                {planLabel !== "FREE" && graceUntil ? (
                   <p className="mt-2 text-xs text-slate-500">
-                    Grace window until{" "}
-                    <span className="font-semibold text-slate-700">{fmtDate(graceUntil)}</span>
+                    Grace window until <span className="font-semibold text-slate-700">{fmtDate(graceUntil)}</span>
                   </p>
                 ) : null}
               </div>
 
               <div className="flex w-full flex-col items-end gap-2 md:w-auto">
-                {planName === "FREE" ? (
-                  <div className="w-full md:w-auto">
+                {planLabel === "FREE" ? (
+                  <div className="w-full md:w-auto space-y-2">
                     <CycleToggle value={cycle} onChange={setCycle} />
-                    <div className="mt-1 text-[11px] text-slate-600">
+                    <TierToggle value={selectedTier} onChange={setSelectedTier} />
+                    <div className="text-[11px] text-slate-600">
                       Annual saves{" "}
-                      <span className="font-extrabold text-slate-900">R{annualSave}</span> per year.
+                      <span className="font-extrabold text-slate-900">R{annualSaveForSelected}</span> per year.
                     </div>
                   </div>
                 ) : null}
 
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {planName === "FREE" ? (
+                  {planLabel === "FREE" ? (
                     <button
                       onClick={onUpgrade}
                       disabled={upgradeLoading}
@@ -566,9 +630,7 @@ export default function BillingPage() {
                       <span className={BTN_ICON_PRIMARY}>⟠</span>
                       {upgradeLoading
                         ? "Redirecting..."
-                        : cycle === "annual"
-                        ? `Upgrade annually (${moneyZar(ANNUAL_PRICE)}/yr)`
-                        : `Upgrade monthly (${moneyZar(MONTHLY_PRICE)}/mo)`}
+                        : `Subscribe • ${PRICE_TABLE[selectedTier].title} (${priceForSelected})`}
                     </button>
                   ) : (
                     <button
@@ -589,15 +651,16 @@ export default function BillingPage() {
                   </button>
                 </div>
 
-                {planName !== "FREE" ? (
-                  <span className="text-[11px] leading-tight text-slate-500">Cancel anytime (secure Paystack portal).</span>
+                {planLabel !== "FREE" ? (
+                  <span className="text-[11px] leading-tight text-slate-500">
+                    Cancel anytime (secure Paystack portal).
+                  </span>
                 ) : null}
               </div>
             </div>
           </PremiumCard>
 
-          {/* Grace Banner (date-driven) */}
-          {planName !== "FREE" && withinGrace ? (
+          {planLabel !== "FREE" && withinGrace ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-amber-900">Grace period active</div>
@@ -615,15 +678,10 @@ export default function BillingPage() {
                 </div>
               </div>
               <div className="mt-2 text-sm text-amber-900/80">
-                You still have Pro access during grace. Update your payment method to avoid a downgrade.
+                You still have paid access during grace. Update your payment method to avoid a downgrade.
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  onClick={onManagePlan}
-                  disabled={manageLoading}
-                  className={BTN_SECONDARY}
-                  title="Manage subscription on Paystack"
-                >
+                <button onClick={onManagePlan} disabled={manageLoading} className={BTN_SECONDARY}>
                   <span className={BTN_ICON_SECONDARY}>⚙</span>
                   {manageLoading ? "Opening..." : "Update payment method"}
                 </button>
@@ -635,7 +693,6 @@ export default function BillingPage() {
             </div>
           ) : null}
 
-          {/* Notices */}
           {entError ? (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{entError}</div>
           ) : null}
@@ -658,17 +715,14 @@ export default function BillingPage() {
             </div>
           ) : null}
 
-          {/* KPI Row */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Plan" value={planName} icon="★" />
+            <KpiCard label="Plan" value={planLabel} icon="★" />
             <KpiCard label="Status" value={heroStatusLabel} icon="✓" />
-            <KpiCard label="Renews" value={planName === "FREE" ? "—" : fmtDate(renewsAt)} icon="⏱" />
+            <KpiCard label="Renews" value={planLabel === "FREE" ? "—" : fmtDate(renewsAt)} icon="⏱" />
             <KpiCard label="Price" value={kpiPrice} icon="R" />
           </div>
 
-          {/* Main Layout */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* Left column */}
             <PremiumCard className="lg:col-span-2">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -683,17 +737,17 @@ export default function BillingPage() {
               </div>
 
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <DetailTile label="Plan" value={planName} />
-                <DetailTile label="Price" value={planName === "FREE" ? "—" : priceLabelForPaid} />
-                <DetailTile label="Renews" value={planName === "FREE" ? "—" : fmtDate(renewsAt)} />
+                <DetailTile label="Plan" value={planLabel} />
+                <DetailTile label="Price" value={planLabel === "FREE" ? "—" : priceLabelForPaid} />
+                <DetailTile label="Renews" value={planLabel === "FREE" ? "—" : fmtDate(renewsAt)} />
               </div>
 
               <div className="mt-6 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                 <p className="text-sm text-slate-700">
-                  {planName === "FREE" ? (
+                  {planLabel === "FREE" ? (
                     <>
-                      You’re on the <span className="font-semibold">FREE</span> plan. Upgrade when you need unlimited
-                      documents and branding.
+                      You’re on the <span className="font-semibold">FREE</span> plan. Paid plans increase your company
+                      limit.
                     </>
                   ) : effectiveStatus === "read_only" ? (
                     <>
@@ -713,56 +767,86 @@ export default function BillingPage() {
                 </p>
               </div>
 
-              {/* Plan comparison (unchanged) */}
               <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">Plan comparison</p>
-                    <p className="mt-1 text-xs text-slate-500">Quick view of what Pro unlocks.</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      The only difference is the number of companies you can create.
+                    </p>
                   </div>
-                  <Chip tone="neutral">Free vs Pro</Chip>
+                  <Chip tone="neutral">Companies</Chip>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <PlanCard
                     title="FREE"
                     price="R0"
-                    active={planName === "FREE"}
+                    active={planLabel === "FREE"}
                     items={[
                       { ok: true, label: "Desktop app access" },
-                      { ok: true, label: "Customer management" },
+                      { ok: true, label: `Companies: 1` },
                       { ok: true, label: `Invoices up to ${limits.invoice}` },
                       { ok: true, label: `Quotes up to ${limits.quote}` },
                       { ok: true, label: `Purchase orders up to ${limits.purchase_order}` },
-                      { ok: false, label: "Unlimited invoices & quotes" },
-                      { ok: false, label: "Branded invoices (logo & footer)" },
-                      { ok: false, label: "Priority support" },
+                    ]}
+                  />
+                  <PlanCard
+                    title="STARTER"
+                    price={
+                      cycle === "annual"
+                        ? `${moneyZar(PRICE_TABLE.starter.annual)}/yr`
+                        : `${moneyZar(PRICE_TABLE.starter.monthly)}/mo`
+                    }
+                    active={planLabel === "STARTER" && !featureReadOnly}
+                    highlight={selectedTier === "starter" && planLabel === "FREE"}
+                    items={[
+                      { ok: true, label: "Desktop app access" },
+                      { ok: true, label: "Unlimited documents" },
+                      { ok: true, label: `Companies: ${PRICE_TABLE.starter.companies}` },
+                    ]}
+                  />
+                  <PlanCard
+                    title="GROWTH"
+                    price={
+                      cycle === "annual"
+                        ? `${moneyZar(PRICE_TABLE.growth.annual)}/yr`
+                        : `${moneyZar(PRICE_TABLE.growth.monthly)}/mo`
+                    }
+                    active={planLabel === "GROWTH" && !featureReadOnly}
+                    highlight={selectedTier === "growth" && planLabel === "FREE"}
+                    items={[
+                      { ok: true, label: "Desktop app access" },
+                      { ok: true, label: "Unlimited documents" },
+                      { ok: true, label: `Companies: ${PRICE_TABLE.growth.companies}` },
+                      { ok: true, label: "Priority support" },
                     ]}
                   />
                   <PlanCard
                     title="PRO"
-                    price={cycle === "annual" ? `${moneyZar(ANNUAL_PRICE)}/yr` : `${moneyZar(MONTHLY_PRICE)}/mo`}
-                    active={planName !== "FREE" && !featureReadOnly}
-                    highlight
+                    price={
+                      cycle === "annual"
+                        ? `${moneyZar(PRICE_TABLE.pro.annual)}/yr`
+                        : `${moneyZar(PRICE_TABLE.pro.monthly)}/mo`
+                    }
+                    active={planLabel === "PRO" && !featureReadOnly}
+                    highlight={selectedTier === "pro" && planLabel === "FREE"}
                     items={[
                       { ok: true, label: "Desktop app access" },
-                      { ok: true, label: "Unlimited invoices & quotes" },
-                      { ok: true, label: "Branded invoices (logo & footer)" },
+                      { ok: true, label: "Unlimited documents" },
+                      { ok: true, label: `Companies: ${PRICE_TABLE.pro.companies}` },
                       { ok: true, label: "Priority support" },
-                      { ok: true, label: "Future: team access & roles" },
-                      { ok: true, label: "Future: statements & automation" },
                     ]}
                   />
                 </div>
 
-                {planName === "FREE" ? (
+                {planLabel === "FREE" ? (
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                    Tip: Choose <span className="font-bold">Annual</span> for best value (Save R{annualSave}/year).
+                    Tip: Choose <span className="font-bold">Annual</span> for best value on any paid plan.
                   </div>
                 ) : null}
               </div>
 
-              {/* Manual verify (unchanged) */}
               <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -793,7 +877,6 @@ export default function BillingPage() {
                 ) : null}
               </div>
 
-              {/* FAQ (unchanged) */}
               <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                 <p className="text-sm font-semibold text-slate-900">FAQ</p>
                 <div className="mt-3 space-y-3">
@@ -813,7 +896,6 @@ export default function BillingPage() {
               </div>
             </PremiumCard>
 
-            {/* Right column */}
             <div className="space-y-6">
               <PremiumCard tone="soft">
                 <div className="flex items-start justify-between gap-3">
@@ -830,22 +912,22 @@ export default function BillingPage() {
                 <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-slate-900">
-                      {planName === "FREE" ? "No payment method saved" : "Stored on Paystack"}
+                      {planLabel === "FREE" ? "No payment method saved" : "Stored on Paystack"}
                     </span>
                     <span className="text-xs font-semibold text-slate-600">
-                      {planName === "FREE" ? "Not required" : "Protected"}
+                      {planLabel === "FREE" ? "Not required" : "Protected"}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-slate-600">For security, we don’t store card details in the portal.</p>
                 </div>
 
                 <button
-                  onClick={planName === "FREE" ? undefined : onManagePlan}
-                  disabled={planName === "FREE" || manageLoading}
-                  className={`${BTN_SECONDARY} mt-6 w-full ${planName === "FREE" ? "cursor-not-allowed opacity-60" : ""}`}
-                  title={planName === "FREE" ? "Upgrade to Pro first" : "Manage subscription on Paystack"}
+                  onClick={planLabel === "FREE" ? undefined : onManagePlan}
+                  disabled={planLabel === "FREE" || manageLoading}
+                  className={`${BTN_SECONDARY} mt-6 w-full ${planLabel === "FREE" ? "cursor-not-allowed opacity-60" : ""}`}
+                  title={planLabel === "FREE" ? "Subscribe first" : "Manage subscription on Paystack"}
                 >
-                  {planName === "FREE"
+                  {planLabel === "FREE"
                     ? "Update payment method"
                     : manageLoading
                     ? "Opening..."
@@ -878,7 +960,7 @@ export default function BillingPage() {
   );
 }
 
-/* ---------------- Local helpers (unchanged) ---------------- */
+/* ---------------- Local helpers ---------------- */
 
 function Feature({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -945,8 +1027,7 @@ function Faq({ q, a }: { q: string; a: string }) {
   );
 }
 
-/* ---------------- Skeleton + EmptyState (keep your existing ones) ---------------- */
-/* NOTE: These were in your original file. Keep them as-is below this point. */
+/* ---------------- Skeleton + EmptyState ---------------- */
 
 function BillingSkeleton() {
   return (

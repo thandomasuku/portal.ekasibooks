@@ -10,19 +10,68 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 const PAYSTACK_CURRENCY = (process.env.PAYSTACK_CURRENCY || "ZAR").toUpperCase();
 const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "";
 
-// Legacy single-plan env (backwards compatible)
-const LEGACY_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || ""; // optional (subscriptions)
+/**
+ * Legacy env (backwards compatible)
+ * - PAYSTACK_PLAN_CODE            (single plan)
+ * - PAYSTACK_AMOUNT_KOBO          (single amount)
+ * - PAYSTACK_PLAN_CODE_MONTHLY    (single monthly plan)
+ * - PAYSTACK_PLAN_CODE_ANNUAL     (single annual plan)
+ * - PAYSTACK_AMOUNT_KOBO_MONTHLY  (single monthly amount)
+ * - PAYSTACK_AMOUNT_KOBO_ANNUAL   (single annual amount)
+ */
+const LEGACY_PLAN_CODE = process.env.PAYSTACK_PLAN_CODE || "";
 const LEGACY_AMOUNT_KOBO = Number(process.env.PAYSTACK_AMOUNT_KOBO || "0");
 
-// New multi-cycle env (recommended)
-const PLAN_CODE_MONTHLY = process.env.PAYSTACK_PLAN_CODE_MONTHLY || "";
-const PLAN_CODE_ANNUAL = process.env.PAYSTACK_PLAN_CODE_ANNUAL || "";
+const LEGACY_PLAN_CODE_MONTHLY = process.env.PAYSTACK_PLAN_CODE_MONTHLY || "";
+const LEGACY_PLAN_CODE_ANNUAL = process.env.PAYSTACK_PLAN_CODE_ANNUAL || "";
 
-// Defaults to your known prices; env can override
-const AMOUNT_KOBO_MONTHLY = Number(process.env.PAYSTACK_AMOUNT_KOBO_MONTHLY || "19900"); // R199
-const AMOUNT_KOBO_ANNUAL = Number(process.env.PAYSTACK_AMOUNT_KOBO_ANNUAL || "214900"); // R2149
+const LEGACY_AMOUNT_KOBO_MONTHLY = Number(process.env.PAYSTACK_AMOUNT_KOBO_MONTHLY || "0");
+const LEGACY_AMOUNT_KOBO_ANNUAL = Number(process.env.PAYSTACK_AMOUNT_KOBO_ANNUAL || "0");
+
+/**
+ * New tier+cycle plan codes (recommended)
+ * These should be the Paystack "plan codes" you created.
+ */
+const PLAN_CODES = {
+  starter: {
+    monthly: process.env.PAYSTACK_PLAN_CODE_STARTER_MONTHLY || "",
+    annual: process.env.PAYSTACK_PLAN_CODE_STARTER_ANNUAL || "",
+  },
+  growth: {
+    monthly: process.env.PAYSTACK_PLAN_CODE_GROWTH_MONTHLY || "",
+    annual: process.env.PAYSTACK_PLAN_CODE_GROWTH_ANNUAL || "",
+  },
+  pro: {
+    monthly: process.env.PAYSTACK_PLAN_CODE_PRO_MONTHLY || "",
+    annual: process.env.PAYSTACK_PLAN_CODE_PRO_ANNUAL || "",
+  },
+} as const;
+
+/**
+ * New tier+cycle amounts (optional).
+ * If you are using Paystack subscriptions with a plan, Paystack can still require `amount` on initialize.
+ * Defaults match your PricingClient.tsx (VAT inclusive):
+ * - Starter: R199 / R2149
+ * - Growth:  R399 / R4309
+ * - Pro:     R599 / R6469
+ */
+const AMOUNTS_KOBO = {
+  starter: {
+    monthly: Number(process.env.PAYSTACK_AMOUNT_KOBO_STARTER_MONTHLY || "19900"),
+    annual: Number(process.env.PAYSTACK_AMOUNT_KOBO_STARTER_ANNUAL || "214900"),
+  },
+  growth: {
+    monthly: Number(process.env.PAYSTACK_AMOUNT_KOBO_GROWTH_MONTHLY || "39900"),
+    annual: Number(process.env.PAYSTACK_AMOUNT_KOBO_GROWTH_ANNUAL || "430900"),
+  },
+  pro: {
+    monthly: Number(process.env.PAYSTACK_AMOUNT_KOBO_PRO_MONTHLY || "59900"),
+    annual: Number(process.env.PAYSTACK_AMOUNT_KOBO_PRO_ANNUAL || "646900"),
+  },
+} as const;
 
 type BillingCycle = "monthly" | "annual";
+type Tier = "starter" | "growth" | "pro";
 
 function cleanBaseUrl(url: string) {
   return url.replace(/\/$/, "");
@@ -33,30 +82,38 @@ function safeBillingCycle(v: unknown): BillingCycle {
   return s === "annual" ? "annual" : "monthly";
 }
 
-function resolvePaystackConfig(cycle: BillingCycle) {
-  // Prefer new env vars. Fallback to legacy single-plan vars.
-  if (cycle === "annual") {
-    const amount =
-      AMOUNT_KOBO_ANNUAL > 0
-        ? AMOUNT_KOBO_ANNUAL
-        : LEGACY_AMOUNT_KOBO > 0
-        ? LEGACY_AMOUNT_KOBO
-        : 214900;
+function safeTier(v: unknown): Tier {
+  const s = String(v || "").toLowerCase();
+  if (s === "growth") return "growth";
+  if (s === "pro") return "pro";
+  return "starter";
+}
 
-    const plan = PLAN_CODE_ANNUAL || LEGACY_PLAN_CODE;
-    return { amountKobo: amount, planCode: plan };
-  }
+function resolvePaystackConfig(tier: Tier, cycle: BillingCycle) {
+  // 1) Prefer new tier+cycle env
+  const amountFromTier = AMOUNTS_KOBO[tier][cycle];
+  const planFromTier = PLAN_CODES[tier][cycle];
 
-  // monthly
-  const amount =
-    AMOUNT_KOBO_MONTHLY > 0
-      ? AMOUNT_KOBO_MONTHLY
-      : LEGACY_AMOUNT_KOBO > 0
-      ? LEGACY_AMOUNT_KOBO
-      : 19900;
+  // 2) Fallback to legacy multi-cycle env (single plan per cycle)
+  const legacyAmount = cycle === "annual" ? LEGACY_AMOUNT_KOBO_ANNUAL : LEGACY_AMOUNT_KOBO_MONTHLY;
+  const legacyPlan = cycle === "annual" ? LEGACY_PLAN_CODE_ANNUAL : LEGACY_PLAN_CODE_MONTHLY;
 
-  const plan = PLAN_CODE_MONTHLY || LEGACY_PLAN_CODE;
-  return { amountKobo: amount, planCode: plan };
+  // 3) Final fallback to legacy single plan/amount
+  const fallbackAmount =
+    legacyAmount > 0 ? legacyAmount : LEGACY_AMOUNT_KOBO > 0 ? LEGACY_AMOUNT_KOBO : amountFromTier;
+
+  const fallbackPlan = legacyPlan || LEGACY_PLAN_CODE || "";
+
+  return {
+    amountKobo: amountFromTier > 0 ? amountFromTier : fallbackAmount,
+    planCode: planFromTier || fallbackPlan,
+  };
+}
+
+function normalizeTierFromDb(v: unknown): Tier | null {
+  const s = String(v || "").toLowerCase();
+  if (s === "starter" || s === "growth" || s === "pro") return s;
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -83,37 +140,44 @@ export async function POST(req: NextRequest) {
     }
 
     /* -------------------------------------------------
-     * 1.5) Prevent duplicate active subscriptions
+     * 2) Read body: tier + cycle
      * ------------------------------------------------- */
-    // If user is already active Pro, don’t let them start another subscription.
-    // If they’re in grace, allow (so they can fix payment).
+    let cycle: BillingCycle = "monthly";
+    let tier: Tier = "starter";
+
+    try {
+      const body = await req.json().catch(() => ({}));
+      cycle = safeBillingCycle(body?.cycle);
+      tier = safeTier(body?.tier);
+    } catch {
+      cycle = "monthly";
+      tier = "starter";
+    }
+
+    /* -------------------------------------------------
+     * 3) Prevent duplicate active subscription (same tier)
+     * ------------------------------------------------- */
+    // Allow upgrades/downgrades by letting them start a new checkout,
+    // but block if they already have an active subscription for the SAME tier.
     const ent = await prisma.entitlement.findUnique({
       where: { userId: user.id },
       select: { tier: true, status: true },
     });
 
-    if (ent?.tier === "pro" && ent?.status === "active") {
+    const currentTier = normalizeTierFromDb(ent?.tier);
+    const currentStatus = String(ent?.status || "").toLowerCase();
+
+    if (currentTier === tier && currentStatus === "active") {
       return NextResponse.json(
-        { error: "You already have an active Pro subscription." },
+        { error: `You already have an active ${tier.toUpperCase()} subscription.` },
         { status: 400 }
       );
     }
 
-    /* -------------------------------------------------
-     * 2) Determine billing cycle from request body
-     * ------------------------------------------------- */
-    let cycle: BillingCycle = "monthly";
-    try {
-      const body = await req.json().catch(() => ({}));
-      cycle = safeBillingCycle(body?.cycle);
-    } catch {
-      cycle = "monthly";
-    }
-
-    const { amountKobo, planCode } = resolvePaystackConfig(cycle);
+    const { amountKobo, planCode } = resolvePaystackConfig(tier, cycle);
 
     /* -------------------------------------------------
-     * 3) Environment sanity checks
+     * 4) Environment sanity checks
      * ------------------------------------------------- */
     if (!PAYSTACK_SECRET_KEY) {
       return NextResponse.json(
@@ -126,18 +190,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Missing/invalid Paystack amount. Set PAYSTACK_AMOUNT_KOBO_MONTHLY / PAYSTACK_AMOUNT_KOBO_ANNUAL (or legacy PAYSTACK_AMOUNT_KOBO).",
+            "Missing/invalid Paystack amount. Set PAYSTACK_AMOUNT_KOBO_<TIER>_<CYCLE> (or legacy PAYSTACK_AMOUNT_KOBO_*).",
         },
         { status: 500 }
       );
     }
 
-    // You said: Paystack subscriptions (plan codes) — require plan code.
     if (!planCode) {
       return NextResponse.json(
         {
           error:
-            "Missing Paystack plan code. Set PAYSTACK_PLAN_CODE_MONTHLY and PAYSTACK_PLAN_CODE_ANNUAL (or legacy PAYSTACK_PLAN_CODE).",
+            "Missing Paystack plan code. Set PAYSTACK_PLAN_CODE_<TIER>_<CYCLE> (or legacy PAYSTACK_PLAN_CODE_*).",
         },
         { status: 500 }
       );
@@ -146,7 +209,7 @@ export async function POST(req: NextRequest) {
     const baseUrl = APP_URL !== "" ? cleanBaseUrl(APP_URL) : req.nextUrl.origin; // safe dev fallback
 
     /* -------------------------------------------------
-     * 4) Initialize Paystack transaction
+     * 5) Initialize Paystack transaction
      * ------------------------------------------------- */
     const payload: Record<string, any> = {
       email: user.email,
@@ -157,6 +220,7 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         source: "ekasi-portal",
         billingCycle: cycle,
+        tier,
         // for debugging/support
         selectedPlanCode: planCode || null,
         selectedAmountKobo: amountKobo,
@@ -193,7 +257,7 @@ export async function POST(req: NextRequest) {
     }
 
     /* -------------------------------------------------
-     * 5) Persist pending payment (idempotent)
+     * 6) Persist pending payment (idempotent)
      * ------------------------------------------------- */
     await prisma.payment.upsert({
       where: { reference },
@@ -208,6 +272,7 @@ export async function POST(req: NextRequest) {
           ...(json?.data ?? {}),
           _ekasi: {
             billingCycle: cycle,
+            tier,
             planCode: planCode || null,
             amountKobo,
           },
@@ -221,6 +286,7 @@ export async function POST(req: NextRequest) {
           ...(json?.data ?? {}),
           _ekasi: {
             billingCycle: cycle,
+            tier,
             planCode: planCode || null,
             amountKobo,
           },
@@ -229,7 +295,7 @@ export async function POST(req: NextRequest) {
     });
 
     /* -------------------------------------------------
-     * 6) Return exactly what UI expects
+     * 7) Return exactly what UI expects
      * ------------------------------------------------- */
     return NextResponse.json(
       {
