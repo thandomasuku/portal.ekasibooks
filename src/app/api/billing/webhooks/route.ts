@@ -33,45 +33,96 @@ type PlanMeta = {
 
 const PLAN_MAP: Record<string, PlanMeta> = {
   // Starter
-  [String(process.env.PAYSTACK_STARTER_MONTHLY_PLAN_CODE || "").trim()]: {
+  [String(
+    process.env.PAYSTACK_PLAN_CODE_STARTER_MONTHLY ||
+      process.env.PAYSTACK_STARTER_MONTHLY_PLAN_CODE ||
+      ""
+  ).trim()]: {
     tier: "starter",
     cycle: "monthly",
     companies: 1,
-    amountKobo: Number(process.env.PAYSTACK_STARTER_MONTHLY_AMOUNT_KOBO || "19900"),
+    amountKobo: Number(
+      process.env.PAYSTACK_AMOUNT_KOBO_STARTER_MONTHLY ||
+        process.env.PAYSTACK_STARTER_MONTHLY_AMOUNT_KOBO ||
+        "19900"
+    ),
   },
-  [String(process.env.PAYSTACK_STARTER_ANNUAL_PLAN_CODE || "").trim()]: {
+
+  [String(
+    process.env.PAYSTACK_PLAN_CODE_STARTER_ANNUAL ||
+      process.env.PAYSTACK_STARTER_ANNUAL_PLAN_CODE ||
+      ""
+  ).trim()]: {
     tier: "starter",
     cycle: "annual",
     companies: 1,
-    amountKobo: Number(process.env.PAYSTACK_STARTER_ANNUAL_AMOUNT_KOBO || "214900"),
+    amountKobo: Number(
+      process.env.PAYSTACK_AMOUNT_KOBO_STARTER_ANNUAL ||
+        process.env.PAYSTACK_STARTER_ANNUAL_AMOUNT_KOBO ||
+        "214900"
+    ),
   },
 
   // Growth
-  [String(process.env.PAYSTACK_GROWTH_MONTHLY_PLAN_CODE || "").trim()]: {
+  [String(
+    process.env.PAYSTACK_PLAN_CODE_GROWTH_MONTHLY ||
+      process.env.PAYSTACK_GROWTH_MONTHLY_PLAN_CODE ||
+      ""
+  ).trim()]: {
     tier: "growth",
     cycle: "monthly",
     companies: 3,
-    amountKobo: Number(process.env.PAYSTACK_GROWTH_MONTHLY_AMOUNT_KOBO || "39900"),
+    amountKobo: Number(
+      process.env.PAYSTACK_AMOUNT_KOBO_GROWTH_MONTHLY ||
+        process.env.PAYSTACK_GROWTH_MONTHLY_AMOUNT_KOBO ||
+        "39900"
+    ),
   },
-  [String(process.env.PAYSTACK_GROWTH_ANNUAL_PLAN_CODE || "").trim()]: {
+
+  [String(
+    process.env.PAYSTACK_PLAN_CODE_GROWTH_ANNUAL ||
+      process.env.PAYSTACK_GROWTH_ANNUAL_PLAN_CODE ||
+      ""
+  ).trim()]: {
     tier: "growth",
     cycle: "annual",
     companies: 3,
-    amountKobo: Number(process.env.PAYSTACK_GROWTH_ANNUAL_AMOUNT_KOBO || "430900"),
+    amountKobo: Number(
+      process.env.PAYSTACK_AMOUNT_KOBO_GROWTH_ANNUAL ||
+        process.env.PAYSTACK_GROWTH_ANNUAL_AMOUNT_KOBO ||
+        "430900"
+    ),
   },
 
   // Pro
-  [String(process.env.PAYSTACK_PRO_MONTHLY_PLAN_CODE || "").trim()]: {
+  [String(
+    process.env.PAYSTACK_PLAN_CODE_PRO_MONTHLY ||
+      process.env.PAYSTACK_PRO_MONTHLY_PLAN_CODE ||
+      ""
+  ).trim()]: {
     tier: "pro",
     cycle: "monthly",
     companies: 5,
-    amountKobo: Number(process.env.PAYSTACK_PRO_MONTHLY_AMOUNT_KOBO || "59900"),
+    amountKobo: Number(
+      process.env.PAYSTACK_AMOUNT_KOBO_PRO_MONTHLY ||
+        process.env.PAYSTACK_PRO_MONTHLY_AMOUNT_KOBO ||
+        "59900"
+    ),
   },
-  [String(process.env.PAYSTACK_PRO_ANNUAL_PLAN_CODE || "").trim()]: {
+
+  [String(
+    process.env.PAYSTACK_PLAN_CODE_PRO_ANNUAL ||
+      process.env.PAYSTACK_PRO_ANNUAL_PLAN_CODE ||
+      ""
+  ).trim()]: {
     tier: "pro",
     cycle: "annual",
     companies: 5,
-    amountKobo: Number(process.env.PAYSTACK_PRO_ANNUAL_AMOUNT_KOBO || "646900"),
+    amountKobo: Number(
+      process.env.PAYSTACK_AMOUNT_KOBO_PRO_ANNUAL ||
+        process.env.PAYSTACK_PRO_ANNUAL_AMOUNT_KOBO ||
+        "646900"
+    ),
   },
 };
 
