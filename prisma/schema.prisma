@@ -23,6 +23,8 @@ enum SubscriptionStatus {
 enum EntitlementTier {
   none
   free
+  starter
+  growth
   pro
 }
 
