@@ -17,7 +17,7 @@ type UserProfile = {
 };
 
 type Entitlement = {
-  plan?: "FREE" | "PRO" | string;
+  plan?: "FREE" | "STARTER" | "GROWTH" | "PRO" | string;
   status?: string;
   currentPeriodEnd?: string | null;
   graceUntil?: string | null;
@@ -27,6 +27,7 @@ type Entitlement = {
       invoice?: number;
       quote?: number;
       purchase_order?: number;
+      companies?: number;
     };
   };
 };
@@ -61,6 +62,21 @@ function capitalizeWords(s: string) {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+/** Page-level UI primitives (keep consistent with Dashboard/Downloads) */
+const BTN_BASE =
+  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold " +
+  "shadow-sm transition will-change-transform " +
+  "hover:-translate-y-[1px] active:translate-y-0 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
+  "disabled:opacity-60 disabled:hover:translate-y-0";
+
+const BTN_PRIMARY = cx(BTN_BASE, "text-white");
+const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -347,12 +363,11 @@ export default function SettingsPage() {
       userName={userName}
       planName={planName}
       headerRight={
-        <button
-          onClick={onRefreshAll}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50"
-        >
-          Refresh
-        </button>
+        state === "ready" ? (
+          <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
+            Refresh
+          </button>
+        ) : null
       }
       footerRight={
         <div className="flex items-center gap-2">
@@ -384,7 +399,7 @@ export default function SettingsPage() {
       ) : (
         <div className="space-y-5">
           {/* Hero */}
-          <PremiumCard tone="brand">
+          <PremiumCard tone="brand" className="portal-card-premium">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <Chip>
@@ -407,16 +422,21 @@ export default function SettingsPage() {
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   disabled
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white opacity-60"
+                  className={cx(BTN_SECONDARY, "rounded-2xl opacity-60")}
                   title="Coming soon"
+                  type="button"
                 >
-                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/10 text-[12px]">✓</span>
+                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
+                    ✓
+                  </span>
                   Enable MFA (soon)
                 </button>
 
                 <button
                   onClick={() => router.push("/billing")}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-[#1c4f54]"
+                  className={BTN_PRIMARY}
+                  style={{ background: "var(--primary)" }}
+                  type="button"
                 >
                   <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/15 text-[12px]">⟠</span>
                   View plan
@@ -436,7 +456,7 @@ export default function SettingsPage() {
           {/* Main grid */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {/* Profile */}
-            <PremiumCard>
+            <PremiumCard className="portal-card-premium">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Profile details</h2>
@@ -471,10 +491,11 @@ export default function SettingsPage() {
               <button
                 disabled={!canEditProfile}
                 onClick={openEdit}
-                className={[
-                  "mt-5 w-full rounded-2xl border border-slate-200 bg-white py-2 text-sm font-semibold text-slate-900 transition",
-                  canEditProfile ? "hover:bg-slate-50" : "opacity-60 cursor-not-allowed",
-                ].join(" ")}
+                className={cx(
+                  BTN_SECONDARY,
+                  "mt-5 w-full rounded-2xl",
+                  !canEditProfile && "cursor-not-allowed opacity-60"
+                )}
                 title={!canEditProfile ? "Your account is read-only or unavailable right now" : "Edit your profile"}
                 type="button"
               >
@@ -483,7 +504,7 @@ export default function SettingsPage() {
             </PremiumCard>
 
             {/* Security */}
-            <PremiumCard>
+            <PremiumCard className="portal-card-premium">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Security</h2>
@@ -537,10 +558,8 @@ export default function SettingsPage() {
               <button
                 disabled={!canManageSecurity}
                 onClick={openPassword}
-                className={[
-                  "mt-5 w-full rounded-2xl py-2 text-sm font-semibold text-white transition",
-                  canManageSecurity ? "bg-slate-900 hover:bg-slate-800" : "bg-slate-900 opacity-60 cursor-not-allowed",
-                ].join(" ")}
+                className={cx(BTN_PRIMARY, "mt-5 w-full rounded-2xl", !canManageSecurity && "cursor-not-allowed opacity-60")}
+                style={{ background: "rgb(15 23 42)" }}
                 title={!canManageSecurity ? "Your account is read-only or unavailable right now" : "Set / change password"}
                 type="button"
               >
@@ -558,9 +577,7 @@ export default function SettingsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Edit profile</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  Update your profile details. Email changes are not supported yet.
-                </p>
+                <p className="mt-1 text-sm text-slate-600">Update your profile details. Email changes are not supported yet.</p>
               </div>
 
               <button
@@ -576,13 +593,13 @@ export default function SettingsPage() {
 
             <div className="mt-4 space-y-3">
               {formMsg ? (
-                <div className={["rounded-xl border px-3 py-2 text-sm", formMsgClass].join(" ")}>{formMsg.text}</div>
+                <div className={cx("rounded-xl border px-3 py-2 text-sm", formMsgClass)}>{formMsg.text}</div>
               ) : null}
 
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Full name</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
                   value={form.fullName}
                   onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
                   placeholder="e.g. Syrus Masuku"
@@ -593,7 +610,7 @@ export default function SettingsPage() {
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Company name</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
                   value={form.companyName}
                   onChange={(e) => setForm((p) => ({ ...p, companyName: e.target.value }))}
                   placeholder="e.g. Onkabetse IT Solutions"
@@ -604,7 +621,7 @@ export default function SettingsPage() {
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Phone</span>
                 <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
                   value={form.phone}
                   onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
                   placeholder="e.g. +27 71 234 5678"
@@ -618,7 +635,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setEditOpen(false)}
-                className="flex-1 rounded-xl border border-slate-300 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
+                className={cx(BTN_SECONDARY, "flex-1")}
                 disabled={saving}
               >
                 Cancel
@@ -627,7 +644,8 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={saveProfile}
-                className="flex-1 rounded-xl bg-[#215D63] py-2 text-sm font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
+                className={cx(BTN_PRIMARY, "flex-1")}
+                style={{ background: "var(--primary)" }}
                 disabled={saving}
               >
                 {saving ? "Saving..." : "Save changes"}
@@ -661,9 +679,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="mt-4 space-y-3">
-              {pwMsg ? (
-                <div className={["rounded-xl border px-3 py-2 text-sm", pwMsgClass].join(" ")}>{pwMsg.text}</div>
-              ) : null}
+              {pwMsg ? <div className={cx("rounded-xl border px-3 py-2 text-sm", pwMsgClass)}>{pwMsg.text}</div> : null}
 
               {pwStep === "request" ? (
                 <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
@@ -675,7 +691,8 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={requestPasswordOtp}
-                    className="mt-4 w-full rounded-xl bg-[#215D63] py-2 text-sm font-semibold text-white hover:bg-[#1c4f54] disabled:opacity-60"
+                    className={cx(BTN_PRIMARY, "mt-4 w-full")}
+                    style={{ background: "var(--primary)" }}
                     disabled={pwSending}
                   >
                     {pwSending ? "Sending..." : "Send OTP"}
@@ -686,7 +703,7 @@ export default function SettingsPage() {
                   <label className="block">
                     <span className="text-sm font-medium text-slate-700">OTP code</span>
                     <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
                       value={pwForm.otpCode}
                       onChange={(e) => setPwForm((p) => ({ ...p, otpCode: e.target.value }))}
                       placeholder="Enter OTP"
@@ -696,7 +713,7 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={requestPasswordOtp}
-                        className="text-xs font-semibold text-[#215D63] hover:underline disabled:opacity-60"
+                        className="text-xs font-semibold text-[color:var(--primary)] hover:underline disabled:opacity-60"
                         disabled={pwSending || pwSaving}
                       >
                         {pwSending ? "Sending..." : "Resend OTP"}
@@ -709,7 +726,7 @@ export default function SettingsPage() {
                     <span className="text-sm font-medium text-slate-700">New password</span>
                     <input
                       type="password"
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
                       value={pwForm.newPassword}
                       onChange={(e) => setPwForm((p) => ({ ...p, newPassword: e.target.value }))}
                       placeholder="At least 8 characters"
@@ -721,7 +738,7 @@ export default function SettingsPage() {
                     <span className="text-sm font-medium text-slate-700">Confirm new password</span>
                     <input
                       type="password"
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30"
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
                       value={pwForm.confirmPassword}
                       onChange={(e) => setPwForm((p) => ({ ...p, confirmPassword: e.target.value }))}
                       placeholder="Repeat password"
@@ -737,7 +754,7 @@ export default function SettingsPage() {
                         setPwStep("request");
                         setPwForm({ otpCode: "", newPassword: "", confirmPassword: "" });
                       }}
-                      className="flex-1 rounded-xl border border-slate-300 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
+                      className={cx(BTN_SECONDARY, "flex-1")}
                       disabled={pwSaving || pwSending}
                     >
                       Back
@@ -746,7 +763,8 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={submitPasswordUpdate}
-                      className="flex-1 rounded-xl bg-slate-900 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      className={cx(BTN_PRIMARY, "flex-1")}
+                      style={{ background: "rgb(15 23 42)" }}
                       disabled={pwSaving}
                     >
                       {pwSaving ? "Updating..." : "Update password"}
@@ -783,10 +801,13 @@ function ActionRow({
     tone === "primary"
       ? "bg-slate-900 text-white hover:bg-slate-800"
       : tone === "brand"
-      ? "bg-[#215D63] text-white hover:bg-[#1c4f54]"
+      ? "text-white"
       : "bg-white text-slate-900 hover:bg-slate-50";
 
-  const ringClass = tone === "neutral" ? "ring-1 ring-slate-200 shadow-sm" : "shadow-sm";
+  const ringClass =
+    tone === "neutral"
+      ? "ring-1 ring-slate-200 shadow-sm"
+      : "shadow-[0_18px_60px_rgba(15,23,42,0.12)] ring-1 ring-white/10";
 
   const iconChip =
     tone === "neutral"
@@ -798,14 +819,17 @@ function ActionRow({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "w-full rounded-2xl px-3 py-2.5 text-left transition",
-        "hover:-translate-y-[1px]",
+        "relative group w-full rounded-2xl px-3 py-2.5 text-left transition-all duration-300 will-change-transform",
+        "hover:-translate-y-[2px] active:translate-y-0",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]",
         toneClass,
         ringClass,
         disabled ? "opacity-60 cursor-not-allowed hover:translate-y-0" : "",
       ].join(" ")}
+      style={tone === "brand" ? { background: "var(--primary)" } : undefined}
+      type="button"
     >
-      <div className="flex items-center gap-3">
+      <div className="relative flex items-center gap-3">
         <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>{icon}</div>
         <div className="min-w-0">
           <div className="text-sm font-semibold">{title}</div>
@@ -813,6 +837,17 @@ function ActionRow({
         </div>
         <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
       </div>
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background:
+            tone === "neutral"
+              ? "radial-gradient(circle at 25% 50%, rgba(15,23,42,0.04), transparent 60%)"
+              : "radial-gradient(circle at 25% 50%, rgba(255,255,255,0.14), transparent 60%)",
+        }}
+      />
     </button>
   );
 }
@@ -880,16 +915,10 @@ function EmptyState({
       <p className="mt-2 text-slate-600">{body}</p>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button
-          onClick={onPrimary}
-          className="rounded-xl bg-[#215D63] px-4 py-2 font-semibold text-white shadow-sm hover:bg-[#1c4f54]"
-        >
+        <button onClick={onPrimary} className={cx(BTN_PRIMARY)} style={{ background: "var(--primary)" }} type="button">
           {primaryLabel}
         </button>
-        <button
-          onClick={onSecondary}
-          className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-        >
+        <button onClick={onSecondary} className={BTN_SECONDARY} type="button">
           {secondaryLabel}
         </button>
       </div>

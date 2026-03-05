@@ -7,19 +7,25 @@ import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 
 /* =========================
+   Small utilities
+   ========================= */
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+/* =========================
    Page-level UI primitives
    ========================= */
 
 const BTN_BASE =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition will-change-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] disabled:opacity-70 disabled:hover:translate-y-0";
+  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition " +
+  "will-change-transform hover:-translate-y-[1px] active:translate-y-0 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
+  "disabled:opacity-70 disabled:hover:translate-y-0";
 
-const BTN_PRIMARY = [BTN_BASE, "text-white", "hover:-translate-y-[1px]"].join(" ");
-
-const BTN_SECONDARY = [
-  BTN_BASE,
-  "border border-slate-200 bg-white text-slate-900",
-  "hover:-translate-y-[1px] hover:bg-slate-50",
-].join(" ");
+const BTN_PRIMARY = cx(BTN_BASE, "text-white");
+const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
 
 const BTN_ICON_PRIMARY = "grid h-7 w-7 place-items-center rounded-lg bg-white/15";
 const BTN_ICON_SECONDARY =
@@ -126,10 +132,10 @@ function CycleToggle({
         type="button"
         onClick={() => onChange("monthly")}
         aria-pressed={value === "monthly"}
-        className={[
+        className={cx(
           "h-9 rounded-xl px-4 text-sm font-semibold transition",
-          value === "monthly" ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50",
-        ].join(" ")}
+          value === "monthly" ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"
+        )}
         style={value === "monthly" ? { background: "var(--primary)" } : undefined}
       >
         Monthly
@@ -139,20 +145,20 @@ function CycleToggle({
         type="button"
         onClick={() => onChange("annual")}
         aria-pressed={value === "annual"}
-        className={[
+        className={cx(
           "h-9 rounded-xl px-4 text-sm font-semibold transition inline-flex items-center gap-2",
-          value === "annual" ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50",
-        ].join(" ")}
+          value === "annual" ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"
+        )}
         style={value === "annual" ? { background: "var(--primary)" } : undefined}
       >
         Annual
         <span
-          className={[
+          className={cx(
             "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-extrabold",
             value === "annual"
               ? "bg-white/15 text-white ring-1 ring-white/25"
-              : "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
-          ].join(" ")}
+              : "bg-slate-100 text-slate-700 ring-1 ring-slate-200"
+          )}
           title="Annual plan discount"
         >
           {saveLabel}
@@ -179,10 +185,10 @@ function TierToggle({ value, onChange }: { value: PaidTier; onChange: (v: PaidTi
             type="button"
             onClick={() => onChange(t.key)}
             aria-pressed={active}
-            className={[
+            className={cx(
               "h-9 rounded-xl px-4 text-sm font-semibold transition",
-              active ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50",
-            ].join(" ")}
+              active ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"
+            )}
             style={active ? { background: "var(--primary)" } : undefined}
           >
             {t.label}
@@ -193,7 +199,25 @@ function TierToggle({ value, onChange }: { value: PaidTier; onChange: (v: PaidTi
   );
 }
 
-/* ---------------- Small utilities ---------------- */
+/* ---------------- Snapshot utils ---------------- */
+
+type Entitlement = {
+  plan?: "FREE" | "STARTER" | "GROWTH" | "PRO" | string;
+  status?: string;
+  amount?: number | null;
+  interval?: string | null; // monthly | annual | yearly
+  currentPeriodEnd?: string | null;
+  graceUntil?: string | null;
+  features?: {
+    readOnly?: boolean;
+    limits?: {
+      invoice?: number;
+      quote?: number;
+      purchase_order?: number;
+      companies?: number;
+    };
+  };
+};
 
 function safeJson(v: any) {
   try {
@@ -225,14 +249,12 @@ function CopyButton({ text }: { text: string }) {
 
 /* ---------------- Pricing model (UI only) ---------------- */
 
-const PRICE_TABLE: Record<
-  PaidTier,
-  { title: string; monthly: number; annual: number; companies: number; badge?: string }
-> = {
-  starter: { title: "Starter", monthly: 199, annual: 2149, companies: 1 },
-  growth: { title: "Growth", monthly: 399, annual: 4309, companies: 3, badge: "Most popular" },
-  pro: { title: "Pro", monthly: 599, annual: 6469, companies: 5 },
-};
+const PRICE_TABLE: Record<PaidTier, { title: string; monthly: number; annual: number; companies: number; badge?: string }> =
+  {
+    starter: { title: "Starter", monthly: 199, annual: 2149, companies: 1 },
+    growth: { title: "Growth", monthly: 399, annual: 4309, companies: 3, badge: "Most popular" },
+    pro: { title: "Pro", monthly: 599, annual: 6469, companies: 5 },
+  };
 
 function planLabelFromEnt(planUpper: string) {
   const p = String(planUpper || "FREE").toUpperCase();
@@ -260,7 +282,7 @@ export default function BillingPage() {
 
   const { state, user, error: sessionError, refresh } = useSession();
 
-  const [ent, setEnt] = useState<any>(null);
+  const [ent, setEnt] = useState<Entitlement | null>(null);
   const [entError, setEntError] = useState<string | null>(null);
 
   const fetchEntitlement = useCallback(async () => {
@@ -270,12 +292,21 @@ export default function BillingPage() {
         credentials: "include",
         cache: "no-store",
       });
+
       const data = await r.json().catch(() => null);
+
+      if (r.status === 401 || r.status === 403) {
+        setEnt(null);
+        return;
+      }
+
       if (!r.ok) {
         throw new Error(data?.error || data?.message || `Entitlement failed (${r.status}).`);
       }
-      setEnt(data);
+
+      setEnt((data ?? null) as Entitlement);
     } catch (e: any) {
+      setEnt(null);
       setEntError(e?.message || "Failed to load entitlement.");
     }
   }, []);
@@ -287,11 +318,8 @@ export default function BillingPage() {
 
   const onRefreshAll = useCallback(async () => {
     await refresh();
-    // ✅ always try entitlement refresh after session refresh (avoids stale `state` closure)
     await fetchEntitlement();
   }, [refresh, fetchEntitlement]);
-
-  const entAny = (ent ?? {}) as any;
 
   const derivedName = useMemo(() => {
     const em = (user as any)?.email as string | undefined;
@@ -369,16 +397,16 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sp]);
 
-  const planName = String(entAny?.plan ?? "FREE").toUpperCase();
+  const planName = String(ent?.plan ?? "FREE").toUpperCase();
   const planLabel = planLabelFromEnt(planName);
   const isPaid = planLabel !== "FREE";
 
-  const renewsAt = (entAny?.currentPeriodEnd as string | null) ?? null;
-  const graceUntil = (entAny?.graceUntil as string | null) ?? null;
+  const renewsAt = ent?.currentPeriodEnd ?? null;
+  const graceUntil = ent?.graceUntil ?? null;
 
-  const featureReadOnly = !!entAny?.features?.readOnly;
+  const featureReadOnly = !!ent?.features?.readOnly;
 
-  // ✅ Keep tier toggle aligned ONLY once you're paid (avoid overriding user's choice on FREE)
+  // ✅ keep tier toggle aligned only once paid
   useEffect(() => {
     if (!isPaid) return;
     setSelectedTier(entToPaidTier(planName));
@@ -396,11 +424,11 @@ export default function BillingPage() {
     if (!isPaid) return "free";
     if (featureReadOnly) return "read_only";
     if (withinGrace) return "grace";
-    return normalizeStatus(entAny?.status ?? "active");
-  }, [entAny?.status, featureReadOnly, isPaid, withinGrace]);
+    return normalizeStatus(ent?.status ?? "active");
+  }, [ent?.status, featureReadOnly, isPaid, withinGrace]);
 
   const limits =
-    entAny?.features?.limits ?? {
+    ent?.features?.limits ?? {
       invoice: 5,
       quote: 5,
       purchase_order: 5,
@@ -495,10 +523,10 @@ export default function BillingPage() {
   const heroTone = statusTone(effectiveStatus);
   const heroDot = statusDotClass(effectiveStatus);
 
-  const priceLabelForPaid = entAny?.amount
-    ? entAny?.interval === "annual" || entAny?.interval === "yearly"
-      ? `${moneyZar(entAny.amount)}/yr`
-      : `${moneyZar(entAny.amount)}/mo`
+  const priceLabelForPaid = ent?.amount
+    ? ent?.interval === "annual" || ent?.interval === "yearly"
+      ? `${moneyZar(ent.amount)}/yr`
+      : `${moneyZar(ent.amount)}/mo`
     : priceForSelected;
 
   const kpiPrice = planLabel === "FREE" ? "—" : priceLabelForPaid;
@@ -515,13 +543,13 @@ export default function BillingPage() {
 
   const entitlementSnapshot = useMemo(() => {
     return {
-      plan: entAny?.plan ?? null,
-      status: entAny?.status ?? null,
-      currentPeriodEnd: entAny?.currentPeriodEnd ?? null,
-      graceUntil: entAny?.graceUntil ?? null,
-      features: entAny?.features ?? null,
+      plan: ent?.plan ?? null,
+      status: ent?.status ?? null,
+      currentPeriodEnd: ent?.currentPeriodEnd ?? null,
+      graceUntil: ent?.graceUntil ?? null,
+      features: ent?.features ?? null,
     };
-  }, [entAny]);
+  }, [ent]);
 
   const companyLimit = Number(limits?.companies ?? 1);
 
@@ -536,9 +564,11 @@ export default function BillingPage() {
       userName={derivedName}
       planName={planLabel}
       headerRight={
-        <button onClick={onRefreshAll} className={BTN_SECONDARY}>
-          Refresh
-        </button>
+        state === "ready" ? (
+          <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
+            Refresh
+          </button>
+        ) : null
       }
       footerRight={
         <div className="flex items-center gap-2">
@@ -572,11 +602,12 @@ export default function BillingPage() {
         />
       ) : (
         <div className="space-y-6">
-          <PremiumCard>
+          {/* HERO */}
+          <PremiumCard className="portal-card-premium">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
+              <div className="min-w-0">
                 <Chip tone={heroTone === "success" ? "success" : heroTone === "brand" ? "brand" : "neutral"}>
-                  <span className={`h-2 w-2 rounded-full ${heroDot}`} />
+                  <span className={cx("h-2 w-2 rounded-full", heroDot)} />
                   {planLabel} • {heroStatusLabel}
                 </Chip>
 
@@ -626,6 +657,7 @@ export default function BillingPage() {
                       disabled={upgradeLoading}
                       className={BTN_PRIMARY}
                       style={{ background: "var(--primary)" }}
+                      type="button"
                     >
                       <span className={BTN_ICON_PRIMARY}>⟠</span>
                       {upgradeLoading
@@ -639,27 +671,27 @@ export default function BillingPage() {
                       className={BTN_PRIMARY}
                       style={{ background: "var(--primary)" }}
                       title="Manage subscription on Paystack"
+                      type="button"
                     >
                       <span className={BTN_ICON_PRIMARY}>⚙</span>
                       {manageLoading ? "Opening..." : "Manage plan"}
                     </button>
                   )}
 
-                  <button onClick={onRefreshAll} className={BTN_SECONDARY}>
+                  <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
                     <span className={BTN_ICON_SECONDARY}>↻</span>
                     Refresh status
                   </button>
                 </div>
 
                 {planLabel !== "FREE" ? (
-                  <span className="text-[11px] leading-tight text-slate-500">
-                    Cancel anytime (secure Paystack portal).
-                  </span>
+                  <span className="text-[11px] leading-tight text-slate-500">Cancel anytime (secure Paystack portal).</span>
                 ) : null}
               </div>
             </div>
           </PremiumCard>
 
+          {/* GRACE STRIP */}
           {planLabel !== "FREE" && withinGrace ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -667,8 +699,8 @@ export default function BillingPage() {
                 <div className="text-xs text-amber-800">
                   {graceCountdown != null ? (
                     <>
-                      <span className="font-semibold">{graceCountdown}</span> day{graceCountdown === 1 ? "" : "s"}{" "}
-                      remaining • Ends <span className="font-semibold">{fmtDate(graceUntil)}</span>
+                      <span className="font-semibold">{graceCountdown}</span> day{graceCountdown === 1 ? "" : "s"} remaining
+                      • Ends <span className="font-semibold">{fmtDate(graceUntil)}</span>
                     </>
                   ) : (
                     <>
@@ -681,11 +713,11 @@ export default function BillingPage() {
                 You still have paid access during grace. Update your payment method to avoid a downgrade.
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={onManagePlan} disabled={manageLoading} className={BTN_SECONDARY}>
+                <button onClick={onManagePlan} disabled={manageLoading} className={BTN_SECONDARY} type="button">
                   <span className={BTN_ICON_SECONDARY}>⚙</span>
                   {manageLoading ? "Opening..." : "Update payment method"}
                 </button>
-                <button onClick={onRefreshAll} className={BTN_SECONDARY}>
+                <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
                   <span className={BTN_ICON_SECONDARY}>↻</span>
                   Refresh
                 </button>
@@ -693,6 +725,7 @@ export default function BillingPage() {
             </div>
           ) : null}
 
+          {/* ERRORS / NOTES */}
           {entError ? (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{entError}</div>
           ) : null}
@@ -710,11 +743,10 @@ export default function BillingPage() {
               Verifying payment…
             </div>
           ) : verifyNote ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              {verifyNote}
-            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{verifyNote}</div>
           ) : null}
 
+          {/* KPI */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard label="Plan" value={planLabel} icon="★" />
             <KpiCard label="Status" value={heroStatusLabel} icon="✓" />
@@ -722,8 +754,9 @@ export default function BillingPage() {
             <KpiCard label="Price" value={kpiPrice} icon="R" />
           </div>
 
+          {/* MAIN GRID */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <PremiumCard className="lg:col-span-2">
+            <PremiumCard className="portal-card-premium lg:col-span-2">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Plan details</h3>
@@ -731,7 +764,7 @@ export default function BillingPage() {
                 </div>
 
                 <Chip tone={heroTone === "success" ? "success" : heroTone === "brand" ? "brand" : "neutral"}>
-                  <span className={`mr-2 inline-block h-2 w-2 rounded-full ${heroDot}`} />
+                  <span className={cx("mr-2 inline-block h-2 w-2 rounded-full", heroDot)} />
                   {heroStatusLabel}
                 </Chip>
               </div>
@@ -746,13 +779,11 @@ export default function BillingPage() {
                 <p className="text-sm text-slate-700">
                   {planLabel === "FREE" ? (
                     <>
-                      You’re on the <span className="font-semibold">FREE</span> plan. Paid plans increase your company
-                      limit.
+                      You’re on the <span className="font-semibold">FREE</span> plan. Paid plans increase your company limit.
                     </>
                   ) : effectiveStatus === "read_only" ? (
                     <>
-                      Your account is <span className="font-semibold">read-only</span>. Resolve billing to restore full
-                      access.
+                      Your account is <span className="font-semibold">read-only</span>. Resolve billing to restore full access.
                     </>
                   ) : (
                     <>
@@ -762,18 +793,15 @@ export default function BillingPage() {
                     </>
                   )}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Paystack handles checkout & tokenization. We store subscription status only.
-                </p>
+                <p className="mt-1 text-xs text-slate-500">Paystack handles checkout & tokenization. We store subscription status only.</p>
               </div>
 
+              {/* PLAN COMPARISON */}
               <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">Plan comparison</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      The only difference is the number of companies you can create.
-                    </p>
+                    <p className="mt-1 text-xs text-slate-500">The only difference is the number of companies you can create.</p>
                   </div>
                   <Chip tone="neutral">Companies</Chip>
                 </div>
@@ -791,13 +819,10 @@ export default function BillingPage() {
                       { ok: true, label: `Purchase orders up to ${limits.purchase_order}` },
                     ]}
                   />
+
                   <PlanCard
                     title="STARTER"
-                    price={
-                      cycle === "annual"
-                        ? `${moneyZar(PRICE_TABLE.starter.annual)}/yr`
-                        : `${moneyZar(PRICE_TABLE.starter.monthly)}/mo`
-                    }
+                    price={cycle === "annual" ? `${moneyZar(PRICE_TABLE.starter.annual)}/yr` : `${moneyZar(PRICE_TABLE.starter.monthly)}/mo`}
                     active={planLabel === "STARTER" && !featureReadOnly}
                     highlight={selectedTier === "starter" && planLabel === "FREE"}
                     items={[
@@ -806,13 +831,10 @@ export default function BillingPage() {
                       { ok: true, label: `Companies: ${PRICE_TABLE.starter.companies}` },
                     ]}
                   />
+
                   <PlanCard
                     title="GROWTH"
-                    price={
-                      cycle === "annual"
-                        ? `${moneyZar(PRICE_TABLE.growth.annual)}/yr`
-                        : `${moneyZar(PRICE_TABLE.growth.monthly)}/mo`
-                    }
+                    price={cycle === "annual" ? `${moneyZar(PRICE_TABLE.growth.annual)}/yr` : `${moneyZar(PRICE_TABLE.growth.monthly)}/mo`}
                     active={planLabel === "GROWTH" && !featureReadOnly}
                     highlight={selectedTier === "growth" && planLabel === "FREE"}
                     items={[
@@ -822,13 +844,10 @@ export default function BillingPage() {
                       { ok: true, label: "Priority support" },
                     ]}
                   />
+
                   <PlanCard
                     title="PRO"
-                    price={
-                      cycle === "annual"
-                        ? `${moneyZar(PRICE_TABLE.pro.annual)}/yr`
-                        : `${moneyZar(PRICE_TABLE.pro.monthly)}/mo`
-                    }
+                    price={cycle === "annual" ? `${moneyZar(PRICE_TABLE.pro.annual)}/yr` : `${moneyZar(PRICE_TABLE.pro.monthly)}/mo`}
                     active={planLabel === "PRO" && !featureReadOnly}
                     highlight={selectedTier === "pro" && planLabel === "FREE"}
                     items={[
@@ -847,6 +866,7 @@ export default function BillingPage() {
                 ) : null}
               </div>
 
+              {/* VERIFY */}
               <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -865,18 +885,17 @@ export default function BillingPage() {
                     placeholder="e.g. 9t5k9m9d0x / trxref"
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-slate-300 focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
                   />
-                  <button onClick={onManualVerify} disabled={verifyLoading} className={BTN_SECONDARY}>
+                  <button onClick={onManualVerify} disabled={verifyLoading} className={BTN_SECONDARY} type="button">
                     {verifyLoading ? "Verifying…" : "Verify"}
                   </button>
                 </div>
 
                 {manualErr ? (
-                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                    {manualErr}
-                  </div>
+                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{manualErr}</div>
                 ) : null}
               </div>
 
+              {/* FAQ */}
               <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                 <p className="text-sm font-semibold text-slate-900">FAQ</p>
                 <div className="mt-3 space-y-3">
@@ -897,7 +916,7 @@ export default function BillingPage() {
             </PremiumCard>
 
             <div className="space-y-6">
-              <PremiumCard tone="soft">
+              <PremiumCard tone="soft" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-semibold text-slate-900">Payment method</h3>
@@ -914,9 +933,7 @@ export default function BillingPage() {
                     <span className="text-sm font-semibold text-slate-900">
                       {planLabel === "FREE" ? "No payment method saved" : "Stored on Paystack"}
                     </span>
-                    <span className="text-xs font-semibold text-slate-600">
-                      {planLabel === "FREE" ? "Not required" : "Protected"}
-                    </span>
+                    <span className="text-xs font-semibold text-slate-600">{planLabel === "FREE" ? "Not required" : "Protected"}</span>
                   </div>
                   <p className="mt-1 text-xs text-slate-600">For security, we don’t store card details in the portal.</p>
                 </div>
@@ -924,18 +941,15 @@ export default function BillingPage() {
                 <button
                   onClick={planLabel === "FREE" ? undefined : onManagePlan}
                   disabled={planLabel === "FREE" || manageLoading}
-                  className={`${BTN_SECONDARY} mt-6 w-full ${planLabel === "FREE" ? "cursor-not-allowed opacity-60" : ""}`}
+                  className={cx(BTN_SECONDARY, "mt-6 w-full", planLabel === "FREE" && "cursor-not-allowed opacity-60")}
                   title={planLabel === "FREE" ? "Subscribe first" : "Manage subscription on Paystack"}
+                  type="button"
                 >
-                  {planLabel === "FREE"
-                    ? "Update payment method"
-                    : manageLoading
-                    ? "Opening..."
-                    : "Manage payment method"}
+                  {planLabel === "FREE" ? "Update payment method" : manageLoading ? "Opening..." : "Manage payment method"}
                 </button>
               </PremiumCard>
 
-              <PremiumCard tone="soft">
+              <PremiumCard tone="soft" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-semibold text-slate-900">Entitlement snapshot</h3>
@@ -966,9 +980,10 @@ function Feature({ ok, label }: { ok: boolean; label: string }) {
   return (
     <li className="flex items-center gap-2">
       <span
-        className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold ${
+        className={cx(
+          "inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold",
           ok ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
-        }`}
+        )}
       >
         {ok ? "✓" : "—"}
       </span>
@@ -992,10 +1007,11 @@ function PlanCard({
 }) {
   return (
     <div
-      className={[
-        "rounded-2xl border bg-white p-4",
-        highlight ? "border-[color:var(--primary)]/30 ring-1 ring-[color:var(--primary)]/15" : "border-slate-200",
-      ].join(" ")}
+      className={cx(
+        // ✅ relative + overflow-visible prevents shadow/ring clipping in weird grid stacks
+        "relative overflow-visible rounded-2xl border bg-white p-4",
+        highlight ? "border-[color:var(--primary)]/30 ring-1 ring-[color:var(--primary)]/15" : "border-slate-200"
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div>

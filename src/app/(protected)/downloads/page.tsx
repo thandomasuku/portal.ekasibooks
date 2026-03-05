@@ -19,7 +19,7 @@ type LatestManifest = {
 
 // matches /api/entitlement response shape (at least the fields we use)
 type Entitlement = {
-  plan?: "FREE" | "PRO" | string;
+  plan?: "FREE" | "STARTER" | "GROWTH" | "PRO" | string;
   status?: string;
   currentPeriodEnd?: string | null;
   graceUntil?: string | null;
@@ -29,6 +29,7 @@ type Entitlement = {
       invoice?: number;
       quote?: number;
       purchase_order?: number;
+      companies?: number;
     };
   };
 };
@@ -97,7 +98,7 @@ export default function DownloadsPage() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  // ✅ Session context no longer provides entitlement — only state/user/error/refresh
+  // ✅ Session context provides state/user/error/refresh
   const { state, user, error, refresh } = useSession();
 
   const nextUrl = useMemo(() => {
@@ -125,7 +126,6 @@ export default function DownloadsPage() {
       const data = await res.json().catch(() => null);
 
       if (res.status === 401 || res.status === 403) {
-        // session provider will handle redirect; just clear entitlement
         setEnt(null);
         return;
       }
@@ -236,7 +236,11 @@ export default function DownloadsPage() {
       version: "Beta",
       date: "Internal beta",
       badge: "Beta",
-      items: ["Performance improvements for invoice lists", "Improved PDF export formatting", "Stability fixes and installer refinements"],
+      items: [
+        "Performance improvements for invoice lists",
+        "Improved PDF export formatting",
+        "Stability fixes and installer refinements",
+      ],
     },
     {
       id: "alpha",
@@ -277,7 +281,7 @@ export default function DownloadsPage() {
       planName={planName}
       headerRight={
         state === "ready" ? (
-          <button onClick={onRefreshAll} className={BTN_SECONDARY}>
+          <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
             Refresh
           </button>
         ) : null
@@ -295,23 +299,20 @@ export default function DownloadsPage() {
       {state === "loading" ? (
         <DownloadsSkeleton />
       ) : state === "error" ? (
-        <PremiumCard>
+        <PremiumCard className="portal-card-premium">
           <h2 className="text-base font-semibold text-slate-900">Session check failed</h2>
           <p className="mt-2 text-sm text-slate-600">{error ?? "Something went wrong. Please try again."}</p>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <button onClick={() => refresh()} className={BTN_PRIMARY} style={{ background: "var(--primary)" }}>
+            <button onClick={() => refresh()} className={BTN_PRIMARY} style={{ background: "var(--primary)" }} type="button">
               Retry
             </button>
-            <button
-              onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
-              className={BTN_SECONDARY}
-            >
+            <button onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)} className={BTN_SECONDARY} type="button">
               Go to login
             </button>
           </div>
         </PremiumCard>
       ) : state === "unauth" ? (
-        <PremiumCard>
+        <PremiumCard className="portal-card-premium">
           <h2 className="text-base font-semibold text-slate-900">Redirecting…</h2>
           <p className="mt-2 text-sm text-slate-600">Your session isn’t active. Taking you to login.</p>
         </PremiumCard>
@@ -329,7 +330,7 @@ export default function DownloadsPage() {
           ) : null}
 
           {/* Top “product” card */}
-          <PremiumCard>
+          <PremiumCard className="portal-card-premium">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -353,19 +354,19 @@ export default function DownloadsPage() {
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
-                <button onClick={onDownload} className={BTN_PRIMARY} style={{ background: "var(--primary)" }}>
+                <button onClick={onDownload} className={BTN_PRIMARY} style={{ background: "var(--primary)" }} type="button">
                   <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-[12px]">⇩</span>
                   Download
                 </button>
 
-                <button onClick={onCopyLink} className={BTN_SECONDARY}>
+                <button onClick={onCopyLink} className={BTN_SECONDARY} type="button">
                   <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
                     ⧉
                   </span>
                   {copyMsg ?? "Copy link"}
                 </button>
 
-                <button disabled className={cx(BTN_SECONDARY, "opacity-60")} title="Coming soon">
+                <button disabled className={cx(BTN_SECONDARY, "opacity-60")} title="Coming soon" type="button">
                   <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
                     ⋯
                   </span>
@@ -387,7 +388,7 @@ export default function DownloadsPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Left */}
             <div className="lg:col-span-2 space-y-6">
-              <PremiumCard>
+              <PremiumCard className="portal-card-premium">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Latest installer</h3>
@@ -413,7 +414,7 @@ export default function DownloadsPage() {
                 </div>
               </PremiumCard>
 
-              <PremiumCard>
+              <PremiumCard className="portal-card-premium">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Changelog</h3>
@@ -426,7 +427,14 @@ export default function DownloadsPage() {
                   {changelog.map((c) => {
                     const open = openId === c.id;
                     return (
-                      <div key={c.id} className={cx("rounded-2xl border border-slate-200 bg-white", open && "shadow-sm")}>
+                      <div
+                        key={c.id}
+                        className={cx(
+                          "rounded-2xl border border-slate-200 bg-white",
+                          // Keep shadows subtle; avoid clipping inner content
+                          open ? "shadow-[0_12px_34px_rgba(15,23,42,0.08)]" : ""
+                        )}
+                      >
                         <button
                           type="button"
                           onClick={() => setOpenId(open ? "" : c.id)}
@@ -469,7 +477,7 @@ export default function DownloadsPage() {
 
             {/* Right */}
             <div className="space-y-6">
-              <PremiumCard tone="soft">
+              <PremiumCard tone="soft" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">What’s included</h3>
@@ -493,7 +501,7 @@ export default function DownloadsPage() {
                 </ul>
               </PremiumCard>
 
-              <PremiumCard tone="soft">
+              <PremiumCard tone="soft" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-slate-900">Integrity & system info</h3>
@@ -509,7 +517,7 @@ export default function DownloadsPage() {
                 </div>
               </PremiumCard>
 
-              <PremiumCard tone="soft">
+              <PremiumCard tone="soft" className="portal-card-premium">
                 <h3 className="text-base font-semibold text-slate-900">Release channels</h3>
                 <p className="mt-1 text-sm text-slate-600">Stable is recommended for most users.</p>
 
@@ -519,7 +527,7 @@ export default function DownloadsPage() {
                   <MiniRow label="Alpha" value="Experimental (internal)" />
                 </div>
 
-                <button disabled className={cx(BTN_SECONDARY, "mt-5 w-full opacity-60")} title="Coming soon">
+                <button disabled className={cx(BTN_SECONDARY, "mt-5 w-full opacity-60")} title="Coming soon" type="button">
                   Join beta channel (soon)
                 </button>
               </PremiumCard>
@@ -534,7 +542,7 @@ export default function DownloadsPage() {
 function DownloadsSkeleton() {
   return (
     <div className="space-y-6">
-      <PremiumCard>
+      <PremiumCard className="portal-card-premium">
         <div className="h-5 w-64 rounded-lg bg-slate-200 animate-pulse" />
         <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -546,7 +554,7 @@ function DownloadsSkeleton() {
       </PremiumCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+        <div className="lg:col-span-2 rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
           <div className="h-5 w-44 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-3 h-4 w-72 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -556,7 +564,7 @@ function DownloadsSkeleton() {
           </div>
         </div>
 
-        <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+        <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
           <div className="h-5 w-40 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-3 h-4 w-56 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-5 space-y-2">

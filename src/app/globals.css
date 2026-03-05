@@ -32,9 +32,27 @@
   /* Focus ring */
   --ring: rgba(17, 179, 163, 0.22);
 
-  /* Shadows (lighter + calmer) */
-  --shadow-sm: 0 1px 10px rgba(15, 23, 42, 0.05);
-  --shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+  /* =========================
+     Elevation (premium)
+     - sm: default cards
+     - md: hover / panels
+     - lg: hero cards / modals
+     ========================= */
+  --shadow-sm: 0 1px 12px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 14px 44px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 26px 90px rgba(15, 23, 42, 0.14);
+
+  /* Backwards compat (keep existing usage working) */
+  --shadow: var(--shadow-md);
+
+  /* Premium inner highlight (makes white cards feel "real") */
+  --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.70);
+
+  /* Hover border tint (brand-tinted border, still subtle) */
+  --border-hover: color-mix(in srgb, var(--primary) 18%, var(--border-soft));
+
+  /* Ambient brand glow (used for hover/focus glows) */
+  --glow: 0 0 0 6px color-mix(in srgb, var(--primary) 16%, transparent);
 
   /* ✅ Sidebar tokens (FLAT, modern) */
   --sidebar-bg-1: #0b1220; /* flat background */
@@ -54,8 +72,8 @@
   --sidebar-hover: rgba(255, 255, 255, 0.06);
 
   /* ✅ Primary UI font (DM Sans) */
-  --font-sans: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, Arial, sans-serif;
+  --font-sans: "DM Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial,
+    sans-serif;
 
   /* ✅ Portal compact tokens */
   --portal-card-radius: 16px;
@@ -87,8 +105,18 @@ body {
 
 body {
   background:
-    radial-gradient(1200px 800px at 15% -10%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 60%),
+    radial-gradient(
+      1200px 800px at 15% -10%,
+      color-mix(in srgb, var(--primary) 10%, transparent),
+      transparent 60%
+    ),
     radial-gradient(900px 600px at 95% 0%, rgba(15, 23, 42, 0.06), transparent 55%),
+    /* ✅ subtle bottom “studio light” */
+    radial-gradient(
+      700px 500px at 50% 120%,
+      color-mix(in srgb, var(--primary) 6%, transparent),
+      transparent 60%
+    ),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -101,11 +129,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Optional: ultra-subtle “premium noise” overlay (helps flat gradients) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+}
+
 /* Better defaults */
 a {
   color: var(--primary);
 }
-
 a:hover {
   opacity: 0.92;
 }
@@ -115,6 +153,68 @@ a:hover {
   background: rgba(17, 179, 163, 0.18);
 }
 
+/* =========================
+   Motion helpers (global)
+   - Use: add class ek-enter to any block
+   - Use: add class ek-sheen to any card-like element
+   ========================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .ek-enter,
+  .ek-sheen::after,
+  .ek-lift {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Entrance */
+.ek-enter {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: ekFadeUp 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ekFadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hover sheen sweep (optional) */
+.ek-sheen {
+  position: relative;
+  isolation: isolate;
+}
+.ek-sheen::after {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  transform: rotate(10deg) translateX(-35%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.16), transparent);
+  opacity: 0;
+  transition: opacity 280ms ease;
+  pointer-events: none;
+}
+.ek-sheen:hover::after {
+  opacity: 1;
+}
+
+/* Premium hover lift helper */
+.ek-lift {
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 260ms ease;
+}
+.ek-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-hover);
+}
 
 /* Main scroll surface background */
 .portal-main {
@@ -122,12 +222,11 @@ a:hover {
     radial-gradient(1000px 700px at 10% 0%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 60%),
     linear-gradient(180deg, var(--surface), var(--surface-2));
 }
+
 /* =========================
    Portal utility classes
-   Use these to rapidly align portal with desktop style
    ========================= */
 
-/* Whole page surface */
 .portal-surface {
   background: var(--surface);
 }
@@ -161,14 +260,12 @@ a:hover {
   box-shadow: none;
 }
 
-/* Divider line inside sidebar */
 .portal-sidebar-divider {
   border-color: var(--sidebar-divider);
 }
 
 /* =========================
-   Sidebar nav (row items)
-   Calmer, more “Stripe discipline”
+   Sidebar nav
    ========================= */
 
 .portal-nav-item {
@@ -300,7 +397,6 @@ a:hover {
   border-radius: var(--portal-card-radius) !important;
 }
 
-/* Keep your “big card” padding comfy */
 .portal-compact .p-8 {
   padding: 24px !important;
 }
@@ -320,12 +416,10 @@ a:hover {
   padding-bottom: 10px !important;
 }
 
-/* KPI tiles tend to be too tall */
 .portal-compact .h-20 {
   height: var(--portal-kpi-height) !important;
 }
 
-/* Reduce overall spacing (but keep breathing room) */
 .portal-compact .space-y-6 > :not([hidden]) ~ :not([hidden]) {
   margin-top: 22px !important;
 }
@@ -338,7 +432,6 @@ a:hover {
   gap: 16px !important;
 }
 
-/* Subtle border / focus helpers that work across the portal */
 .portal-compact :focus-visible {
   outline: 0;
   box-shadow: 0 0 0 4px var(--ring);

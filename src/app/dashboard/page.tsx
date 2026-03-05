@@ -11,7 +11,7 @@ import { useSession } from "@/components/portal/session";
    ========================= */
 
 type Entitlement = {
-  plan: "FREE" | "PRO" | string;
+  plan: "FREE" | "STARTER" | "GROWTH" | "PRO" | string;
   status: string;
   currentPeriodEnd: string | null;
   graceUntil: string | null;
@@ -21,6 +21,7 @@ type Entitlement = {
       invoice: number;
       quote: number;
       purchase_order: number;
+      companies?: number;
     };
   };
 };
@@ -89,9 +90,13 @@ function parseDateMs(iso?: string | null) {
   return Number.isFinite(t) ? t : Number.NaN;
 }
 
+function normalizeStatus(raw?: string | null) {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
 function statusFromEntitlement(ent: any) {
   const plan = normalizePlan(ent?.plan);
-  const statusRaw = String(ent?.status ?? "").trim().toLowerCase();
+  const statusRaw = normalizeStatus(ent?.status);
   const readOnly = !!ent?.features?.readOnly;
 
   const now = Date.now();
@@ -100,7 +105,6 @@ function statusFromEntitlement(ent: any) {
 
   const withinGrace = Number.isFinite(graceUntilMs) && now <= graceUntilMs;
 
-  // FREE always “FREE”
   if (plan === "FREE") {
     return {
       label: "FREE",
@@ -109,10 +113,10 @@ function statusFromEntitlement(ent: any) {
       hint: "Limited access. Trial limits apply in the desktop app.",
       countdownTargetMs: Number.NaN,
       countdownLabel: null as string | null,
+      isBillingProblem: false,
     };
   }
 
-  // PRO but server says read-only / blocked
   if (readOnly) {
     return {
       label: "READ_ONLY",
@@ -121,10 +125,10 @@ function statusFromEntitlement(ent: any) {
       hint: "Your subscription is not active or is blocked. Desktop will be read-only.",
       countdownTargetMs: Number.NaN,
       countdownLabel: null as string | null,
+      isBillingProblem: true,
     };
   }
 
-  // Grace window (paying user but within grace)
   if (withinGrace) {
     return {
       label: "GRACE",
@@ -133,10 +137,10 @@ function statusFromEntitlement(ent: any) {
       hint: "You’re in grace. Access remains enabled until grace ends.",
       countdownTargetMs: graceUntilMs,
       countdownLabel: "Grace ends in",
+      isBillingProblem: true,
     };
   }
 
-  // Active-ish states (fallback)
   const isActiveish = statusRaw === "active" || statusRaw === "trialing" || statusRaw === "trial";
   if (isActiveish) {
     return {
@@ -146,22 +150,25 @@ function statusFromEntitlement(ent: any) {
       hint: "Subscription active. Full access enabled.",
       countdownTargetMs: Number.isFinite(periodEndMs) ? periodEndMs : Number.NaN,
       countdownLabel: Number.isFinite(periodEndMs) ? "Renews in" : null,
+      isBillingProblem: false,
     };
   }
 
-  // Anything else
+  const isProblem = ["past_due", "canceled", "cancelled", "blocked", "unpaid"].includes(statusRaw);
+
   return {
     label: (statusRaw || "unknown").toUpperCase(),
     tone: "neutral" as const,
-    dot: "bg-slate-400",
+    dot: isProblem ? "bg-amber-500" : "bg-slate-400",
     hint: "Status reported by billing system.",
     countdownTargetMs: Number.NaN,
     countdownLabel: null as string | null,
+    isBillingProblem: isProblem,
   };
 }
 
 /* =========================
-   Entitlement fetch (single source of truth)
+   Entitlement fetch
    ========================= */
 
 function usePortalEntitlement(enabled: boolean, refreshKey: number) {
@@ -196,16 +203,47 @@ function usePortalEntitlement(enabled: boolean, refreshKey: number) {
 }
 
 /* =========================
-   Page-level UI primitives
+   Premium UI primitives
    ========================= */
 
 const BTN_BASE =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition " +
-  "hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
+  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold " +
+  "shadow-sm transition will-change-transform " +
+  "hover:-translate-y-[1px] active:translate-y-0 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
   "disabled:opacity-60 disabled:hover:translate-y-0";
 
 const BTN_PRIMARY = cx(BTN_BASE, "text-white");
 const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
+
+const ICON_CHIP = "grid h-7 w-7 place-items-center rounded-lg bg-white/12 ring-1 ring-white/15 text-[12px]";
+
+/* =========================
+   Billing CTA rules
+   ========================= */
+
+function billingCta(planUpper: string, status: ReturnType<typeof statusFromEntitlement>) {
+  const isFree = planUpper === "FREE";
+  if (isFree) return { label: "View plans", subtitle: "See Starter, Growth and Pro", href: "/billing" };
+  if (status.isBillingProblem) return { label: "Fix billing", subtitle: "Resolve payment to restore access", href: "/billing" };
+  return { label: "Manage plan", subtitle: "Payments, receipts & subscription", href: "/billing" };
+}
+
+function Stagger({
+  children,
+  delayMs = 0,
+  className,
+}: {
+  children: React.ReactNode;
+  delayMs?: number;
+  className?: string;
+}) {
+  return (
+    <div className={cx("ek-enter", className)} style={{ animationDelay: `${Math.max(0, delayMs)}ms` }}>
+      {children}
+    </div>
+  );
+}
 
 function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -238,9 +276,8 @@ export default function DashboardPage() {
 
   const { state, user, error, refresh } = useSession();
 
- // ✅ Single-source entitlement from /api/entitlement (same as desktop)
-const [entRefreshKey, setEntRefreshKey] = useState(0);
-const { entitlement, entitlementError } = usePortalEntitlement(state === "ready", entRefreshKey);
+  const [entRefreshKey, setEntRefreshKey] = useState(0);
+  const { entitlement, entitlementError } = usePortalEntitlement(state === "ready", entRefreshKey);
 
   const subtitle =
     state === "ready"
@@ -257,6 +294,7 @@ const { entitlement, entitlementError } = usePortalEntitlement(state === "ready"
   const name = user?.email ? capitalizeWords(displayNameFromEmail(user.email) ?? "") : null;
 
   const status = useMemo(() => statusFromEntitlement(entitlement), [entitlement]);
+  const cta = useMemo(() => billingCta(planUpper, status), [planUpper, status]);
 
   const countdown = useMemo(() => {
     if (!Number.isFinite(status.countdownTargetMs)) return null;
@@ -266,7 +304,6 @@ const { entitlement, entitlementError } = usePortalEntitlement(state === "ready"
   }, [status.countdownTargetMs]);
 
   const entitlementSnapshot = useMemo(() => {
-    // This matches what the desktop consumes from /api/entitlement
     return {
       plan: entitlement?.plan ?? null,
       status: entitlement?.status ?? null,
@@ -291,31 +328,27 @@ const { entitlement, entitlementError } = usePortalEntitlement(state === "ready"
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                refresh(); // refresh session/user
-                setEntRefreshKey((n) => n + 1); // refresh entitlement
+                refresh();
+                setEntRefreshKey((n) => n + 1);
               }}
               className={BTN_SECONDARY}
+              type="button"
             >
               Refresh
             </button>
 
-            {planUpper === "FREE" ? (
-              <button
-                onClick={() => router.push("/billing")}
-                className={BTN_PRIMARY}
-                style={{ background: "var(--primary)" }}
-              >
-                Upgrade to Pro
-              </button>
-            ) : (
-              <button
-                onClick={() => router.push("/billing")}
-                className={BTN_PRIMARY}
-                style={{ background: "var(--primary)" }}
-              >
-                Manage billing
-              </button>
-            )}
+            <button
+              onClick={() => router.push(cta.href)}
+              className={BTN_PRIMARY}
+              style={{ background: "var(--primary)" }}
+              title={cta.subtitle}
+              type="button"
+            >
+              <span className={cx("rounded-lg px-2 py-1 text-[11px] font-extrabold", "bg-white/15 ring-1 ring-white/20")}>
+                ⟠
+              </span>
+              {cta.label}
+            </button>
           </div>
         ) : null
       }
@@ -354,162 +387,166 @@ const { entitlement, entitlementError } = usePortalEntitlement(state === "ready"
       ) : (
         <div className="space-y-6">
           {/* Hero */}
-          <PremiumCard>
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Chip tone={status.tone}>
-                    <span className={cx("h-2 w-2 rounded-full", status.dot)} />
-                    Status: {status.label}
-                  </Chip>
+          <Stagger delayMs={0}>
+            <PremiumCard tone="soft" className="portal-card-premium">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip tone={status.tone}>
+                      <span className={cx("h-2 w-2 rounded-full", status.dot)} />
+                      Status: {status.label}
+                    </Chip>
 
-                  <span className="text-xs text-slate-500">•</span>
-                  <span className="text-xs font-semibold text-slate-700">{planUpper} plan</span>
+                    <span className="text-xs text-slate-500">•</span>
+                    <span className="text-xs font-semibold text-slate-700">{planUpper} plan</span>
 
-                  {countdown && status.countdownLabel ? (
-                    <>
-                      <span className="text-xs text-slate-500">•</span>
-                      <span className="text-xs font-semibold text-slate-700">
-                        {status.countdownLabel}: {countdown}
-                      </span>
-                    </>
-                  ) : null}
+                    {countdown && status.countdownLabel ? (
+                      <>
+                        <span className="text-xs text-slate-500">•</span>
+                        <span className="text-xs font-semibold text-slate-700">
+                          {status.countdownLabel}: {countdown}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+
+                  <h2 className="mt-3 text-lg font-semibold text-slate-900">Welcome back{name ? `, ${name}` : ""}.</h2>
+
+                  <p className="mt-1 text-sm text-slate-600">{status.hint}</p>
+
+                  <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                    <span className="font-semibold text-slate-700">Note:</span> Accounting work happens in the desktop app.
+                    The portal manages access, billing and downloads.
+                  </div>
                 </div>
 
-                <h2 className="mt-3 text-lg font-semibold text-slate-900">
-                  Welcome back{name ? `, ${name}` : ""}.
-                </h2>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                  <button
+                    onClick={() => router.push("/downloads")}
+                    className={BTN_PRIMARY}
+                    style={{ background: "rgb(15 23 42)" }}
+                    type="button"
+                  >
+                    <span className={ICON_CHIP}>⇩</span>
+                    Get desktop app
+                  </button>
 
-                <p className="mt-1 text-sm text-slate-600">{status.hint}</p>
+                  <button onClick={() => router.push(cta.href)} className={BTN_SECONDARY} title={cta.subtitle} type="button">
+                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
+                      ⟠
+                    </span>
+                    {cta.label}
+                  </button>
 
-                <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
-                  <span className="font-semibold text-slate-700">Note:</span> Accounting work happens in the desktop app.
-                  The portal manages access, billing and downloads.
+                  <button onClick={() => router.push("/settings")} className={BTN_SECONDARY} type="button">
+                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
+                      ⚙
+                    </span>
+                    Security
+                  </button>
                 </div>
               </div>
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                <button
-                  onClick={() => router.push("/downloads")}
-                  className={BTN_PRIMARY}
-                  style={{ background: "rgb(15 23 42)" }}
-                >
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/10 text-[12px]">⇩</span>
-                  Get desktop app
-                </button>
-
-                <button onClick={() => router.push("/billing")} className={BTN_SECONDARY}>
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
-                    ⟠
-                  </span>
-                  Billing
-                </button>
-
-                <button onClick={() => router.push("/settings")} className={BTN_SECONDARY}>
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
-                    ⚙
-                  </span>
-                  Security
-                </button>
-              </div>
-            </div>
-          </PremiumCard>
+            </PremiumCard>
+          </Stagger>
 
           {/* KPI row */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-start">
-            <KpiCard label="Plan" value={planUpper} icon="★" />
-            <KpiCard label="Email" value={String(user?.email ?? "—")} icon="✉" />
-            <KpiCard label="Created" value={fmtDate((user as any)?.createdAt)} icon="⏱" />
-            <KpiCard label="Last login" value={fmtDate((user as any)?.lastLoginAt)} icon="✓" />
-          </div>
+          <Stagger delayMs={70}>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-start">
+              <div className="ek-enter" style={{ animationDelay: "70ms" }}>
+                <KpiCard label="Plan" value={planUpper} icon="★" hint={`Companies allowed: ${String(entitlement?.features?.limits?.companies ?? 1)}`} />
+              </div>
+              <div className="ek-enter" style={{ animationDelay: "110ms" }}>
+                <KpiCard label="Email" value={String(user?.email ?? "—")} icon="✉" />
+              </div>
+              <div className="ek-enter" style={{ animationDelay: "150ms" }}>
+                <KpiCard label="Created" value={fmtDate((user as any)?.createdAt)} icon="⏱" />
+              </div>
+              <div className="ek-enter" style={{ animationDelay: "190ms" }}>
+                <KpiCard label="Last login" value={fmtDate((user as any)?.lastLoginAt)} icon="✓" />
+              </div>
+            </div>
+          </Stagger>
 
           {/* Main grid */}
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 xl:items-start">
-            {/* Left: Subscription / entitlement */}
-            <PremiumCard className="xl:col-span-2">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h3 className="text-base font-semibold text-slate-900">Subscription & access</h3>
-                  <p className="mt-1 text-sm text-slate-600">This is the effective entitlement the desktop app will apply.</p>
+            <Stagger delayMs={140} className="xl:col-span-2">
+              <PremiumCard className="portal-card-premium">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">Subscription & access</h3>
+                    <p className="mt-1 text-sm text-slate-600">This is the effective entitlement the desktop app will apply.</p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Chip tone={status.tone}>
+                      <span className={cx("h-2 w-2 rounded-full", status.dot)} />
+                      {status.label}
+                    </Chip>
+
+                    <CopyButton text={safeJson(entitlementSnapshot)} label="Copy snapshot" />
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Chip tone={status.tone}>
-                    <span className={cx("h-2 w-2 rounded-full", status.dot)} />
-                    {status.label}
-                  </Chip>
-
-                  <CopyButton text={safeJson(entitlementSnapshot)} label="Copy snapshot" />
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <DetailTile label="Plan" value={planUpper} />
+                  <DetailTile label="Portal status" value={String(entitlement?.status ?? "—")} />
+                  <DetailTile label="Read-only" value={entitlement?.features?.readOnly ? "Yes" : "No"} />
+                  <DetailTile label="Companies" value={String(entitlement?.features?.limits?.companies ?? 1)} />
+                  <DetailTile label="Current period ends" value={fmtDate(entitlement?.currentPeriodEnd)} />
+                  <DetailTile label="Grace until" value={fmtDate(entitlement?.graceUntil)} />
                 </div>
-              </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <DetailTile label="Portal status" value={String(entitlement?.status ?? "—")} />
-                <DetailTile label="Read-only" value={entitlement?.features?.readOnly ? "Yes" : "No"} />
-                <DetailTile label="Current period ends" value={fmtDate(entitlement?.currentPeriodEnd)} />
-                <DetailTile label="Grace until" value={fmtDate(entitlement?.graceUntil)} />
-              </div>
+                <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
+                  <div className="text-sm font-semibold text-slate-900">Trial limits (FREE)</div>
+                  <p className="mt-1 text-xs text-slate-600">These limits are enforced in the desktop app and are shown here for clarity.</p>
 
-              <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                <div className="text-sm font-semibold text-slate-900">Trial limits (FREE)</div>
-                <p className="mt-1 text-xs text-slate-600">
-                  These limits are enforced in the desktop app and are shown here for clarity.
-                </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <DetailTile label="Invoices" value={String(entitlement?.features?.limits?.invoice ?? 5)} />
+                    <DetailTile label="Quotes" value={String(entitlement?.features?.limits?.quote ?? 5)} />
+                    <DetailTile label="Purchase orders" value={String(entitlement?.features?.limits?.purchase_order ?? 5)} />
+                  </div>
+                </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <DetailTile label="Invoices" value={String(entitlement?.features?.limits?.invoice ?? 5)} />
-                  <DetailTile label="Quotes" value={String(entitlement?.features?.limits?.quote ?? 5)} />
-                  <DetailTile
-                    label="Purchase orders"
-                    value={String(entitlement?.features?.limits?.purchase_order ?? 5)}
+                <div className="mt-5">
+                  <div className="mb-2 text-xs font-semibold text-slate-700">Entitlement snapshot</div>
+                  <pre className="max-h-[200px] overflow-auto rounded-2xl bg-slate-950 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
+                    {safeJson(entitlementSnapshot)}
+                  </pre>
+                </div>
+              </PremiumCard>
+            </Stagger>
+
+            <Stagger delayMs={180}>
+              <PremiumCard className="portal-card-premium">
+                <h3 className="text-base font-semibold text-slate-900">Quick actions</h3>
+                <p className="mt-1 text-sm text-slate-600">Get to what you need fast.</p>
+
+                <div className="mt-4 space-y-2">
+                  <ActionRow
+                    title="Download eKasiBooks Desktop"
+                    subtitle="Windows installer & updates"
+                    icon="⇩"
+                    tone="brand"
+                    onClick={() => router.push("/downloads")}
+                  />
+                  <ActionRow title={cta.label} subtitle={cta.subtitle} icon="⟠" tone="primary" onClick={() => router.push(cta.href)} />
+                  <ActionRow
+                    title="Profile & security"
+                    subtitle="Password, OTP and settings"
+                    icon="⚙"
+                    tone="neutral"
+                    onClick={() => router.push("/settings")}
                   />
                 </div>
-              </div>
 
-              <div className="mt-5">
-                <div className="mb-2 text-xs font-semibold text-slate-700">Entitlement snapshot</div>
-                <pre className="max-h-[200px] overflow-auto rounded-2xl bg-slate-900 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
-                  {safeJson(entitlementSnapshot)}
-                </pre>
-              </div>
-            </PremiumCard>
-
-            {/* Right: Quick actions */}
-            <PremiumCard>
-              <h3 className="text-base font-semibold text-slate-900">Quick actions</h3>
-              <p className="mt-1 text-sm text-slate-600">Get to what you need fast.</p>
-
-              <div className="mt-4 space-y-2">
-                <ActionRow
-                  title="Download eKasiBooks Desktop"
-                  subtitle="Windows installer & updates"
-                  icon="⇩"
-                  tone="brand"
-                  onClick={() => router.push("/downloads")}
-                />
-                <ActionRow
-                  title={planUpper === "FREE" ? "Upgrade to Pro" : "Manage billing"}
-                  subtitle="Subscription, payments, receipts"
-                  icon="⟠"
-                  tone="primary"
-                  onClick={() => router.push("/billing")}
-                />
-                <ActionRow
-                  title="Profile & security"
-                  subtitle="Password, OTP and settings"
-                  icon="⚙"
-                  tone="neutral"
-                  onClick={() => router.push("/settings")}
-                />
-              </div>
-
-              {countdown && status.countdownLabel ? (
-                <div className="mt-4 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                  <div className="text-xs font-semibold text-slate-700">{status.countdownLabel}</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">{countdown}</div>
-                </div>
-              ) : null}
-            </PremiumCard>
+                {countdown && status.countdownLabel ? (
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                    <div className="text-xs font-semibold text-slate-700">{status.countdownLabel}</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900">{countdown}</div>
+                  </div>
+                ) : null}
+              </PremiumCard>
+            </Stagger>
           </div>
         </div>
       )}
@@ -539,7 +576,7 @@ function ActionRow({
       ? "text-white"
       : "bg-white text-slate-900 hover:bg-slate-50";
 
-  const ringClass = tone === "neutral" ? "ring-1 ring-slate-200 shadow-sm" : "shadow-sm";
+  const ringClass = tone === "neutral" ? "ring-1 ring-slate-200 shadow-sm" : "shadow-[var(--shadow-md)] ring-1 ring-white/10";
 
   const iconChip =
     tone === "neutral"
@@ -550,8 +587,8 @@ function ActionRow({
     <button
       onClick={onClick}
       className={[
-        "relative group w-full rounded-2xl px-3 py-2.5 text-left transition",
-        "hover:-translate-y-[1px]",
+        "relative group w-full rounded-2xl px-3 py-2.5 text-left transition-all duration-300 will-change-transform",
+        "hover:-translate-y-[2px] active:translate-y-0",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]",
         toneClass,
         ringClass,
@@ -560,9 +597,7 @@ function ActionRow({
       type="button"
     >
       <div className="relative flex items-center gap-3">
-        <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>
-          {icon}
-        </div>
+        <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>{icon}</div>
         <div className="min-w-0">
           <div className="text-sm font-semibold">{title}</div>
           <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>{subtitle}</div>
@@ -570,13 +605,16 @@ function ActionRow({
         <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
       </div>
 
-      {tone === "neutral" ? (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-          style={{ background: "radial-gradient(circle at 25% 50%, rgba(15,23,42,0.04), transparent 60%)" }}
-        />
-      ) : null}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{
+          background:
+            tone === "neutral"
+              ? "radial-gradient(circle at 25% 50%, rgba(15,23,42,0.04), transparent 60%)"
+              : "radial-gradient(circle at 25% 50%, rgba(255,255,255,0.14), transparent 60%)",
+        }}
+      />
     </button>
   );
 }
@@ -584,7 +622,7 @@ function ActionRow({
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+      <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
         <div className="h-5 w-52 rounded-lg bg-slate-200 animate-pulse" />
         <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
 
@@ -597,7 +635,7 @@ function DashboardSkeleton() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="xl:col-span-2 rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+        <div className="xl:col-span-2 rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
           <div className="h-5 w-44 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-3 h-4 w-72 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -608,7 +646,7 @@ function DashboardSkeleton() {
           </div>
         </div>
 
-        <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+        <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
           <div className="h-5 w-40 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-3 h-4 w-56 rounded-lg bg-slate-200 animate-pulse" />
           <div className="mt-5 space-y-2">
@@ -644,7 +682,7 @@ function EmptyState({
   const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
 
   return (
-    <div className="rounded-3xl bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+    <div className="rounded-3xl bg-white p-8 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
       <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
       <p className="mt-2 text-slate-600">{body}</p>
 
