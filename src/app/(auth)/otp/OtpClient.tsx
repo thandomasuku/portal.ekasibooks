@@ -17,12 +17,27 @@ export default function OtpPage() {
     return next && next.startsWith("/") ? next : "/dashboard";
   }, [sp]);
 
+  const planParam = useMemo(() => {
+    const raw = String(sp.get("plan") ?? "").toLowerCase().trim();
+    if (raw === "growth") return "growth";
+    if (raw === "pro") return "pro";
+    if (raw === "trial") return "trial";
+    if (raw === "starter") return "starter";
+    return "";
+  }, [sp]);
+
+  const loginHref = useMemo(() => {
+    const qs = new URLSearchParams();
+    qs.set("next", nextUrl);
+    if (planParam) qs.set("plan", planParam);
+    return `/login?${qs.toString()}`;
+  }, [nextUrl, planParam]);
+
   const [email] = useState(initialEmail);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
-  // Resend cooldown (nice UX, prevents spam clicks)
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -34,6 +49,7 @@ export default function OtpPage() {
   function showError(text: string) {
     setMsg({ type: "error", text });
   }
+
   function showSuccess(text: string) {
     setMsg({ type: "success", text });
   }
@@ -60,7 +76,6 @@ export default function OtpPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        // ✅ Backend expects `code` (not `otp`)
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           code: otpClean,
@@ -122,7 +137,6 @@ export default function OtpPage() {
       ? "bg-red-50 border-red-200 text-red-800"
       : "bg-slate-50 border-slate-200 text-slate-700";
 
-  // If someone lands here without email, guide them out cleanly
   const missingEmail = !email.trim();
 
   return (
@@ -181,7 +195,7 @@ export default function OtpPage() {
           </button>
 
           <button
-            onClick={() => router.push("/login")}
+            onClick={() => router.push(loginHref)}
             className="w-full rounded-xl border border-slate-300 py-2 font-medium"
           >
             Back to login

@@ -25,17 +25,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={dmSans.variable}>
-      <body className={`${geistMono.variable} antialiased min-h-screen relative overflow-hidden`}>
+      <body
+        className={`${geistMono.variable} antialiased min-h-screen relative overflow-x-hidden overflow-y-auto`}
+      >
         {/* Background image */}
         <div
-          className="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat"
+          className="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat pointer-events-none"
           style={{ backgroundImage: "url(/portal-bg.jpg)" }}
         />
 
         {/* Soft fade overlay */}
-        <div className="fixed inset-0 -z-10 bg-white/55" />
+        <div className="fixed inset-0 -z-10 bg-white/55 pointer-events-none" />
 
-        <div className="relative z-10">{children}</div>
+        <div className="relative z-10 min-h-screen">{children}</div>
       </body>
     </html>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
@@ -273,11 +273,24 @@ function entToPaidTier(planUpper: string): PaidTier {
 
 export default function BillingPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const sp = useSearchParams();
 
-  const nextUrl = useMemo(() => {
-    const next = sp.get("next");
-    return next && next.startsWith("/") ? next : "/billing";
+  const currentBillingUrl = useMemo(() => {
+    const qs = sp.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }, [pathname, sp]);
+
+  const requestedPlan = useMemo(() => {
+    const raw = String(sp.get("plan") ?? "").toLowerCase().trim();
+    if (raw === "growth") return "growth" as PaidTier;
+    if (raw === "pro") return "pro" as PaidTier;
+    return "starter" as PaidTier;
+  }, [sp]);
+
+  const requestedCycle = useMemo(() => {
+    const raw = String(sp.get("cycle") ?? "").toLowerCase().trim();
+    return raw === "annual" ? "annual" : "monthly";
   }, [sp]);
 
   const { state, user, error: sessionError, refresh } = useSession();
@@ -401,12 +414,20 @@ export default function BillingPage() {
   const planLabel = planLabelFromEnt(planName);
   const isPaid = planLabel !== "FREE";
 
+  // If a free user arrives from marketing with ?plan=...&cycle=...
+  // respect that intent immediately on the billing page.
+  useEffect(() => {
+    if (planLabel !== "FREE") return;
+    setSelectedTier(requestedPlan);
+    setCycle(requestedCycle);
+  }, [planLabel, requestedPlan, requestedCycle]);
+
   const renewsAt = ent?.currentPeriodEnd ?? null;
   const graceUntil = ent?.graceUntil ?? null;
 
   const featureReadOnly = !!ent?.features?.readOnly;
 
-  // ✅ keep tier toggle aligned only once paid
+  // keep tier toggle aligned only once paid
   useEffect(() => {
     if (!isPaid) return;
     setSelectedTier(entToPaidTier(planName));
@@ -587,7 +608,7 @@ export default function BillingPage() {
           title="Please log in to continue"
           body="Your session isn’t active. Log in again to manage billing."
           primaryLabel="Go to login"
-          onPrimary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
+          onPrimary={() => router.push(`/login?next=${encodeURIComponent(currentBillingUrl)}`)}
           secondaryLabel="Back to home"
           onSecondary={() => router.push("/")}
         />
@@ -598,7 +619,7 @@ export default function BillingPage() {
           primaryLabel="Retry"
           onPrimary={() => onRefreshAll()}
           secondaryLabel="Go to login"
-          onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
+          onSecondary={() => router.push(`/login?next=${encodeURIComponent(currentBillingUrl)}`)}
         />
       ) : (
         <div className="space-y-6">
@@ -640,12 +661,16 @@ export default function BillingPage() {
 
               <div className="flex w-full flex-col items-end gap-2 md:w-auto">
                 {planLabel === "FREE" ? (
-                  <div className="w-full md:w-auto space-y-2">
+                  <div className="w-full space-y-2 md:w-auto">
                     <CycleToggle value={cycle} onChange={setCycle} />
                     <TierToggle value={selectedTier} onChange={setSelectedTier} />
                     <div className="text-[11px] text-slate-600">
                       Annual saves{" "}
                       <span className="font-extrabold text-slate-900">R{annualSaveForSelected}</span> per year.
+                    </div>
+                    <div className="text-[11px] text-slate-600">
+                      Selected from pricing page:{" "}
+                      <span className="font-extrabold text-slate-900">{PRICE_TABLE[selectedTier].title}</span>
                     </div>
                   </div>
                 ) : null}
@@ -1008,7 +1033,6 @@ function PlanCard({
   return (
     <div
       className={cx(
-        // ✅ relative + overflow-visible prevents shadow/ring clipping in weird grid stacks
         "relative overflow-visible rounded-2xl border bg-white p-4",
         highlight ? "border-[color:var(--primary)]/30 ring-1 ring-[color:var(--primary)]/15" : "border-slate-200"
       )}
