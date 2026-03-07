@@ -25,7 +25,10 @@ const BTN_BASE =
   "disabled:opacity-70 disabled:hover:translate-y-0";
 
 const BTN_PRIMARY = cx(BTN_BASE, "text-white");
-const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
+const BTN_SECONDARY = cx(
+  BTN_BASE,
+  "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
+);
 
 const BTN_ICON_PRIMARY = "grid h-7 w-7 place-items-center rounded-lg bg-white/15";
 const BTN_ICON_SECONDARY =
@@ -146,7 +149,7 @@ function CycleToggle({
         onClick={() => onChange("annual")}
         aria-pressed={value === "annual"}
         className={cx(
-          "h-9 rounded-xl px-4 text-sm font-semibold transition inline-flex items-center gap-2",
+          "inline-flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition",
           value === "annual" ? "text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"
         )}
         style={value === "annual" ? { background: "var(--primary)" } : undefined}
@@ -168,7 +171,13 @@ function CycleToggle({
   );
 }
 
-function TierToggle({ value, onChange }: { value: PaidTier; onChange: (v: PaidTier) => void }) {
+function TierToggle({
+  value,
+  onChange,
+}: {
+  value: PaidTier;
+  onChange: (v: PaidTier) => void;
+}) {
   const tiers: Array<{ key: PaidTier; label: string }> = [
     { key: "starter", label: "Starter" },
     { key: "growth", label: "Growth" },
@@ -205,7 +214,7 @@ type Entitlement = {
   plan?: "FREE" | "STARTER" | "GROWTH" | "PRO" | string;
   status?: string;
   amount?: number | null;
-  interval?: string | null; // monthly | annual | yearly
+  interval?: string | null;
   currentPeriodEnd?: string | null;
   graceUntil?: string | null;
   features?: {
@@ -249,12 +258,14 @@ function CopyButton({ text }: { text: string }) {
 
 /* ---------------- Pricing model (UI only) ---------------- */
 
-const PRICE_TABLE: Record<PaidTier, { title: string; monthly: number; annual: number; companies: number; badge?: string }> =
-  {
-    starter: { title: "Starter", monthly: 199, annual: 2149, companies: 1 },
-    growth: { title: "Growth", monthly: 399, annual: 4309, companies: 3, badge: "Most popular" },
-    pro: { title: "Pro", monthly: 599, annual: 6469, companies: 5 },
-  };
+const PRICE_TABLE: Record<
+  PaidTier,
+  { title: string; monthly: number; annual: number; companies: number; badge?: string }
+> = {
+  starter: { title: "Starter", monthly: 199, annual: 2149, companies: 1 },
+  growth: { title: "Growth", monthly: 399, annual: 4309, companies: 3, badge: "Most popular" },
+  pro: { title: "Pro", monthly: 599, annual: 6469, companies: 5 },
+};
 
 function planLabelFromEnt(planUpper: string) {
   const p = String(planUpper || "FREE").toUpperCase();
@@ -269,6 +280,211 @@ function entToPaidTier(planUpper: string): PaidTier {
   if (p === "GROWTH") return "growth";
   if (p === "PRO") return "pro";
   return "starter";
+}
+
+/* ---------------- FREE onboarding view ---------------- */
+
+type BillingOnboardingViewProps = {
+  userEmail?: string | null;
+  requestedPlan: PaidTier;
+  selectedTier: PaidTier;
+  setSelectedTier: (v: PaidTier) => void;
+  cycle: BillingCycle;
+  setCycle: (v: BillingCycle) => void;
+  upgradeLoading: boolean;
+  onUpgrade: () => void;
+};
+
+function BillingOnboardingView({
+  userEmail,
+  requestedPlan,
+  selectedTier,
+  setSelectedTier,
+  cycle,
+  setCycle,
+  upgradeLoading,
+  onUpgrade,
+}: BillingOnboardingViewProps) {
+  const selected = PRICE_TABLE[selectedTier];
+  const cameFromPricing = Boolean(requestedPlan);
+  const priceLabel =
+    cycle === "annual"
+      ? `${moneyZar(selected.annual)}/yr`
+      : `${moneyZar(selected.monthly)}/mo`;
+
+  const annualSave = selected.monthly * 12 - selected.annual;
+
+  return (
+    <div className="space-y-6">
+      <PremiumCard className="portal-card-premium">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <Chip tone="neutral">
+              <span className="h-2 w-2 rounded-full bg-slate-400" />
+              No active subscription
+            </Chip>
+
+            <h2 className="mt-3 text-xl font-semibold text-slate-900 sm:text-2xl">
+              Choose your plan
+            </h2>
+
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
+              Pick the plan that fits your business today. You can upgrade later as your
+              needs grow.
+            </p>
+
+            {cameFromPricing ? (
+              <div className="mt-3">
+                <Chip tone="brand">
+                  <span className="h-2 w-2 rounded-full bg-sky-500" />
+                  {PRICE_TABLE[requestedPlan].title} preselected from pricing page
+                </Chip>
+              </div>
+            ) : null}
+          </div>
+
+          {userEmail ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Signed in as
+              </div>
+              <div className="mt-1 font-medium text-slate-900">{userEmail}</div>
+            </div>
+          ) : null}
+        </div>
+      </PremiumCard>
+
+      <PremiumCard className="portal-card-premium">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Billing cycle</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Annual saves more if you already know this is your long-term setup.
+            </p>
+          </div>
+
+          <CycleToggle value={cycle} onChange={setCycle} />
+        </div>
+      </PremiumCard>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {(["starter", "growth", "pro"] as PaidTier[]).map((tier) => {
+          const plan = PRICE_TABLE[tier];
+          const active = selectedTier === tier;
+          const price =
+            cycle === "annual"
+              ? `${moneyZar(plan.annual)}/yr`
+              : `${moneyZar(plan.monthly)}/mo`;
+
+          return (
+            <button
+              key={tier}
+              type="button"
+              onClick={() => setSelectedTier(tier)}
+              aria-pressed={active}
+              className={cx(
+                "relative rounded-3xl border bg-white p-5 text-left shadow-sm transition",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]",
+                active
+                  ? "border-[color:var(--primary)] shadow-[0_0_0_4px_rgba(17,179,163,0.10)]"
+                  : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+              )}
+            >
+              {plan.badge ? (
+              <div className="absolute right-12 top-4 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
+                {plan.badge}
+              </div>
+            ) : null}
+
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold text-slate-900">{plan.title}</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {tier === "starter"
+                      ? "For freelancers and solo businesses"
+                      : tier === "growth"
+                      ? "Best for growing businesses"
+                      : "For established operations"}
+                  </div>
+                </div>
+
+                <div
+                  className={cx(
+                    "mt-1 h-5 w-5 rounded-full border-2 transition",
+                    active
+                      ? "border-[color:var(--primary)] bg-[var(--primary)]"
+                      : "border-slate-300 bg-white"
+                  )}
+                />
+              </div>
+
+              <div className="mt-5">
+                <div className="text-2xl font-semibold tracking-tight text-slate-900">
+                  {price}
+                </div>
+                <div className="mt-1 text-sm text-slate-500">
+                  {plan.companies} compan{plan.companies === 1 ? "y" : "ies"}
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-2">
+                <div className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
+                  <span>Desktop app access</span>
+                </div>
+                <div className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
+                  <span>Unlimited documents</span>
+                </div>
+                <div className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
+                  <span>{plan.companies} compan{plan.companies === 1 ? "y" : "ies"}</span>
+                </div>
+                {tier !== "starter" ? (
+                  <div className="flex items-start gap-2 text-sm text-slate-700">
+                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
+                    <span>Priority support</span>
+                  </div>
+                ) : null}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <PremiumCard className="portal-card-premium">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">
+              Selected plan: {selected.title}
+            </div>
+            <div className="mt-1 text-sm text-slate-600">
+              {priceLabel} • {selected.companies} compan{selected.companies === 1 ? "y" : "ies"}
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              Secure checkout. Cancel anytime. Access updates immediately after payment.
+            </div>
+            {cycle === "annual" ? (
+              <div className="mt-2 text-xs text-slate-600">
+                Annual saving: <span className="font-bold text-slate-900">R{annualSave}</span>
+              </div>
+            ) : null}
+          </div>
+
+          <button
+            onClick={onUpgrade}
+            disabled={upgradeLoading}
+            className={BTN_PRIMARY}
+            style={{ background: "var(--primary)" }}
+            type="button"
+          >
+            <span className={BTN_ICON_PRIMARY}>⟠</span>
+            {upgradeLoading ? "Redirecting..." : `Continue with ${selected.title}`}
+          </button>
+        </div>
+      </PremiumCard>
+    </div>
+  );
 }
 
 export default function BillingPage() {
@@ -413,9 +629,8 @@ export default function BillingPage() {
   const planName = String(ent?.plan ?? "FREE").toUpperCase();
   const planLabel = planLabelFromEnt(planName);
   const isPaid = planLabel !== "FREE";
+  const isFreeOnboarding = planLabel === "FREE";
 
-  // If a free user arrives from marketing with ?plan=...&cycle=...
-  // respect that intent immediately on the billing page.
   useEffect(() => {
     if (planLabel !== "FREE") return;
     setSelectedTier(requestedPlan);
@@ -427,7 +642,6 @@ export default function BillingPage() {
 
   const featureReadOnly = !!ent?.features?.readOnly;
 
-  // keep tier toggle aligned only once paid
   useEffect(() => {
     if (!isPaid) return;
     setSelectedTier(entToPaidTier(planName));
@@ -458,7 +672,9 @@ export default function BillingPage() {
 
   const subtitle =
     state === "ready"
-      ? "Manage your plan and subscription in one place."
+      ? planLabel === "FREE"
+        ? "Choose a plan to activate your account."
+        : "Manage your plan and subscription in one place."
       : state === "unauth"
       ? "Your session has expired — please log in again."
       : state === "error"
@@ -593,7 +809,9 @@ export default function BillingPage() {
       }
       footerRight={
         <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-slate-500 sm:inline">Payments powered by Paystack</span>
+          <span className="hidden text-xs text-slate-500 sm:inline">
+            Payments powered by Paystack
+          </span>
           <Chip>
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             Billing
@@ -621,87 +839,98 @@ export default function BillingPage() {
           secondaryLabel="Go to login"
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(currentBillingUrl)}`)}
         />
+      ) : isFreeOnboarding ? (
+        <div className="space-y-6">
+          {entError ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {entError}
+            </div>
+          ) : null}
+
+          {upgradeError ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {upgradeError}
+            </div>
+          ) : null}
+
+          {verifyLoading ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Verifying payment…
+            </div>
+          ) : verifyNote ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              {verifyNote}
+            </div>
+          ) : null}
+
+          <BillingOnboardingView
+            userEmail={(user as any)?.email ?? null}
+            requestedPlan={requestedPlan}
+            selectedTier={selectedTier}
+            setSelectedTier={setSelectedTier}
+            cycle={cycle}
+            setCycle={setCycle}
+            upgradeLoading={upgradeLoading}
+            onUpgrade={onUpgrade}
+          />
+        </div>
       ) : (
         <div className="space-y-6">
           {/* HERO */}
           <PremiumCard className="portal-card-premium">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
-                <Chip tone={heroTone === "success" ? "success" : heroTone === "brand" ? "brand" : "neutral"}>
+                <Chip
+                  tone={
+                    heroTone === "success"
+                      ? "success"
+                      : heroTone === "brand"
+                      ? "brand"
+                      : "neutral"
+                  }
+                >
                   <span className={cx("h-2 w-2 rounded-full", heroDot)} />
                   {planLabel} • {heroStatusLabel}
                 </Chip>
 
                 <h2 className="mt-3 text-xl font-semibold text-slate-900">
-                  {planLabel === "FREE"
-                    ? "Choose a plan when you’re ready"
-                    : effectiveStatus === "read_only"
+                  {effectiveStatus === "read_only"
                     ? "Your account is in read-only mode"
                     : "Your subscription is active"}
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-600">
-                  {planLabel === "FREE"
-                    ? "Paid plans unlock more companies. Everything else stays the same."
-                    : effectiveStatus === "read_only"
+                  {effectiveStatus === "read_only"
                     ? "Your subscription is not active. The desktop app will be read-only until billing is resolved."
                     : "Manage billing securely on Paystack — update your card, cancel anytime."}
                 </p>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Company limit: <span className="font-semibold text-slate-700">{companyLimit}</span>
+                  Company limit:{" "}
+                  <span className="font-semibold text-slate-700">{companyLimit}</span>
                 </p>
 
-                {planLabel !== "FREE" && graceUntil ? (
+                {graceUntil ? (
                   <p className="mt-2 text-xs text-slate-500">
-                    Grace window until <span className="font-semibold text-slate-700">{fmtDate(graceUntil)}</span>
+                    Grace window until{" "}
+                    <span className="font-semibold text-slate-700">{fmtDate(graceUntil)}</span>
                   </p>
                 ) : null}
               </div>
 
               <div className="flex w-full flex-col items-end gap-2 md:w-auto">
-                {planLabel === "FREE" ? (
-                  <div className="w-full space-y-2 md:w-auto">
-                    <CycleToggle value={cycle} onChange={setCycle} />
-                    <TierToggle value={selectedTier} onChange={setSelectedTier} />
-                    <div className="text-[11px] text-slate-600">
-                      Annual saves{" "}
-                      <span className="font-extrabold text-slate-900">R{annualSaveForSelected}</span> per year.
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      Selected from pricing page:{" "}
-                      <span className="font-extrabold text-slate-900">{PRICE_TABLE[selectedTier].title}</span>
-                    </div>
-                  </div>
-                ) : null}
-
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  {planLabel === "FREE" ? (
-                    <button
-                      onClick={onUpgrade}
-                      disabled={upgradeLoading}
-                      className={BTN_PRIMARY}
-                      style={{ background: "var(--primary)" }}
-                      type="button"
-                    >
-                      <span className={BTN_ICON_PRIMARY}>⟠</span>
-                      {upgradeLoading
-                        ? "Redirecting..."
-                        : `Subscribe • ${PRICE_TABLE[selectedTier].title} (${priceForSelected})`}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={onManagePlan}
-                      disabled={manageLoading}
-                      className={BTN_PRIMARY}
-                      style={{ background: "var(--primary)" }}
-                      title="Manage subscription on Paystack"
-                      type="button"
-                    >
-                      <span className={BTN_ICON_PRIMARY}>⚙</span>
-                      {manageLoading ? "Opening..." : "Manage plan"}
-                    </button>
-                  )}
+                  <button
+                    onClick={onManagePlan}
+                    disabled={manageLoading}
+                    className={BTN_PRIMARY}
+                    style={{ background: "var(--primary)" }}
+                    title="Manage subscription on Paystack"
+                    type="button"
+                  >
+                    <span className={BTN_ICON_PRIMARY}>⚙</span>
+                    {manageLoading ? "Opening..." : "Manage plan"}
+                  </button>
 
                   <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
                     <span className={BTN_ICON_SECONDARY}>↻</span>
@@ -709,23 +938,24 @@ export default function BillingPage() {
                   </button>
                 </div>
 
-                {planLabel !== "FREE" ? (
-                  <span className="text-[11px] leading-tight text-slate-500">Cancel anytime (secure Paystack portal).</span>
-                ) : null}
+                <span className="text-[11px] leading-tight text-slate-500">
+                  Cancel anytime (secure Paystack portal).
+                </span>
               </div>
             </div>
           </PremiumCard>
 
           {/* GRACE STRIP */}
-          {planLabel !== "FREE" && withinGrace ? (
+          {withinGrace ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-amber-900">Grace period active</div>
                 <div className="text-xs text-amber-800">
                   {graceCountdown != null ? (
                     <>
-                      <span className="font-semibold">{graceCountdown}</span> day{graceCountdown === 1 ? "" : "s"} remaining
-                      • Ends <span className="font-semibold">{fmtDate(graceUntil)}</span>
+                      <span className="font-semibold">{graceCountdown}</span> day
+                      {graceCountdown === 1 ? "" : "s"} remaining • Ends{" "}
+                      <span className="font-semibold">{fmtDate(graceUntil)}</span>
                     </>
                   ) : (
                     <>
@@ -735,10 +965,16 @@ export default function BillingPage() {
                 </div>
               </div>
               <div className="mt-2 text-sm text-amber-900/80">
-                You still have paid access during grace. Update your payment method to avoid a downgrade.
+                You still have paid access during grace. Update your payment method to avoid a
+                downgrade.
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={onManagePlan} disabled={manageLoading} className={BTN_SECONDARY} type="button">
+                <button
+                  onClick={onManagePlan}
+                  disabled={manageLoading}
+                  className={BTN_SECONDARY}
+                  type="button"
+                >
                   <span className={BTN_ICON_SECONDARY}>⚙</span>
                   {manageLoading ? "Opening..." : "Update payment method"}
                 </button>
@@ -752,15 +988,21 @@ export default function BillingPage() {
 
           {/* ERRORS / NOTES */}
           {entError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{entError}</div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {entError}
+            </div>
           ) : null}
 
           {upgradeError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{upgradeError}</div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {upgradeError}
+            </div>
           ) : null}
 
           {manageError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{manageError}</div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {manageError}
+            </div>
           ) : null}
 
           {verifyLoading ? (
@@ -768,14 +1010,16 @@ export default function BillingPage() {
               Verifying payment…
             </div>
           ) : verifyNote ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{verifyNote}</div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              {verifyNote}
+            </div>
           ) : null}
 
           {/* KPI */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <KpiCard label="Plan" value={planLabel} icon="★" />
             <KpiCard label="Status" value={heroStatusLabel} icon="✓" />
-            <KpiCard label="Renews" value={planLabel === "FREE" ? "—" : fmtDate(renewsAt)} icon="⏱" />
+            <KpiCard label="Renews" value={fmtDate(renewsAt)} icon="⏱" />
             <KpiCard label="Price" value={kpiPrice} icon="R" />
           </div>
 
@@ -785,10 +1029,20 @@ export default function BillingPage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">Plan details</h3>
-                  <p className="mt-1 text-sm text-slate-600">Subscription status and what’s included.</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Subscription status and what’s included.
+                  </p>
                 </div>
 
-                <Chip tone={heroTone === "success" ? "success" : heroTone === "brand" ? "brand" : "neutral"}>
+                <Chip
+                  tone={
+                    heroTone === "success"
+                      ? "success"
+                      : heroTone === "brand"
+                      ? "brand"
+                      : "neutral"
+                  }
+                >
                   <span className={cx("mr-2 inline-block h-2 w-2 rounded-full", heroDot)} />
                   {heroStatusLabel}
                 </Chip>
@@ -796,29 +1050,30 @@ export default function BillingPage() {
 
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <DetailTile label="Plan" value={planLabel} />
-                <DetailTile label="Price" value={planLabel === "FREE" ? "—" : priceLabelForPaid} />
-                <DetailTile label="Renews" value={planLabel === "FREE" ? "—" : fmtDate(renewsAt)} />
+                <DetailTile label="Price" value={priceLabelForPaid} />
+                <DetailTile label="Renews" value={fmtDate(renewsAt)} />
               </div>
 
               <div className="mt-6 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                 <p className="text-sm text-slate-700">
-                  {planLabel === "FREE" ? (
+                  {effectiveStatus === "read_only" ? (
                     <>
-                      You’re on the <span className="font-semibold">FREE</span> plan. Paid plans increase your company limit.
-                    </>
-                  ) : effectiveStatus === "read_only" ? (
-                    <>
-                      Your account is <span className="font-semibold">read-only</span>. Resolve billing to restore full access.
+                      Your account is <span className="font-semibold">read-only</span>. Resolve
+                      billing to restore full access.
                     </>
                   ) : (
                     <>
                       Your subscription is{" "}
-                      <span className="font-semibold">{heroStatusLabel.toLowerCase()}</span>. Manage it securely via{" "}
-                      <span className="font-semibold">Paystack</span>.
+                      <span className="font-semibold">
+                        {heroStatusLabel.toLowerCase()}
+                      </span>
+                      . Manage it securely via <span className="font-semibold">Paystack</span>.
                     </>
                   )}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">Paystack handles checkout & tokenization. We store subscription status only.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Paystack handles checkout & tokenization. We store subscription status only.
+                </p>
               </div>
 
               {/* PLAN COMPARISON */}
@@ -826,30 +1081,22 @@ export default function BillingPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">Plan comparison</p>
-                    <p className="mt-1 text-xs text-slate-500">The only difference is the number of companies you can create.</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      The main difference is the number of companies you can create.
+                    </p>
                   </div>
                   <Chip tone="neutral">Companies</Chip>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <PlanCard
-                    title="FREE"
-                    price="R0"
-                    active={planLabel === "FREE"}
-                    items={[
-                      { ok: true, label: "Desktop app access" },
-                      { ok: true, label: `Companies: 1` },
-                      { ok: true, label: `Invoices up to ${limits.invoice}` },
-                      { ok: true, label: `Quotes up to ${limits.quote}` },
-                      { ok: true, label: `Purchase orders up to ${limits.purchase_order}` },
-                    ]}
-                  />
-
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <PlanCard
                     title="STARTER"
-                    price={cycle === "annual" ? `${moneyZar(PRICE_TABLE.starter.annual)}/yr` : `${moneyZar(PRICE_TABLE.starter.monthly)}/mo`}
+                    price={
+                      cycle === "annual"
+                        ? `${moneyZar(PRICE_TABLE.starter.annual)}/yr`
+                        : `${moneyZar(PRICE_TABLE.starter.monthly)}/mo`
+                    }
                     active={planLabel === "STARTER" && !featureReadOnly}
-                    highlight={selectedTier === "starter" && planLabel === "FREE"}
                     items={[
                       { ok: true, label: "Desktop app access" },
                       { ok: true, label: "Unlimited documents" },
@@ -859,9 +1106,12 @@ export default function BillingPage() {
 
                   <PlanCard
                     title="GROWTH"
-                    price={cycle === "annual" ? `${moneyZar(PRICE_TABLE.growth.annual)}/yr` : `${moneyZar(PRICE_TABLE.growth.monthly)}/mo`}
+                    price={
+                      cycle === "annual"
+                        ? `${moneyZar(PRICE_TABLE.growth.annual)}/yr`
+                        : `${moneyZar(PRICE_TABLE.growth.monthly)}/mo`
+                    }
                     active={planLabel === "GROWTH" && !featureReadOnly}
-                    highlight={selectedTier === "growth" && planLabel === "FREE"}
                     items={[
                       { ok: true, label: "Desktop app access" },
                       { ok: true, label: "Unlimited documents" },
@@ -872,9 +1122,12 @@ export default function BillingPage() {
 
                   <PlanCard
                     title="PRO"
-                    price={cycle === "annual" ? `${moneyZar(PRICE_TABLE.pro.annual)}/yr` : `${moneyZar(PRICE_TABLE.pro.monthly)}/mo`}
+                    price={
+                      cycle === "annual"
+                        ? `${moneyZar(PRICE_TABLE.pro.annual)}/yr`
+                        : `${moneyZar(PRICE_TABLE.pro.monthly)}/mo`
+                    }
                     active={planLabel === "PRO" && !featureReadOnly}
-                    highlight={selectedTier === "pro" && planLabel === "FREE"}
                     items={[
                       { ok: true, label: "Desktop app access" },
                       { ok: true, label: "Unlimited documents" },
@@ -883,12 +1136,6 @@ export default function BillingPage() {
                     ]}
                   />
                 </div>
-
-                {planLabel === "FREE" ? (
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                    Tip: Choose <span className="font-bold">Annual</span> for best value on any paid plan.
-                  </div>
-                ) : null}
               </div>
 
               {/* VERIFY */}
@@ -910,13 +1157,20 @@ export default function BillingPage() {
                     placeholder="e.g. 9t5k9m9d0x / trxref"
                     className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-slate-300 focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
                   />
-                  <button onClick={onManualVerify} disabled={verifyLoading} className={BTN_SECONDARY} type="button">
+                  <button
+                    onClick={onManualVerify}
+                    disabled={verifyLoading}
+                    className={BTN_SECONDARY}
+                    type="button"
+                  >
                     {verifyLoading ? "Verifying…" : "Verify"}
                   </button>
                 </div>
 
                 {manualErr ? (
-                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{manualErr}</div>
+                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    {manualErr}
+                  </div>
                 ) : null}
               </div>
 
@@ -956,29 +1210,35 @@ export default function BillingPage() {
                 <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-slate-900">
-                      {planLabel === "FREE" ? "No payment method saved" : "Stored on Paystack"}
+                      Stored on Paystack
                     </span>
-                    <span className="text-xs font-semibold text-slate-600">{planLabel === "FREE" ? "Not required" : "Protected"}</span>
+                    <span className="text-xs font-semibold text-slate-600">Protected</span>
                   </div>
-                  <p className="mt-1 text-xs text-slate-600">For security, we don’t store card details in the portal.</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    For security, we don’t store card details in the portal.
+                  </p>
                 </div>
 
                 <button
-                  onClick={planLabel === "FREE" ? undefined : onManagePlan}
-                  disabled={planLabel === "FREE" || manageLoading}
-                  className={cx(BTN_SECONDARY, "mt-6 w-full", planLabel === "FREE" && "cursor-not-allowed opacity-60")}
-                  title={planLabel === "FREE" ? "Subscribe first" : "Manage subscription on Paystack"}
+                  onClick={onManagePlan}
+                  disabled={manageLoading}
+                  className={cx(BTN_SECONDARY, "mt-6 w-full")}
+                  title="Manage subscription on Paystack"
                   type="button"
                 >
-                  {planLabel === "FREE" ? "Update payment method" : manageLoading ? "Opening..." : "Manage payment method"}
+                  {manageLoading ? "Opening..." : "Manage payment method"}
                 </button>
               </PremiumCard>
 
               <PremiumCard tone="soft" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">Entitlement snapshot</h3>
-                    <p className="mt-1 text-sm text-slate-600">This is what the desktop app will consume.</p>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      Entitlement snapshot
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      This is what the desktop app will consume.
+                    </p>
                   </div>
                   <CopyButton text={safeJson(entitlementSnapshot)} />
                 </div>
@@ -988,7 +1248,8 @@ export default function BillingPage() {
                 </pre>
 
                 <div className="mt-3 text-[11px] text-slate-500">
-                  Effective status: <span className="font-semibold text-slate-700">{heroStatusLabel}</span>
+                  Effective status:{" "}
+                  <span className="font-semibold text-slate-700">{heroStatusLabel}</span>
                 </div>
               </PremiumCard>
             </div>
@@ -1022,21 +1283,14 @@ function PlanCard({
   price,
   items,
   active,
-  highlight,
 }: {
   title: string;
   price: string;
   items: { ok: boolean; label: string }[];
   active?: boolean;
-  highlight?: boolean;
 }) {
   return (
-    <div
-      className={cx(
-        "relative overflow-visible rounded-2xl border bg-white p-4",
-        highlight ? "border-[color:var(--primary)]/30 ring-1 ring-[color:var(--primary)]/15" : "border-slate-200"
-      )}
-    >
+    <div className="relative overflow-visible rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-900">{title}</div>
@@ -1073,13 +1327,13 @@ function BillingSkeleton() {
   return (
     <div className="space-y-6">
       <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-        <div className="h-5 w-52 rounded-lg bg-slate-200 animate-pulse" />
-        <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
+        <div className="h-5 w-52 animate-pulse rounded-lg bg-slate-200" />
+        <div className="mt-3 h-4 w-80 animate-pulse rounded-lg bg-slate-200" />
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
+          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
+          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
+          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
         </div>
       </div>
     </div>
@@ -1107,7 +1361,12 @@ function EmptyState({
       <p className="mt-2 text-slate-600">{body}</p>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button onClick={onPrimary} className={BTN_PRIMARY} style={{ background: "var(--primary)" }} type="button">
+        <button
+          onClick={onPrimary}
+          className={BTN_PRIMARY}
+          style={{ background: "var(--primary)" }}
+          type="button"
+        >
           {primaryLabel}
         </button>
         <button onClick={onSecondary} className={BTN_SECONDARY} type="button">

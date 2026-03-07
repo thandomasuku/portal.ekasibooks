@@ -51,9 +51,13 @@ export default function VerifyEmailClient() {
 
         setState({ status: "success" });
 
-        // ✅ Auto-redirect to login, then user can continue to dashboard
+        const redirectTo =
+          typeof data?.redirectTo === "string" && data.redirectTo.startsWith("/")
+            ? data.redirectTo
+            : "/billing";
+
         setTimeout(() => {
-          router.push("/login?next=/dashboard&verified=1");
+          router.push(redirectTo);
         }, 1200);
       } catch {
         if (cancelled) return;
@@ -67,7 +71,7 @@ export default function VerifyEmailClient() {
   }, [token, router]);
 
   return (
-    <main className="min-h-[70vh] flex items-center justify-center p-6">
+    <main className="flex min-h-[70vh] items-center justify-center p-6">
       <div className="w-full max-w-xl rounded-2xl border bg-white p-8 shadow-sm">
         {state.status === "missing" && (
           <>
@@ -91,12 +95,10 @@ export default function VerifyEmailClient() {
         {state.status === "success" && (
           <>
             <h1 className="text-2xl font-semibold">Email verified ✅</h1>
-            <p className="mt-2 text-slate-600">
-              Redirecting you to login…
-            </p>
+            <p className="mt-2 text-slate-600">Redirecting you to your account…</p>
             <div className="mt-6">
-              <Link className="text-teal-700 underline" href="/login?next=/dashboard&verified=1">
-                Go now
+              <Link className="text-teal-700 underline" href="/billing">
+                Continue now
               </Link>
             </div>
           </>
@@ -109,7 +111,10 @@ export default function VerifyEmailClient() {
 
             {state.code === "TOKEN_EXPIRED" && state.email && (
               <div className="mt-4">
-                <Link className="text-teal-700 underline" href={`/login?email=${encodeURIComponent(state.email)}`}>
+                <Link
+                  className="text-teal-700 underline"
+                  href={`/login?email=${encodeURIComponent(state.email)}`}
+                >
                   Resend verification email
                 </Link>
               </div>
