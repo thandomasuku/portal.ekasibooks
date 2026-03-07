@@ -77,6 +77,7 @@ export default function RegisterPage() {
     setDevVerifyUrl(null);
     setEmailSent(null);
 
+    if (!name.trim()) return showError("Please enter your full name.");
     if (!emailOk) return showError("Please enter a valid email address.");
     if (!password.trim()) return showError("Password is required.");
     if (!PASSWORD_REGEX.test(password)) return showError(PASSWORD_RULE);
@@ -291,7 +292,7 @@ export default function RegisterPage() {
 
                   <label className="block">
                     <span className="text-sm font-medium text-slate-700">
-                      Full name (optional)
+                      Full name (required)
                     </span>
                     <input
                       className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
