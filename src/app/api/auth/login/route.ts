@@ -24,22 +24,70 @@ function getClientMeta(req: NextRequest) {
   return { userAgent, ip };
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function toNumberOverride(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.floor(value);
+  }
+
+  if (typeof value === "string") {
+    const n = Number(value.trim());
+    if (Number.isFinite(n)) {
+      return Math.floor(n);
+    }
+  }
+
+  return null;
+}
+
+async function getMaxActiveSessions(userId: string): Promise<number> {
+  const ent = await prisma.entitlement.findUnique({
+    where: { userId },
+    select: {
+      tier: true,
+      status: true,
+      features: true,
+    },
+  });
+
+  const tier = String(ent?.tier ?? "free").toLowerCase().trim();
+  const status = String(ent?.status ?? "active").toLowerCase().trim();
+
+  const features = isPlainObject(ent?.features) ? ent.features : {};
+  const override = toNumberOverride(features["maxActiveSessions"]);
+
+  const tierDefault =
+    tier === "pro" ? 4 :
+    tier === "growth" ? 2 :
+    1;
+
+  const computed = override ?? tierDefault;
+
+  // Safety: blocked/none should never get extra sessions.
+  if (status === "blocked" || status === "none") {
+    return 1;
+  }
+
+  return Math.max(1, computed);
+}
+
 /**
- * ✅ Enforce "1 active session per account":
- * revoke ALL existing active sessions for this user, then create a fresh one.
- * (Done in a transaction to avoid races.)
+ * Enforce per-account active session limit:
+ * create a new session, keep the newest N active sessions, revoke the rest.
  */
-async function createSingleActiveSession(userId: string, meta: { userAgent: string; ip: string }) {
+async function createLimitedActiveSession(
+  userId: string,
+  meta: { userAgent: string; ip: string },
+  maxActiveSessions: number
+) {
   const now = new Date();
+  const keepCount = Math.max(1, maxActiveSessions);
 
   return await prisma.$transaction(async (tx) => {
-    // revoke all active sessions
-    await tx.session.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: now },
-    });
-
-    // create the new single active session
+    // Create the new session first
     const session = await tx.session.create({
       data: {
         userId,
@@ -51,6 +99,29 @@ async function createSingleActiveSession(userId: string, meta: { userAgent: stri
       },
       select: { id: true },
     });
+
+    // Fetch all active sessions for this user, newest first
+    const activeSessions = await tx.session.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+    });
+
+    // Keep the newest N sessions, revoke anything older
+    const sessionsToRevoke = activeSessions.slice(keepCount).map((s) => s.id);
+
+    if (sessionsToRevoke.length > 0) {
+      await tx.session.updateMany({
+        where: {
+          id: { in: sessionsToRevoke },
+          revokedAt: null,
+        },
+        data: { revokedAt: now },
+      });
+    }
 
     return session;
   });
@@ -76,7 +147,9 @@ export async function POST(req: NextRequest) {
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return jsonError("Invalid email or password.", 401);
+    if (!ok) {
+      return jsonError("Invalid email or password.", 401);
+    }
 
     // 🚫 Block login until email is verified
     if (!user.emailVerifiedAt) {
@@ -90,9 +163,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ Enforce 1 session/account in portal (last login wins)
     const meta = getClientMeta(req);
-    const session = await createSingleActiveSession(user.id, meta);
+    const maxActiveSessions = await getMaxActiveSessions(user.id);
+    const session = await createLimitedActiveSession(user.id, meta, maxActiveSessions);
 
     const token = await signSession(user.id, session.id);
 
@@ -104,7 +177,13 @@ export async function POST(req: NextRequest) {
       })
       .catch(() => {});
 
-    const res = NextResponse.json({ success: true }, { status: 200 });
+    const res = NextResponse.json(
+      {
+        success: true,
+        maxActiveSessions,
+      },
+      { status: 200 }
+    );
     res.cookies.set(buildSessionCookie(token));
     return res;
   } catch (err) {

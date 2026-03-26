@@ -74,15 +74,29 @@ model User {
   subscription Subscription?
   entitlement  Entitlement?
   sessions     Session[]
+  quotes       Quote[]
 
-  // ✅ add this
   emailVerificationToken EmailVerificationToken?
+}
+
+model Customer {
+  id           String   @id
+  userId       String
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  city         String?
+  companyRegNo String?
+  vatNumber    String?
+  updatedAt    DateTime
+
+  createdAt DateTime @default(now())
 }
 
 model EmailVerificationToken {
   id String @id @default(cuid())
 
-  // ✅ relation now has an opposite field on User
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @unique
 
@@ -117,12 +131,11 @@ model Payment {
   reference String @unique
 
   amountKobo Int?
-  currency   String? // "NGN", etc.
+  currency   String?
 
   status PaymentStatus @default(pending)
   paidAt DateTime?
 
-  // Optional: store a small slice of Paystack payload for debugging/audit
   raw Json?
 
   createdAt DateTime @default(now())
@@ -140,12 +153,10 @@ model Subscription {
   provider String             @default("paystack")
   status   SubscriptionStatus @default(inactive)
 
-  // Paystack identifiers (nullable: you may start with one-time payments)
   customerCode     String?
   subscriptionCode String?
   planCode         String?
 
-  // Useful for access windows (even with subscriptions)
   currentPeriodEnd DateTime?
   canceledAt       DateTime?
 
@@ -165,7 +176,12 @@ model Entitlement {
   tier   EntitlementTier   @default(free)
   status EntitlementStatus @default(active)
 
-  // Optional feature flags / limits
+  // Example future shape:
+  // {
+  //   "cloudSync": true,
+  //   "maxActiveSessions": 2,
+  //   "maxCompanies": 3
+  // }
   features Json?
 
   updatedAt DateTime @updatedAt
@@ -173,6 +189,44 @@ model Entitlement {
 
   @@index([tier])
   @@index([status])
+}
+
+model Quote {
+  id String @id
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  number          String
+  customerId      String?
+  customerName    String
+  customerAddress String?
+
+  issueDate  String
+  expiryDate String?
+  dueDate    String?
+
+  reference      String?
+  publicComments String?
+  internalNotes  String?
+
+  currency String   @default("ZAR")
+  status   String   @default("draft")
+  vatRate  Decimal  @db.Decimal(8, 2)
+  subtotal Decimal  @db.Decimal(18, 2)
+  vat      Decimal  @db.Decimal(18, 2)
+  total    Decimal  @db.Decimal(18, 2)
+
+  data Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([userId, updatedAt])
+  @@index([userId, deletedAt])
+  @@index([userId, number])
 }
 
 model WebhookEvent {

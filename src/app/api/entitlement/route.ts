@@ -18,14 +18,16 @@ type BillingEntitlementResponse = {
   currentPeriodEnd: string | null;
   graceUntil: string | null;
 
-  // ✅ new fields (safe additions — won’t break older clients)
-  tier: Tier; // "free" | "starter" | "growth" | "pro"
-  interval: BillingCycle | null; // inferred from planCode if possible
-  amount: number | null; // Rands (e.g. 199, 4309)
-  planCode: string | null; // subscription plan code (useful for debugging)
+  // safe additions
+  tier: Tier;
+  interval: BillingCycle | null;
+  amount: number | null;
+  planCode: string | null;
 
   features: {
     readOnly: boolean;
+    cloudSync: boolean;
+    maxActiveSessions: number;
     limits: {
       invoice: number;
       quote: number;
@@ -94,8 +96,29 @@ function normalizeEntStatus(raw: unknown): EntStatus {
   return "active";
 }
 
+function toBooleanOverride(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const s = value.toLowerCase().trim();
+    if (s === "true") return true;
+    if (s === "false") return false;
+  }
+  return null;
+}
+
+function toNumberOverride(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string") {
+    const n = Number(value.trim());
+    if (Number.isFinite(n)) return Math.floor(n);
+  }
+  return null;
+}
+
 /* =========================================================
-   ✅ Pricing + plan-code inference (matches subscribe route)
+   Pricing + plan-code inference (matches subscribe route)
    ========================================================= */
 
 const PLAN_CODES = {
@@ -154,7 +177,7 @@ function inferIntervalFromPlanCode(tier: Tier, planCode: string | null): Billing
 
 function amountRandFor(tier: Tier, interval: BillingCycle | null): number | null {
   if (!isPaidTier(tier)) return null;
-  const cyc = interval ?? "monthly"; // if unknown, default display (UI-only)
+  const cyc = interval ?? "monthly";
   const kobo =
     tier === "starter"
       ? AMOUNTS_KOBO.starter[cyc]
@@ -162,7 +185,6 @@ function amountRandFor(tier: Tier, interval: BillingCycle | null): number | null
       ? AMOUNTS_KOBO.growth[cyc]
       : AMOUNTS_KOBO.pro[cyc];
 
-  // convert to rands (19900 -> 199)
   return Math.round((kobo || 0) / 100);
 }
 
@@ -192,7 +214,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Pull both entitlement + subscription
     const [ent, sub] = await Promise.all([
       prisma.entitlement.findUnique({
         where: { userId },
@@ -204,20 +225,16 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // Use let so we can reflect state changes in the SAME response
     let tier = normalizeTier(ent?.tier);
     let entStatus = normalizeEntStatus(ent?.status);
 
-    // ✅ Prisma JsonValue-safe features handling (single clean init)
     const rawFeatures: unknown = ent?.features ?? null;
     let featuresObj: Record<string, any> = isPlainObject(rawFeatures) ? { ...(rawFeatures as any) } : {};
     if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
 
-    // Subscription period end if known (nullable)
     const currentPeriodEndDate: Date | null = sub?.currentPeriodEnd ?? null;
     const currentPeriodEnd = currentPeriodEndDate ? currentPeriodEndDate.toISOString() : null;
 
-    // ✅ Grace window (computed from subscription.currentPeriodEnd)
     let graceUntil: string | null = null;
 
     if (isPaidTier(tier) && currentPeriodEndDate) {
@@ -225,7 +242,6 @@ export async function GET(req: NextRequest) {
       const cpeMs = currentPeriodEndDate.getTime();
       const graceEndMs = cpeMs + GRACE_DAYS * MS_DAY;
 
-      // In grace window
       if (nowMs > cpeMs && nowMs <= graceEndMs) {
         graceUntil = new Date(graceEndMs).toISOString();
 
@@ -250,7 +266,6 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Past grace window -> downgrade immediately
       if (nowMs > graceEndMs) {
         const nextFeatures = stripGraceFields(featuresObj);
 
@@ -278,18 +293,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ✅ Back-compat: if entitlement was already grace, read stored graceUntil
     if (!graceUntil && entStatus === "grace") {
       const d = parseIsoDate(featuresObj.graceUntil);
       graceUntil = d ? d.toISOString() : null;
     }
 
-    // ✅ Determine the effective status AFTER we may have changed entStatus above.
     let effectiveStatus = normalizeStatus(sub?.status ?? entStatus);
     if (entStatus === "grace") effectiveStatus = "grace";
     if (entStatus === "blocked") effectiveStatus = "blocked";
 
-    // Defaults
     const defaultFreeLimits = {
       invoice: 5,
       quote: 5,
@@ -309,8 +321,14 @@ export async function GET(req: NextRequest) {
         : defaultFreeLimits;
 
     const limits = {
-      invoice: typeof featuresObj?.limits?.invoice === "number" ? (featuresObj.limits.invoice as number) : computedLimits.invoice,
-      quote: typeof featuresObj?.limits?.quote === "number" ? (featuresObj.limits.quote as number) : computedLimits.quote,
+      invoice:
+        typeof featuresObj?.limits?.invoice === "number"
+          ? (featuresObj.limits.invoice as number)
+          : computedLimits.invoice,
+      quote:
+        typeof featuresObj?.limits?.quote === "number"
+          ? (featuresObj.limits.quote as number)
+          : computedLimits.quote,
       purchase_order:
         typeof featuresObj?.limits?.purchase_order === "number"
           ? (featuresObj.limits.purchase_order as number)
@@ -321,15 +339,28 @@ export async function GET(req: NextRequest) {
           : computedLimits.companies,
     };
 
-    // ✅ readOnly must respect blocked.
     const isBlocked = entStatus === "blocked";
+
+    const readOnlyOverride = toBooleanOverride(featuresObj?.readOnly);
     const readOnly =
       isBlocked ||
-      (!isPaidTier(tier) && (featuresObj?.readOnly === true || featuresObj?.readOnly === "true"));
+      readOnlyOverride === true ||
+      (!isPaidTier(tier) && featuresObj?.readOnly === "true");
+
+    const computedCloudSync = tier === "growth" || tier === "pro";
+    const cloudSyncOverride = toBooleanOverride(featuresObj?.cloudSync);
+    const cloudSync = isBlocked ? false : cloudSyncOverride ?? computedCloudSync;
+
+    const computedMaxActiveSessions =
+      tier === "pro" ? 4 : tier === "growth" ? 2 : 1;
+    const maxActiveSessionsOverride = toNumberOverride(featuresObj?.maxActiveSessions);
+    const maxActiveSessions = Math.max(
+      0,
+      maxActiveSessionsOverride ?? computedMaxActiveSessions
+    );
 
     const plan: BillingEntitlementResponse["plan"] = tierToPlan(tier);
 
-    // ✅ interval + amount for the portal UI
     const planCode = safeTrim(sub?.planCode) || null;
     const interval = isPaidTier(tier) ? inferIntervalFromPlanCode(tier, planCode) : null;
     const amount = isPaidTier(tier) ? amountRandFor(tier, interval) : null;
@@ -345,6 +376,8 @@ export async function GET(req: NextRequest) {
       planCode,
       features: {
         readOnly,
+        cloudSync,
+        maxActiveSessions,
         limits,
       },
     };
