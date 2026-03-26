@@ -66,6 +66,20 @@ function toDecimalNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function toBooleanOverride(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const s = value.toLowerCase().trim();
+    if (s === "true") return true;
+    if (s === "false") return false;
+  }
+  return null;
+}
+
 async function requireAuthedUser(req: NextRequest) {
   const token = req.cookies.get(getSessionCookieName())?.value;
   if (!token) {
@@ -100,21 +114,14 @@ async function requireCloudSyncEnabled(userId: string) {
   const tier = String(entitlement.tier ?? "free").toLowerCase().trim();
   const status = String(entitlement.status ?? "active").toLowerCase().trim();
 
-  const features =
-    entitlement.features && typeof entitlement.features === "object"
-      ? (entitlement.features as Record<string, unknown>)
-      : {};
-
-  // ✅ Same logic as entitlement route
-  const override = features["cloudSync"];
+  const features = isPlainObject(entitlement.features) ? entitlement.features : {};
+  const override = toBooleanOverride(features["cloudSync"]);
   const computed = tier === "growth" || tier === "pro";
 
   const cloudSync =
-    status === "blocked"
+    status === "blocked" || status === "none"
       ? false
-      : typeof override === "boolean"
-      ? override
-      : computed;
+      : override ?? computed;
 
   if (!cloudSync) {
     return {
@@ -138,15 +145,15 @@ async function requireOwnedCompany(userId: string, companyId: string) {
   });
 }
 
-function mapQuoteForResponse(row: {
+function mapInvoiceForResponse(row: {
   id: string;
   number: string;
   customerId: string | null;
   customerName: string;
   customerAddress: string | null;
   issueDate: string;
-  expiryDate: string | null;
   dueDate: string | null;
+  paidDate: string | null;
   reference: string | null;
   publicComments: string | null;
   internalNotes: string | null;
@@ -156,6 +163,7 @@ function mapQuoteForResponse(row: {
   subtotal: any;
   vat: any;
   total: any;
+  balance: any;
   data: any;
   createdAt: Date;
   updatedAt: Date;
@@ -168,8 +176,8 @@ function mapQuoteForResponse(row: {
     customerName: row.customerName,
     customerAddress: row.customerAddress,
     issueDate: row.issueDate,
-    expiryDate: row.expiryDate,
     dueDate: row.dueDate,
+    paidDate: row.paidDate,
     reference: row.reference,
     publicComments: row.publicComments,
     internalNotes: row.internalNotes,
@@ -179,6 +187,7 @@ function mapQuoteForResponse(row: {
     subtotal: Number(row.subtotal),
     vat: Number(row.vat),
     total: Number(row.total),
+    balance: row.balance == null ? null : Number(row.balance),
     data: row.data,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -236,7 +245,7 @@ export async function GET(req: NextRequest) {
       andFilters.push({ deletedAt: null });
     }
 
-    const rows = await prisma.quote.findMany({
+    const rows = await prisma.invoice.findMany({
       where: { AND: andFilters },
       orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
       take: limit,
@@ -247,8 +256,8 @@ export async function GET(req: NextRequest) {
         customerName: true,
         customerAddress: true,
         issueDate: true,
-        expiryDate: true,
         dueDate: true,
+        paidDate: true,
         reference: true,
         publicComments: true,
         internalNotes: true,
@@ -258,6 +267,7 @@ export async function GET(req: NextRequest) {
         subtotal: true,
         vat: true,
         total: true,
+        balance: true,
         data: true,
         createdAt: true,
         updatedAt: true,
@@ -265,21 +275,22 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const nextCursor = rows.length === limit
-      ? encodeCursor(rows[rows.length - 1]!.updatedAt, rows[rows.length - 1]!.id)
-      : null;
+    const nextCursor =
+      rows.length === limit
+        ? encodeCursor(rows[rows.length - 1]!.updatedAt, rows[rows.length - 1]!.id)
+        : null;
 
     return NextResponse.json(
       {
         success: true,
-        quotes: rows.map(mapQuoteForResponse),
+        invoices: rows.map(mapInvoiceForResponse),
         nextCursor,
       },
       { status: 200, headers: noStoreHeaders() }
     );
   } catch (err) {
-    console.error("[api/quotes][GET] failed:", err);
-    return jsonError("Failed to load quotes.", 500);
+    console.error("[api/invoices][GET] failed:", err);
+    return jsonError("Failed to load invoices.", 500);
   }
 }
 
@@ -300,14 +311,14 @@ export async function POST(req: NextRequest) {
       return jsonError("Company not found or access denied.", 403);
     }
 
-    const id = toRequiredString(body?.id, "Quote id", 191);
-    const number = toRequiredString(body?.number, "Quote number", 100);
+    const id = toRequiredString(body?.id, "Invoice id", 191);
+    const number = toRequiredString(body?.number, "Invoice number", 100);
     const customerName = toRequiredString(body?.customerName, "Customer name", 200);
     const issueDate = toRequiredString(body?.issueDate, "Issue date", 30);
 
     const incomingUpdatedAt = parseDateParam(body?.updatedAt ?? null);
 
-    const existing = await prisma.quote.findFirst({
+    const existing = await prisma.invoice.findFirst({
       where: {
         id,
         userId: auth.userId,
@@ -321,7 +332,7 @@ export async function POST(req: NextRequest) {
 
     if (existing) {
       if (incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
-        const current = await prisma.quote.findUniqueOrThrow({
+        const current = await prisma.invoice.findUniqueOrThrow({
           where: { id },
           select: {
             id: true,
@@ -330,8 +341,8 @@ export async function POST(req: NextRequest) {
             customerName: true,
             customerAddress: true,
             issueDate: true,
-            expiryDate: true,
             dueDate: true,
+            paidDate: true,
             reference: true,
             publicComments: true,
             internalNotes: true,
@@ -341,6 +352,7 @@ export async function POST(req: NextRequest) {
             subtotal: true,
             vat: true,
             total: true,
+            balance: true,
             data: true,
             createdAt: true,
             updatedAt: true,
@@ -351,15 +363,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: true,
-            quote: mapQuoteForResponse(current),
+            invoice: mapInvoiceForResponse(current),
             ignored: true,
-            reason: "Incoming quote is older than cloud copy.",
+            reason: "Incoming invoice is older than cloud copy.",
           },
           { status: 200, headers: noStoreHeaders() }
         );
       }
 
-      const updated = await prisma.quote.update({
+      const updated = await prisma.invoice.update({
         where: { id },
         data: {
           number,
@@ -367,8 +379,8 @@ export async function POST(req: NextRequest) {
           customerName,
           customerAddress: toNullableString(body?.customerAddress, 500),
           issueDate,
-          expiryDate: toNullableString(body?.expiryDate, 30),
           dueDate: toNullableString(body?.dueDate, 30),
+          paidDate: toNullableString(body?.paidDate, 30),
           reference: toNullableString(body?.reference, 200),
           publicComments: toNullableString(body?.publicComments, 4000),
           internalNotes: toNullableString(body?.internalNotes, 4000),
@@ -378,6 +390,10 @@ export async function POST(req: NextRequest) {
           subtotal: toDecimalNumber(body?.subtotal, 0),
           vat: toDecimalNumber(body?.vat, 0),
           total: toDecimalNumber(body?.total, 0),
+          balance:
+            body?.balance === undefined || body?.balance === null || body?.balance === ""
+              ? null
+              : toDecimalNumber(body?.balance, 0),
           data: body ?? null,
           deletedAt: body?.deletedAt ? new Date(body.deletedAt) : null,
         },
@@ -388,8 +404,8 @@ export async function POST(req: NextRequest) {
           customerName: true,
           customerAddress: true,
           issueDate: true,
-          expiryDate: true,
           dueDate: true,
+          paidDate: true,
           reference: true,
           publicComments: true,
           internalNotes: true,
@@ -399,6 +415,7 @@ export async function POST(req: NextRequest) {
           subtotal: true,
           vat: true,
           total: true,
+          balance: true,
           data: true,
           createdAt: true,
           updatedAt: true,
@@ -409,13 +426,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: true,
-          quote: mapQuoteForResponse(updated),
+          invoice: mapInvoiceForResponse(updated),
         },
         { status: 200, headers: noStoreHeaders() }
       );
     }
 
-    const created = await prisma.quote.create({
+    const created = await prisma.invoice.create({
       data: {
         id,
         userId: auth.userId,
@@ -425,8 +442,8 @@ export async function POST(req: NextRequest) {
         customerName,
         customerAddress: toNullableString(body?.customerAddress, 500),
         issueDate,
-        expiryDate: toNullableString(body?.expiryDate, 30),
         dueDate: toNullableString(body?.dueDate, 30),
+        paidDate: toNullableString(body?.paidDate, 30),
         reference: toNullableString(body?.reference, 200),
         publicComments: toNullableString(body?.publicComments, 4000),
         internalNotes: toNullableString(body?.internalNotes, 4000),
@@ -436,6 +453,10 @@ export async function POST(req: NextRequest) {
         subtotal: toDecimalNumber(body?.subtotal, 0),
         vat: toDecimalNumber(body?.vat, 0),
         total: toDecimalNumber(body?.total, 0),
+        balance:
+          body?.balance === undefined || body?.balance === null || body?.balance === ""
+            ? null
+            : toDecimalNumber(body?.balance, 0),
         data: body ?? null,
         deletedAt: body?.deletedAt ? new Date(body.deletedAt) : null,
       },
@@ -446,8 +467,8 @@ export async function POST(req: NextRequest) {
         customerName: true,
         customerAddress: true,
         issueDate: true,
-        expiryDate: true,
         dueDate: true,
+        paidDate: true,
         reference: true,
         publicComments: true,
         internalNotes: true,
@@ -457,6 +478,7 @@ export async function POST(req: NextRequest) {
         subtotal: true,
         vat: true,
         total: true,
+        balance: true,
         data: true,
         createdAt: true,
         updatedAt: true,
@@ -467,12 +489,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        quote: mapQuoteForResponse(created),
+        invoice: mapInvoiceForResponse(created),
       },
       { status: 201, headers: noStoreHeaders() }
     );
   } catch (err: any) {
-    console.error("[api/quotes][POST] failed:", err);
-    return jsonError(err?.message || "Failed to save quote.", 500);
+    console.error("[api/invoices][POST] failed:", err);
+    return jsonError(err?.message || "Failed to save invoice.", 500);
   }
 }

@@ -16,6 +16,18 @@ async function requireUser(req: NextRequest) {
   }
 }
 
+async function requireOwnedCompany(userId: string, companyId: string) {
+  return prisma.company.findFirst({
+    where: {
+      id: companyId,
+      userId,
+      deletedAt: null,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+}
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
@@ -29,13 +41,29 @@ export async function PUT(
       { status: 401 }
     );
   }
-  
 
   const body = await req.json();
   const resolvedParams = await Promise.resolve(params);
 
+  const companyId = String(body?.companyId ?? "").trim();
   const id = String(resolvedParams?.id ?? "").trim();
   const name = String(body?.name ?? "").trim();
+
+  if (!companyId) {
+    return NextResponse.json(
+      { success: false, error: "companyId is required." },
+      { status: 400 }
+    );
+  }
+
+  const company = await requireOwnedCompany(session.userId, companyId);
+
+  if (!company) {
+    return NextResponse.json(
+      { success: false, error: "Company not found or access denied." },
+      { status: 403 }
+    );
+  }
 
   if (!id) {
     return NextResponse.json(
@@ -55,6 +83,7 @@ export async function PUT(
     where: {
       id,
       userId: session.userId,
+      companyId,
     },
   });
 

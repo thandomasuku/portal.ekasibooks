@@ -41,7 +41,6 @@ model Session {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
 
-  // optional diagnostics
   userAgent String @default("")
   ip        String @default("")
 
@@ -55,11 +54,11 @@ model Session {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
   passwordHash String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   lastLoginAt  DateTime?
 
   fullName    String?
@@ -69,19 +68,97 @@ model User {
   emailVerifiedAt DateTime?
   verifySentAt    DateTime?
 
-  otpCodes     OtpCode[]
-  payments     Payment[]
-  subscription Subscription?
-  entitlement  Entitlement?
-  sessions     Session[]
-  quotes       Quote[]
-
+  otpCodes               OtpCode[]
+  payments               Payment[]
+  subscription           Subscription?
+  entitlement            Entitlement?
+  sessions               Session[]
+  companies              Company[]
+  companySettings        CompanySettings[]
+  customers              Customer[]
+  quotes                 Quote[]
+  invoices               Invoice[]
   emailVerificationToken EmailVerificationToken?
+}
+
+model Company {
+  id        String   @id
+  userId    String
+  name      String
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  settings  CompanySettings?
+  customers Customer[]
+  quotes    Quote[]
+  invoices  Invoice[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([userId, deletedAt])
+  @@index([userId, isDefault])
+  @@unique([userId, id])
+}
+
+model CompanySettings {
+  id        String @id @default(cuid())
+  userId    String
+  companyId String @unique
+
+  companyName     String?
+  tradingName     String?
+  registrationNo  String?
+  vatNumber       String?
+  email           String?
+  phone           String?
+  website         String?
+
+  addressLine1    String?
+  addressLine2    String?
+  suburb          String?
+  city            String?
+  province        String?
+  postalCode      String?
+  country         String?
+
+  currency        String?  @default("ZAR")
+  vatRateDefault  Decimal? @db.Decimal(8, 2)
+  quotePrefix     String?
+  invoicePrefix   String?
+  quoteTerms      String?
+  invoiceTerms    String?
+
+  bankName        String?
+  bankAccountName String?
+  bankAccountNo   String?
+  bankBranchCode  String?
+  bankAccountType String?
+
+  logoUrl         String?
+  accentColor     String?
+
+  raw             Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, companyId])
 }
 
 model Customer {
   id           String   @id
   userId       String
+  companyId    String
+
   name         String
   email        String?
   phone        String?
@@ -89,9 +166,112 @@ model Customer {
   city         String?
   companyRegNo String?
   vatNumber    String?
-  updatedAt    DateTime
 
-  createdAt DateTime @default(now())
+  updatedAt    DateTime
+  createdAt    DateTime @default(now())
+  deletedAt    DateTime?
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quotes       Quote[]
+  invoices     Invoice[]
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([companyId, updatedAt])
+  @@index([companyId, deletedAt])
+  @@index([userId, companyId])
+}
+
+model Quote {
+  id String @id
+
+  userId    String
+  companyId String
+
+  number          String
+  customerId      String?
+  customerName    String
+  customerAddress String?
+
+  issueDate  String
+  expiryDate String?
+  dueDate    String?
+
+  reference      String?
+  publicComments String?
+  internalNotes  String?
+
+  currency String   @default("ZAR")
+  status   String   @default("draft")
+  vatRate  Decimal  @db.Decimal(8, 2)
+  subtotal Decimal  @db.Decimal(18, 2)
+  vat      Decimal  @db.Decimal(18, 2)
+  total    Decimal  @db.Decimal(18, 2)
+
+  data Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([companyId, updatedAt])
+  @@index([companyId, deletedAt])
+  @@index([companyId, number])
+  @@index([companyId, customerId])
+  @@index([userId, companyId])
+}
+
+model Invoice {
+  id String @id
+
+  userId    String
+  companyId String
+
+  number          String
+  customerId      String?
+  customerName    String
+  customerAddress String?
+
+  issueDate  String
+  dueDate    String?
+  paidDate   String?
+
+  reference      String?
+  publicComments String?
+  internalNotes  String?
+
+  currency String   @default("ZAR")
+  status   String   @default("draft")
+  vatRate  Decimal  @db.Decimal(8, 2)
+  subtotal Decimal  @db.Decimal(18, 2)
+  vat      Decimal  @db.Decimal(18, 2)
+  total    Decimal  @db.Decimal(18, 2)
+  balance  Decimal? @db.Decimal(18, 2)
+
+  data Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([companyId, updatedAt])
+  @@index([companyId, deletedAt])
+  @@index([companyId, number])
+  @@index([companyId, customerId])
+  @@index([userId, companyId])
 }
 
 model EmailVerificationToken {
@@ -108,12 +288,12 @@ model EmailVerificationToken {
 }
 
 model OtpCode {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   email     String
   code      String
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   user   User?   @relation(fields: [userId], references: [id])
   userId String?
@@ -176,12 +356,6 @@ model Entitlement {
   tier   EntitlementTier   @default(free)
   status EntitlementStatus @default(active)
 
-  // Example future shape:
-  // {
-  //   "cloudSync": true,
-  //   "maxActiveSessions": 2,
-  //   "maxCompanies": 3
-  // }
   features Json?
 
   updatedAt DateTime @updatedAt
@@ -191,48 +365,10 @@ model Entitlement {
   @@index([status])
 }
 
-model Quote {
-  id String @id
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  number          String
-  customerId      String?
-  customerName    String
-  customerAddress String?
-
-  issueDate  String
-  expiryDate String?
-  dueDate    String?
-
-  reference      String?
-  publicComments String?
-  internalNotes  String?
-
-  currency String   @default("ZAR")
-  status   String   @default("draft")
-  vatRate  Decimal  @db.Decimal(8, 2)
-  subtotal Decimal  @db.Decimal(18, 2)
-  vat      Decimal  @db.Decimal(18, 2)
-  total    Decimal  @db.Decimal(18, 2)
-
-  data Json?
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-
-  @@index([userId])
-  @@index([userId, updatedAt])
-  @@index([userId, deletedAt])
-  @@index([userId, number])
-}
-
 model WebhookEvent {
-  id        String  @id @default(cuid())
-  provider  String  @default("paystack")
-  eventId   String  @unique
+  id        String @id @default(cuid())
+  provider  String @default("paystack")
+  eventId   String @unique
   eventType String
   reference String?
   raw       Json?

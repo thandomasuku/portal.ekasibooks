@@ -16,6 +16,22 @@ async function requireUser(req: NextRequest) {
   }
 }
 
+async function requireOwnedCompany(userId: string, companyId: string) {
+  const company = await prisma.company.findFirst({
+    where: {
+      id: companyId,
+      userId,
+      deletedAt: null,
+      isActive: true,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return company;
+}
+
 export async function GET(req: NextRequest) {
   const session = await requireUser(req);
 
@@ -26,12 +42,33 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const companyId = String(
+    req.nextUrl.searchParams.get("companyId") ?? ""
+  ).trim();
+
+  if (!companyId) {
+    return NextResponse.json(
+      { success: false, error: "companyId is required." },
+      { status: 400 }
+    );
+  }
+
+  const company = await requireOwnedCompany(session.userId, companyId);
+
+  if (!company) {
+    return NextResponse.json(
+      { success: false, error: "Company not found or access denied." },
+      { status: 403 }
+    );
+  }
+
   const since = req.nextUrl.searchParams.get("since");
   const limitRaw = Number(req.nextUrl.searchParams.get("limit") || 50);
   const limit = Math.max(1, Math.min(limitRaw || 50, 250));
 
   const where: any = {
     userId: session.userId,
+    companyId,
   };
 
   if (since) {
@@ -65,8 +102,25 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
+  const companyId = String(body?.companyId ?? "").trim();
   const id = String(body?.id ?? "").trim();
   const name = String(body?.name ?? "").trim();
+
+  if (!companyId) {
+    return NextResponse.json(
+      { success: false, error: "companyId is required." },
+      { status: 400 }
+    );
+  }
+
+  const company = await requireOwnedCompany(session.userId, companyId);
+
+  if (!company) {
+    return NextResponse.json(
+      { success: false, error: "Company not found or access denied." },
+      { status: 403 }
+    );
+  }
 
   if (!id) {
     return NextResponse.json(
@@ -91,6 +145,7 @@ export async function POST(req: NextRequest) {
     where: {
       id,
       userId: session.userId,
+      companyId,
     },
   });
 
@@ -116,6 +171,7 @@ export async function POST(req: NextRequest) {
     data: {
       id,
       userId: session.userId,
+      companyId,
       name,
       email: body?.email ?? null,
       phone: body?.phone ?? null,

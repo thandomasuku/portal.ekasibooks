@@ -119,15 +119,15 @@ async function requireOwnedCompany(userId: string, companyId: string) {
   });
 }
 
-function mapQuoteForResponse(row: {
+function mapInvoiceForResponse(row: {
   id: string;
   number: string;
   customerId: string | null;
   customerName: string;
   customerAddress: string | null;
   issueDate: string;
-  expiryDate: string | null;
   dueDate: string | null;
+  paidDate: string | null;
   reference: string | null;
   publicComments: string | null;
   internalNotes: string | null;
@@ -137,6 +137,7 @@ function mapQuoteForResponse(row: {
   subtotal: any;
   vat: any;
   total: any;
+  balance: any;
   data: any;
   createdAt: Date;
   updatedAt: Date;
@@ -149,8 +150,8 @@ function mapQuoteForResponse(row: {
     customerName: row.customerName,
     customerAddress: row.customerAddress,
     issueDate: row.issueDate,
-    expiryDate: row.expiryDate,
     dueDate: row.dueDate,
+    paidDate: row.paidDate,
     reference: row.reference,
     publicComments: row.publicComments,
     internalNotes: row.internalNotes,
@@ -160,6 +161,7 @@ function mapQuoteForResponse(row: {
     subtotal: Number(row.subtotal),
     vat: Number(row.vat),
     total: Number(row.total),
+    balance: row.balance == null ? null : Number(row.balance),
     data: row.data,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -190,7 +192,7 @@ export async function GET(
 
     const { id } = await ctx.params;
 
-    const row = await prisma.quote.findFirst({
+    const row = await prisma.invoice.findFirst({
       where: {
         id,
         userId: auth.userId,
@@ -203,8 +205,8 @@ export async function GET(
         customerName: true,
         customerAddress: true,
         issueDate: true,
-        expiryDate: true,
         dueDate: true,
+        paidDate: true,
         reference: true,
         publicComments: true,
         internalNotes: true,
@@ -214,6 +216,7 @@ export async function GET(
         subtotal: true,
         vat: true,
         total: true,
+        balance: true,
         data: true,
         createdAt: true,
         updatedAt: true,
@@ -222,19 +225,19 @@ export async function GET(
     });
 
     if (!row) {
-      return jsonError("Quote not found.", 404);
+      return jsonError("Invoice not found.", 404);
     }
 
     return NextResponse.json(
       {
         success: true,
-        quote: mapQuoteForResponse(row),
+        invoice: mapInvoiceForResponse(row),
       },
       { status: 200, headers: noStoreHeaders() }
     );
   } catch (err) {
-    console.error("[api/quotes/:id][GET] failed:", err);
-    return jsonError("Failed to load quote.", 500);
+    console.error("[api/invoices/:id][GET] failed:", err);
+    return jsonError("Failed to load invoice.", 500);
   }
 }
 
@@ -263,7 +266,7 @@ export async function PUT(
 
     const { id } = await ctx.params;
 
-    const existing = await prisma.quote.findFirst({
+    const existing = await prisma.invoice.findFirst({
       where: {
         id,
         userId: auth.userId,
@@ -276,13 +279,13 @@ export async function PUT(
     });
 
     if (!existing) {
-      return jsonError("Quote not found.", 404);
+      return jsonError("Invoice not found.", 404);
     }
 
     const incomingUpdatedAt = parseDateParam(body?.updatedAt ?? null);
 
     if (incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
-      const current = await prisma.quote.findUniqueOrThrow({
+      const current = await prisma.invoice.findUniqueOrThrow({
         where: { id },
         select: {
           id: true,
@@ -291,8 +294,8 @@ export async function PUT(
           customerName: true,
           customerAddress: true,
           issueDate: true,
-          expiryDate: true,
           dueDate: true,
+          paidDate: true,
           reference: true,
           publicComments: true,
           internalNotes: true,
@@ -302,6 +305,7 @@ export async function PUT(
           subtotal: true,
           vat: true,
           total: true,
+          balance: true,
           data: true,
           createdAt: true,
           updatedAt: true,
@@ -312,15 +316,15 @@ export async function PUT(
       return NextResponse.json(
         {
           success: true,
-          quote: mapQuoteForResponse(current),
+          invoice: mapInvoiceForResponse(current),
           ignored: true,
-          reason: "Incoming quote is older than cloud copy.",
+          reason: "Incoming invoice is older than cloud copy.",
         },
         { status: 200, headers: noStoreHeaders() }
       );
     }
 
-    const updated = await prisma.quote.update({
+    const updated = await prisma.invoice.update({
       where: { id },
       data: {
         number: toNullableString(body?.number, 100) ?? undefined,
@@ -333,8 +337,8 @@ export async function PUT(
           body?.customerAddress === undefined ? undefined : toNullableString(body?.customerAddress, 500),
         issueDate:
           body?.issueDate === undefined ? undefined : toNullableString(body?.issueDate, 30) ?? undefined,
-        expiryDate: body?.expiryDate === undefined ? undefined : toNullableString(body?.expiryDate, 30),
         dueDate: body?.dueDate === undefined ? undefined : toNullableString(body?.dueDate, 30),
+        paidDate: body?.paidDate === undefined ? undefined : toNullableString(body?.paidDate, 30),
         reference: body?.reference === undefined ? undefined : toNullableString(body?.reference, 200),
         publicComments:
           body?.publicComments === undefined ? undefined : toNullableString(body?.publicComments, 4000),
@@ -346,6 +350,12 @@ export async function PUT(
         subtotal: body?.subtotal === undefined ? undefined : toDecimalNumber(body?.subtotal, 0),
         vat: body?.vat === undefined ? undefined : toDecimalNumber(body?.vat, 0),
         total: body?.total === undefined ? undefined : toDecimalNumber(body?.total, 0),
+        balance:
+          body?.balance === undefined
+            ? undefined
+            : body?.balance === null || body?.balance === ""
+            ? null
+            : toDecimalNumber(body?.balance, 0),
         data: body ?? undefined,
         deletedAt:
           body?.deletedAt === undefined
@@ -361,8 +371,8 @@ export async function PUT(
         customerName: true,
         customerAddress: true,
         issueDate: true,
-        expiryDate: true,
         dueDate: true,
+        paidDate: true,
         reference: true,
         publicComments: true,
         internalNotes: true,
@@ -372,6 +382,7 @@ export async function PUT(
         subtotal: true,
         vat: true,
         total: true,
+        balance: true,
         data: true,
         createdAt: true,
         updatedAt: true,
@@ -382,13 +393,13 @@ export async function PUT(
     return NextResponse.json(
       {
         success: true,
-        quote: mapQuoteForResponse(updated),
+        invoice: mapInvoiceForResponse(updated),
       },
       { status: 200, headers: noStoreHeaders() }
     );
   } catch (err) {
-    console.error("[api/quotes/:id][PUT] failed:", err);
-    return jsonError("Failed to update quote.", 500);
+    console.error("[api/invoices/:id][PUT] failed:", err);
+    return jsonError("Failed to update invoice.", 500);
   }
 }
 
@@ -415,7 +426,7 @@ export async function DELETE(
 
     const { id } = await ctx.params;
 
-    const existing = await prisma.quote.findFirst({
+    const existing = await prisma.invoice.findFirst({
       where: {
         id,
         userId: auth.userId,
@@ -427,10 +438,10 @@ export async function DELETE(
     });
 
     if (!existing) {
-      return jsonError("Quote not found.", 404);
+      return jsonError("Invoice not found.", 404);
     }
 
-    const deleted = await prisma.quote.update({
+    const deleted = await prisma.invoice.update({
       where: { id },
       data: {
         deletedAt: new Date(),
@@ -442,8 +453,8 @@ export async function DELETE(
         customerName: true,
         customerAddress: true,
         issueDate: true,
-        expiryDate: true,
         dueDate: true,
+        paidDate: true,
         reference: true,
         publicComments: true,
         internalNotes: true,
@@ -453,6 +464,7 @@ export async function DELETE(
         subtotal: true,
         vat: true,
         total: true,
+        balance: true,
         data: true,
         createdAt: true,
         updatedAt: true,
@@ -463,12 +475,12 @@ export async function DELETE(
     return NextResponse.json(
       {
         success: true,
-        quote: mapQuoteForResponse(deleted),
+        invoice: mapInvoiceForResponse(deleted),
       },
       { status: 200, headers: noStoreHeaders() }
     );
   } catch (err) {
-    console.error("[api/quotes/:id][DELETE] failed:", err);
-    return jsonError("Failed to delete quote.", 500);
+    console.error("[api/invoices/:id][DELETE] failed:", err);
+    return jsonError("Failed to delete invoice.", 500);
   }
 }
