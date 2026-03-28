@@ -106,17 +106,18 @@ export async function PUT(
 
   const customer = await prisma.customer.update({
     where: { id },
-    data: {
-      name,
-      email: body?.email ?? null,
-      phone: body?.phone ?? null,
-      address: body?.address ?? null,
-      city: body?.city ?? null,
-      companyRegNo: body?.companyRegNo ?? null,
-      vatNumber: body?.vatNumber ?? null,
-      updatedAt,
-      deletedAt, // ✅ THIS IS THE FIX
-    },
+   data: {
+  name,
+  email: body?.email ?? null,
+  phone: body?.phone ?? null,
+  address: body?.address ?? null,
+  city: body?.city ?? null,
+  companyRegNo: body?.companyRegNo ?? null,
+  vatNumber: body?.vatNumber ?? null,
+  status: body?.status ?? "active", 
+  updatedAt,
+  deletedAt,
+},
   });
 
   return NextResponse.json({ success: true, customer });

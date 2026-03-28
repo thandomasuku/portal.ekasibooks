@@ -156,39 +156,41 @@ export async function POST(req: NextRequest) {
 
   if (existing) {
     const customer = await prisma.customer.update({
-      where: { id },
-      data: {
-        name,
-        email: body?.email ?? null,
-        phone: body?.phone ?? null,
-        address: body?.address ?? null,
-        city: body?.city ?? null,
-        companyRegNo: body?.companyRegNo ?? null,
-        vatNumber: body?.vatNumber ?? null,
-        updatedAt,
-        deletedAt,
-      },
-    });
+  where: { id },
+  data: {
+    name,
+    email: body?.email ?? null,
+    phone: body?.phone ?? null,
+    address: body?.address ?? null,
+    city: body?.city ?? null,
+    companyRegNo: body?.companyRegNo ?? null,
+    vatNumber: body?.vatNumber ?? null,
+    status: body?.status ?? "active", // 🔥 ADD THIS
+    updatedAt,
+    deletedAt,
+  },
+});
 
     return NextResponse.json({ success: true, customer });
   }
 
-  const customer = await prisma.customer.create({
-    data: {
-      id,
-      userId: session.userId,
-      companyId,
-      name,
-      email: body?.email ?? null,
-      phone: body?.phone ?? null,
-      address: body?.address ?? null,
-      city: body?.city ?? null,
-      companyRegNo: body?.companyRegNo ?? null,
-      vatNumber: body?.vatNumber ?? null,
-      updatedAt,
-      deletedAt,
-    },
-  });
+ const customer = await prisma.customer.create({
+  data: {
+    id,
+    userId: session.userId,
+    companyId,
+    name,
+    email: body?.email ?? null,
+    phone: body?.phone ?? null,
+    address: body?.address ?? null,
+    city: body?.city ?? null,
+    companyRegNo: body?.companyRegNo ?? null,
+    vatNumber: body?.vatNumber ?? null,
+    status: body?.status ?? "active", // 🔥 ADD THIS
+    updatedAt,
+    deletedAt,
+  },
+});
 
   return NextResponse.json({ success: true, customer });
 }

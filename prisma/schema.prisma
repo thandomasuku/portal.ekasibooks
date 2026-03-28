@@ -167,6 +167,8 @@ model Customer {
   companyRegNo String?
   vatNumber    String?
 
+  status       String   @default("active")
+
   updatedAt    DateTime
   createdAt    DateTime @default(now())
   deletedAt    DateTime?
@@ -175,12 +177,6 @@ model Customer {
   company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   quotes       Quote[]
   invoices     Invoice[]
-
-  @@index([userId])
-  @@index([companyId])
-  @@index([companyId, updatedAt])
-  @@index([companyId, deletedAt])
-  @@index([userId, companyId])
 }
 
 model Quote {
