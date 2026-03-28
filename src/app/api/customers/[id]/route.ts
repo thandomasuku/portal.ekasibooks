@@ -99,6 +99,11 @@ export async function PUT(
       ? new Date(body.updatedAt)
       : new Date();
 
+  const deletedAt =
+    body?.deletedAt && !Number.isNaN(new Date(body.deletedAt).getTime())
+      ? new Date(body.deletedAt)
+      : null;
+
   const customer = await prisma.customer.update({
     where: { id },
     data: {
@@ -110,6 +115,7 @@ export async function PUT(
       companyRegNo: body?.companyRegNo ?? null,
       vatNumber: body?.vatNumber ?? null,
       updatedAt,
+      deletedAt, // ✅ THIS IS THE FIX
     },
   });
 

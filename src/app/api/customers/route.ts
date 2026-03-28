@@ -141,6 +141,11 @@ export async function POST(req: NextRequest) {
       ? new Date(body.updatedAt)
       : new Date();
 
+  const deletedAt =
+    body?.deletedAt && !Number.isNaN(new Date(body.deletedAt).getTime())
+      ? new Date(body.deletedAt)
+      : null;
+
   const existing = await prisma.customer.findFirst({
     where: {
       id,
@@ -161,6 +166,7 @@ export async function POST(req: NextRequest) {
         companyRegNo: body?.companyRegNo ?? null,
         vatNumber: body?.vatNumber ?? null,
         updatedAt,
+        deletedAt,
       },
     });
 
@@ -180,6 +186,7 @@ export async function POST(req: NextRequest) {
       companyRegNo: body?.companyRegNo ?? null,
       vatNumber: body?.vatNumber ?? null,
       updatedAt,
+      deletedAt,
     },
   });
 
