@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { trackEvent } from "@/lib/analytics";
 
 type Msg = { type: "success" | "error" | "info"; text: string } | null;
 
@@ -66,10 +65,10 @@ export default function RegisterPage() {
     !m
       ? ""
       : m.type === "success"
-        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-        : m.type === "error"
-          ? "bg-red-50 border-red-200 text-red-800"
-          : "bg-sky-50 border-sky-200 text-sky-800";
+      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+      : m.type === "error"
+      ? "bg-red-50 border-red-200 text-red-800"
+      : "bg-sky-50 border-sky-200 text-sky-800";
 
   async function register() {
     if (loading) return;
@@ -84,13 +83,6 @@ export default function RegisterPage() {
     if (!PASSWORD_REGEX.test(password)) return showError(PASSWORD_RULE);
     if (password !== confirm) return showError("Passwords do not match.");
     if (!agree) return showError("Please accept the Terms & Privacy Policy.");
-
-    trackEvent("portal_register_attempt", {
-      plan: planParam,
-      has_next: Boolean(nextUrl),
-      next_path: nextUrl,
-      remember,
-    });
 
     setLoading(true);
 
@@ -108,25 +100,11 @@ export default function RegisterPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        trackEvent("portal_register_failed", {
-          reason: data?.error || "registration_failed",
-          plan: planParam,
-          has_next: Boolean(nextUrl),
-        });
-        throw new Error(data?.error || "Registration failed");
-      }
+      if (!res.ok) throw new Error(data?.error || "Registration failed");
 
       setCreated(true);
       setEmailSent(Boolean(data?.emailSent));
       setDevVerifyUrl(typeof data?.dev_verifyUrl === "string" ? data.dev_verifyUrl : null);
-
-      trackEvent("account_created", {
-        plan: planParam,
-        email_sent: Boolean(data?.emailSent),
-        has_next: Boolean(nextUrl),
-        next_path: nextUrl,
-      });
 
       if (data?.emailSent) {
         showSuccess(
@@ -149,11 +127,6 @@ export default function RegisterPage() {
     const e = email.trim().toLowerCase();
     if (!e || !e.includes("@")) return showError("Please enter a valid email first.");
 
-    trackEvent("portal_resend_verification_attempt", {
-      plan: planParam,
-      email_present: Boolean(e),
-    });
-
     setResendLoading(true);
     setMsg(null);
     setDevVerifyUrl(null);
@@ -165,22 +138,10 @@ export default function RegisterPage() {
         body: JSON.stringify({ email: e }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        trackEvent("portal_resend_verification_failed", {
-          reason: data?.error || "resend_failed",
-          plan: planParam,
-        });
-        throw new Error(data?.error || "Failed to resend verification email");
-      }
+      if (!res.ok) throw new Error(data?.error || "Failed to resend verification email");
 
       setEmailSent(Boolean(data?.emailSent));
       setDevVerifyUrl(typeof data?.dev_verifyUrl === "string" ? data.dev_verifyUrl : null);
-
-      trackEvent("portal_resend_verification_success", {
-        plan: planParam,
-        email_sent: Boolean(data?.emailSent),
-      });
-
       showSuccess("Verification email sent. Please check your inbox (and spam/promotions).");
     } catch (e: any) {
       showError(e?.message || "Failed to resend verification email");
@@ -255,14 +216,7 @@ export default function RegisterPage() {
                     <p className="text-sm text-white/90">
                       Already have an account?{" "}
                       <button
-                        onClick={() => {
-                          trackEvent("portal_login_redirect_click", {
-                            source: "register_side_panel",
-                            plan: planParam,
-                            next_path: nextUrl,
-                          });
-                          router.push(loginHref);
-                        }}
+                        onClick={() => router.push(loginHref)}
                         className="ml-1 inline-flex items-center font-semibold underline underline-offset-4 hover:text-white"
                         type="button"
                       >
@@ -312,10 +266,6 @@ export default function RegisterPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            trackEvent("portal_go_to_login_after_register", {
-                              plan: planParam,
-                              next_path: nextUrl,
-                            });
                             const qs = new URLSearchParams();
                             qs.set("email", email.trim().toLowerCase());
                             qs.set("registered", "1");
@@ -430,14 +380,7 @@ export default function RegisterPage() {
                   </button>
 
                   <button
-                    onClick={() => {
-                      trackEvent("portal_login_redirect_click", {
-                        source: "register_bottom_button",
-                        plan: planParam,
-                        next_path: nextUrl,
-                      });
-                      router.push(loginHref);
-                    }}
+                    onClick={() => router.push(loginHref)}
                     disabled={loading || created}
                     className="w-full rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
                     type="button"

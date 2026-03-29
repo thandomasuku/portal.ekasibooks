@@ -1,58 +1,58 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { trackEvent } from "@/lib/analytics";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Msg = { type: "success" | "error" | "info"; text: string } | null;
 
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-const PASSWORD_RULE =
-  "Password must be at least 8 characters long and include a capital letter, a number, and a special character";
-
-export default function RegisterPage() {
+export default function LoginClient() {
   const router = useRouter();
-  const sp = useSearchParams();
+  const params = useSearchParams();
 
-  const nextUrl = useMemo(() => {
-    const next = sp.get("next");
-    return next && next.startsWith("/") ? next : "/billing";
-  }, [sp]);
+  const isProd = process.env.NODE_ENV === "production";
 
-  const planParam = useMemo(() => {
-    const raw = String(sp.get("plan") ?? "").toLowerCase().trim();
-    if (raw === "growth") return "growth";
-    if (raw === "pro") return "pro";
-    if (raw === "trial") return "trial";
-    return "starter";
-  }, [sp]);
-
-  const loginHref = useMemo(() => {
-    const qs = new URLSearchParams();
-    qs.set("next", nextUrl);
-    if (planParam) qs.set("plan", planParam);
-    return `/login?${qs.toString()}`;
-  }, [nextUrl, planParam]);
-
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [email, setEmail] = useState(isProd ? "" : "test@example.com");
+  const [password, setPassword] = useState(isProd ? "" : "Password@123");
   const [remember, setRemember] = useState(true);
 
-  const [agree, setAgree] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<Msg>(null);
-  const [created, setCreated] = useState(false);
-  const [emailSent, setEmailSent] = useState<boolean | null>(null);
-  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [msg, setMsg] = useState<Msg>(null);
+
+  const [needsVerify, setNeedsVerify] = useState(false);
+
+  // Show dev OTP (if API returns devCode in non-prod)
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+
+  const isBusy = pwLoading || otpLoading;
 
   const emailOk = useMemo(() => {
     const e = email.trim();
     return e.length >= 5 && e.includes("@") && e.includes(".");
   }, [email]);
+
+  const nextUrl = useMemo(() => {
+    const next = params.get("next");
+    return next && next.startsWith("/") ? next : "/dashboard";
+  }, [params]);
+
+  const planParam = useMemo(() => {
+    const raw = String(params.get("plan") ?? "").toLowerCase().trim();
+    if (raw === "growth") return "growth";
+    if (raw === "pro") return "pro";
+    if (raw === "trial") return "trial";
+    if (raw === "starter") return "starter";
+    return "";
+  }, [params]);
+
+  const registerHref = useMemo(() => {
+    const qs = new URLSearchParams();
+    qs.set("next", nextUrl);
+    if (planParam) qs.set("plan", planParam);
+    return `/register?${qs.toString()}`;
+  }, [nextUrl, planParam]);
 
   function showError(text: string) {
     setMsg({ type: "error", text });
@@ -62,40 +62,22 @@ export default function RegisterPage() {
     setMsg({ type: "success", text });
   }
 
-  const msgClass = (m: Msg) =>
-    !m
-      ? ""
-      : m.type === "success"
-        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-        : m.type === "error"
-          ? "bg-red-50 border-red-200 text-red-800"
-          : "bg-sky-50 border-sky-200 text-sky-800";
+  function showInfo(text: string) {
+    setMsg({ type: "info", text });
+  }
 
-  async function register() {
-    if (loading) return;
-
-    setMsg(null);
-    setDevVerifyUrl(null);
-    setEmailSent(null);
-
-    if (!name.trim()) return showError("Please enter your full name.");
+  async function loginWithPassword() {
+    if (isBusy) return;
     if (!emailOk) return showError("Please enter a valid email address.");
-    if (!password.trim()) return showError("Password is required.");
-    if (!PASSWORD_REGEX.test(password)) return showError(PASSWORD_RULE);
-    if (password !== confirm) return showError("Passwords do not match.");
-    if (!agree) return showError("Please accept the Terms & Privacy Policy.");
+    if (!password.trim()) return showError("Please enter your password.");
 
-    trackEvent("portal_register_attempt", {
-      plan: planParam,
-      has_next: Boolean(nextUrl),
-      next_path: nextUrl,
-      remember,
-    });
-
-    setLoading(true);
+    setPwLoading(true);
+    setMsg(null);
+    setDevOtp(null);
+    setNeedsVerify(false);
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -103,91 +85,116 @@ export default function RegisterPage() {
           email: email.trim().toLowerCase(),
           password,
           remember,
-          name: name.trim() || undefined,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        trackEvent("portal_register_failed", {
-          reason: data?.error || "registration_failed",
-          plan: planParam,
-          has_next: Boolean(nextUrl),
-        });
-        throw new Error(data?.error || "Registration failed");
+        if (res.status === 403 && (data as any)?.code === "EMAIL_NOT_VERIFIED") {
+          setNeedsVerify(true);
+          throw new Error((data as any)?.error || "Please verify your email before logging in.");
+        }
+        throw new Error((data as any)?.error || "Login failed");
       }
 
-      setCreated(true);
-      setEmailSent(Boolean(data?.emailSent));
-      setDevVerifyUrl(typeof data?.dev_verifyUrl === "string" ? data.dev_verifyUrl : null);
+      showSuccess("Login successful. Redirecting...");
+      router.replace(nextUrl);
+    } catch (e: any) {
+      showError(e?.message || "Login failed");
+    } finally {
+      setPwLoading(false);
+    }
+  }
 
-      trackEvent("account_created", {
-        plan: planParam,
-        email_sent: Boolean(data?.emailSent),
-        has_next: Boolean(nextUrl),
-        next_path: nextUrl,
+  async function requestOtp() {
+    if (isBusy) return;
+    if (!emailOk) return showError("Please enter a valid email address.");
+
+    setOtpLoading(true);
+    setMsg(null);
+    setDevOtp(null);
+    setNeedsVerify(false);
+
+    showInfo(
+      "Requesting OTP… delivery can take up to 1–2 minutes on some email providers. Please also check spam/promotions."
+    );
+
+    try {
+      const res = await fetch("/api/auth/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
 
-      if (data?.emailSent) {
-        showSuccess(
-          "Account created. We sent you a verification email — please verify your email, then log in."
-        );
-      } else {
-        showSuccess(
-          "Account created. Please verify your email before logging in. If you don’t receive an email, click ‘Resend verification email’."
-        );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 403 && (data as any)?.code === "EMAIL_NOT_VERIFIED") {
+          setNeedsVerify(true);
+          throw new Error((data as any)?.error || "Please verify your email before using OTP login.");
+        }
+        throw new Error((data as any)?.error || "OTP request failed");
       }
+
+      if (!isProd && (data as any)?.devCode) {
+        setDevOtp(String((data as any).devCode));
+      }
+
+      showSuccess(
+        "OTP requested. If it doesn’t arrive within 2 minutes, check spam/promotions or tap Resend on the next screen."
+      );
+
+      const qs = new URLSearchParams({
+        email: email.trim().toLowerCase(),
+        remember: remember ? "1" : "0",
+        next: nextUrl,
+      });
+
+      if (planParam) qs.set("plan", planParam);
+
+      router.push(`/otp?${qs.toString()}`);
     } catch (e: any) {
-      showError(e?.message || "Registration failed");
+      showError(e?.message || "OTP request failed");
     } finally {
-      setLoading(false);
+      setOtpLoading(false);
     }
   }
 
   async function resendVerification() {
     if (resendLoading) return;
-    const e = email.trim().toLowerCase();
-    if (!e || !e.includes("@")) return showError("Please enter a valid email first.");
-
-    trackEvent("portal_resend_verification_attempt", {
-      plan: planParam,
-      email_present: Boolean(e),
-    });
+    if (!emailOk) return showError("Please enter a valid email address first.");
 
     setResendLoading(true);
-    setMsg(null);
-    setDevVerifyUrl(null);
-
     try {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: e }),
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        trackEvent("portal_resend_verification_failed", {
-          reason: data?.error || "resend_failed",
-          plan: planParam,
-        });
-        throw new Error(data?.error || "Failed to resend verification email");
-      }
-
-      setEmailSent(Boolean(data?.emailSent));
-      setDevVerifyUrl(typeof data?.dev_verifyUrl === "string" ? data.dev_verifyUrl : null);
-
-      trackEvent("portal_resend_verification_success", {
-        plan: planParam,
-        email_sent: Boolean(data?.emailSent),
-      });
+      if (!res.ok) throw new Error((data as any)?.error || "Resend failed");
 
       showSuccess("Verification email sent. Please check your inbox (and spam/promotions).");
+      setNeedsVerify(false);
     } catch (e: any) {
-      showError(e?.message || "Failed to resend verification email");
+      showError(e?.message || "Resend failed");
     } finally {
       setResendLoading(false);
     }
   }
+
+  function handleRegisterClick() {
+    router.push(registerHref);
+  }
+
+  const msgClass = (m: Msg) =>
+    !m
+      ? ""
+      : m.type === "success"
+      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+      : m.type === "error"
+      ? "bg-red-50 border-red-200 text-red-800"
+      : "bg-sky-50 border-sky-200 text-sky-800";
 
   return (
     <main className="bg-[#f6f9fb]">
@@ -201,22 +208,14 @@ export default function RegisterPage() {
         "
       >
         <div className="mx-auto w-full max-w-6xl px-4 pt-4 pb-6 sm:px-6 sm:pt-6 sm:pb-8 lg:px-8 lg:py-10">
-          <div className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_60px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
+          <div className="rounded-3xl bg-white shadow-[0_18px_60px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-2">
-              {/* LEFT brand panel */}
               <div className="relative bg-gradient-to-br from-[#0b2a3a] via-[#0e3a4f] to-[#215D63] p-6 text-white sm:p-8 lg:p-12">
-                <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+                <div className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-black/10 blur-3xl" />
 
                 <div className="relative">
-                  <div className="flex justify-center">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">
-                      <span className="h-2 w-2 rounded-full bg-emerald-300" />
-                      Create your account
-                    </div>
-                  </div>
-
-                  <div className="mb-6 mt-5 flex justify-center">
+                  <div className="mb-6 flex justify-center">
                     <Image
                       src="/logo/ekasibooks.png"
                       alt="eKasiBooks"
@@ -227,132 +226,71 @@ export default function RegisterPage() {
                     />
                   </div>
 
-                  <h1 className="text-center text-3xl font-semibold tracking-tight lg:text-4xl">
-                    Join eKasiBooks
+                  <div className="flex justify-center">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">
+                      <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                      Secure portal access
+                    </div>
+                  </div>
+
+                  <h1 className="mt-5 text-center text-3xl font-semibold tracking-tight lg:text-4xl">
+                    eKasiBooks Portal
                   </h1>
 
                   <p className="mt-3 text-center leading-relaxed text-white/85">
-                    Set your password once, then sign in with password or OTP whenever
-                    you want.
+                    Sign in to manage invoices, customers, and subscription access — with
+                    password login or quick OTP when needed.
                   </p>
-
-                  <div className="mt-8 space-y-3 text-sm text-white/90">
-                    <BrandFeature
-                      title="Secure by design"
-                      desc="Sessions, logout, and account access are properly managed."
-                    />
-                    <BrandFeature
-                      title="Password required"
-                      desc="Your password is mandatory on registration for trust and security."
-                    />
-                    <BrandFeature
-                      title="OTP is optional"
-                      desc="Use OTP when you don’t want to type your password."
-                    />
-                  </div>
 
                   <div className="mt-8 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 sm:mt-10">
                     <p className="text-sm text-white/90">
-                      Already have an account?{" "}
+                      New to eKasiBooks?{" "}
                       <button
-                        onClick={() => {
-                          trackEvent("portal_login_redirect_click", {
-                            source: "register_side_panel",
-                            plan: planParam,
-                            next_path: nextUrl,
-                          });
-                          router.push(loginHref);
-                        }}
+                        onClick={handleRegisterClick}
                         className="ml-1 inline-flex items-center font-semibold underline underline-offset-4 hover:text-white"
                         type="button"
                       >
-                        Login
+                        Create an account
                       </button>
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* RIGHT form */}
               <div className="p-6 sm:p-8 lg:p-12">
                 <div>
-                  <h2 className="text-2xl font-semibold text-slate-900">Create account</h2>
+                  <h2 className="text-2xl font-semibold text-slate-900">Login</h2>
                   <p className="mt-1 text-slate-600">
-                    Use your email and set a password to get started.
+                    Enter your email, then choose password login or OTP.
                   </p>
                 </div>
 
                 <div className="mt-8 space-y-4">
                   {msg && (
                     <div className={`rounded-xl border px-3 py-2 text-sm ${msgClass(msg)}`}>
-                      {msg.text}
-                    </div>
-                  )}
+                      <div className="flex flex-col gap-2">
+                        <div>{msg.text}</div>
 
-                  {created && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-                      <div className="font-semibold">Almost there — verify your email</div>
-                      <div className="mt-1 text-sm text-emerald-900/80">
-                        We require email verification before login.
-                        {emailSent
-                          ? " Check your inbox (and spam/promotions)."
-                          : " If you don’t receive an email, click ‘Resend verification email’."}
-                      </div>
-
-                      {devVerifyUrl && (
-                        <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs text-slate-800 ring-1 ring-emerald-200">
-                          <div className="font-semibold text-slate-900">
-                            Dev verify link (SMTP not configured):
-                          </div>
-                          <div className="mt-1 break-all">{devVerifyUrl}</div>
-                        </div>
-                      )}
-
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            trackEvent("portal_go_to_login_after_register", {
-                              plan: planParam,
-                              next_path: nextUrl,
-                            });
-                            const qs = new URLSearchParams();
-                            qs.set("email", email.trim().toLowerCase());
-                            qs.set("registered", "1");
-                            qs.set("next", nextUrl);
-                            if (planParam) qs.set("plan", planParam);
-                            router.push(`/login?${qs.toString()}`);
-                          }}
-                          className="inline-flex items-center justify-center rounded-xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white"
-                        >
-                          Go to login
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={resendVerification}
-                          disabled={resendLoading}
-                          className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-60"
-                        >
-                          {resendLoading ? "Sending..." : "Resend verification email"}
-                        </button>
+                        {needsVerify && (
+                          <button
+                            type="button"
+                            onClick={resendVerification}
+                            disabled={resendLoading}
+                            className="w-fit rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+                          >
+                            {resendLoading ? "Sending..." : "Resend verification email"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
 
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">
-                      Full name (required)
-                    </span>
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Syrus Example"
-                      autoComplete="name"
-                      disabled={loading || created}
-                    />
-                  </label>
+                  {!isProd && devOtp && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      Dev OTP:{" "}
+                      <span className="font-mono font-semibold tracking-widest">{devOtp}</span>
+                    </div>
+                  )}
 
                   <label className="block">
                     <span className="text-sm font-medium text-slate-700">Email</span>
@@ -363,7 +301,7 @@ export default function RegisterPage() {
                       placeholder="you@company.com"
                       autoComplete="email"
                       inputMode="email"
-                      disabled={loading || created}
+                      disabled={isBusy}
                     />
                   </label>
 
@@ -374,24 +312,11 @@ export default function RegisterPage() {
                       className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimum 8 characters"
-                      autoComplete="new-password"
-                      disabled={loading || created}
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Confirm password</span>
-                    <input
-                      type="password"
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
-                      value={confirm}
-                      onChange={(e) => setConfirm(e.target.value)}
-                      placeholder="Re-type your password"
-                      autoComplete="new-password"
-                      disabled={loading || created}
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                      disabled={isBusy}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && !created) register();
+                        if (e.key === "Enter") loginWithPassword();
                       }}
                     />
                   </label>
@@ -401,53 +326,40 @@ export default function RegisterPage() {
                       type="checkbox"
                       checked={remember}
                       onChange={(e) => setRemember(e.target.checked)}
-                      disabled={loading || created}
+                      disabled={isBusy}
                     />
                     Remember me for 7 days
                   </label>
 
-                  <label className="flex select-none items-start gap-2 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={agree}
-                      onChange={(e) => setAgree(e.target.checked)}
-                      disabled={loading || created}
-                      className="mt-1"
-                    />
-                    <span>
-                      I agree to the <span className="font-semibold">Terms</span> &{" "}
-                      <span className="font-semibold">Privacy Policy</span>.
-                    </span>
-                  </label>
+                  <div className="grid grid-cols-1 gap-3 pt-2">
+                    <button
+                      onClick={loginWithPassword}
+                      disabled={isBusy}
+                      className="rounded-xl bg-[#215D63] py-2 font-semibold text-white shadow-sm hover:bg-[#1c4f54] disabled:opacity-60"
+                      type="button"
+                    >
+                      {pwLoading ? "Signing in..." : "Login with password"}
+                    </button>
 
-                  <button
-                    onClick={() => (!created ? register() : undefined)}
-                    disabled={loading || created}
-                    className="w-full rounded-xl bg-[#215D63] py-2 font-semibold text-white shadow-sm hover:bg-[#1c4f54] disabled:opacity-60"
-                    type="button"
-                  >
-                    {created ? "Account created" : loading ? "Creating account..." : "Create account"}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      trackEvent("portal_login_redirect_click", {
-                        source: "register_bottom_button",
-                        plan: planParam,
-                        next_path: nextUrl,
-                      });
-                      router.push(loginHref);
-                    }}
-                    disabled={loading || created}
-                    className="w-full rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
-                    type="button"
-                  >
-                    Back to login
-                  </button>
+                    <button
+                      onClick={requestOtp}
+                      disabled={isBusy || !emailOk}
+                      className="rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
+                      title={!emailOk ? "Enter a valid email first" : undefined}
+                      type="button"
+                    >
+                      {otpLoading ? "Requesting OTP..." : "Request OTP instead"}
+                    </button>
+                  </div>
 
                   <p className="text-xs leading-relaxed text-slate-500">
-                    You can still use OTP for login later — it’s optional. Your password
-                    is the primary credential.
+                    OTP emails can sometimes be delayed (up to a few minutes) depending on your
+                    inbox provider. Please check spam/promotions if you don’t see it.
+                  </p>
+
+                  <p className="text-xs leading-relaxed text-slate-500">
+                    Tip: OTP is handy when you don’t want to type your password. Password
+                    remains the default.
                   </p>
                 </div>
               </div>
@@ -460,19 +372,5 @@ export default function RegisterPage() {
         </div>
       </div>
     </main>
-  );
-}
-
-function BrandFeature({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="flex gap-3">
-      <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/20">
-        <span className="h-2 w-2 rounded-full bg-white/70" />
-      </div>
-      <div>
-        <div className="font-semibold text-white">{title}</div>
-        <div className="text-white/80">{desc}</div>
-      </div>
-    </div>
   );
 }
