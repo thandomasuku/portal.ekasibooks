@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 
@@ -9,6 +9,33 @@ type Msg = { type: "success" | "error" | "info"; text: string } | null;
 const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const PASSWORD_RULE =
   "Password must be at least 8 characters long and include a capital letter, a number, and a special character";
+
+async function trackAnalytics(eventName: string, params?: Record<string, any>) {
+  try {
+    const analytics = (await import("@/lib/analytics")) as any;
+
+    if (typeof analytics.trackEvent === "function") {
+      analytics.trackEvent(eventName, params);
+      return;
+    }
+
+    if (typeof analytics.track === "function") {
+      analytics.track(eventName, params);
+      return;
+    }
+
+    if (typeof analytics.event === "function") {
+      analytics.event(eventName, params);
+      return;
+    }
+  } catch {
+    // Fall through to window.gtag
+  }
+
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("event", eventName, params ?? {});
+  }
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -53,6 +80,14 @@ export default function RegisterPage() {
     return e.length >= 5 && e.includes("@") && e.includes(".");
   }, [email]);
 
+  useEffect(() => {
+    trackAnalytics("register_page_view", {
+      page: "/register",
+      next_url: nextUrl,
+      plan: planParam,
+    });
+  }, [nextUrl, planParam]);
+
   function showError(text: string) {
     setMsg({ type: "error", text });
   }
@@ -77,12 +112,65 @@ export default function RegisterPage() {
     setDevVerifyUrl(null);
     setEmailSent(null);
 
-    if (!name.trim()) return showError("Please enter your full name.");
-    if (!emailOk) return showError("Please enter a valid email address.");
-    if (!password.trim()) return showError("Password is required.");
-    if (!PASSWORD_REGEX.test(password)) return showError(PASSWORD_RULE);
-    if (password !== confirm) return showError("Passwords do not match.");
-    if (!agree) return showError("Please accept the Terms & Privacy Policy.");
+    if (!name.trim()) {
+      await trackAnalytics("register_validation_failed", {
+        reason: "missing_name",
+        next_url: nextUrl,
+        plan: planParam,
+      });
+      return showError("Please enter your full name.");
+    }
+
+    if (!emailOk) {
+      await trackAnalytics("register_validation_failed", {
+        reason: "invalid_email",
+        next_url: nextUrl,
+        plan: planParam,
+      });
+      return showError("Please enter a valid email address.");
+    }
+
+    if (!password.trim()) {
+      await trackAnalytics("register_validation_failed", {
+        reason: "missing_password",
+        next_url: nextUrl,
+        plan: planParam,
+      });
+      return showError("Password is required.");
+    }
+
+    if (!PASSWORD_REGEX.test(password)) {
+      await trackAnalytics("register_validation_failed", {
+        reason: "weak_password",
+        next_url: nextUrl,
+        plan: planParam,
+      });
+      return showError(PASSWORD_RULE);
+    }
+
+    if (password !== confirm) {
+      await trackAnalytics("register_validation_failed", {
+        reason: "password_mismatch",
+        next_url: nextUrl,
+        plan: planParam,
+      });
+      return showError("Passwords do not match.");
+    }
+
+    if (!agree) {
+      await trackAnalytics("register_validation_failed", {
+        reason: "terms_not_accepted",
+        next_url: nextUrl,
+        plan: planParam,
+      });
+      return showError("Please accept the Terms & Privacy Policy.");
+    }
+
+    await trackAnalytics("register_attempt", {
+      next_url: nextUrl,
+      plan: planParam,
+      remember,
+    });
 
     setLoading(true);
 
@@ -100,7 +188,20 @@ export default function RegisterPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Registration failed");
+      if (!res.ok) {
+        await trackAnalytics("register_failed", {
+          reason: data?.error || `http_${res.status}`,
+          next_url: nextUrl,
+          plan: planParam,
+        });
+        throw new Error(data?.error || "Registration failed");
+      }
+
+      await trackAnalytics("register_success", {
+        email_sent: Boolean(data?.emailSent),
+        next_url: nextUrl,
+        plan: planParam,
+      });
 
       setCreated(true);
       setEmailSent(Boolean(data?.emailSent));
@@ -125,7 +226,19 @@ export default function RegisterPage() {
   async function resendVerification() {
     if (resendLoading) return;
     const e = email.trim().toLowerCase();
-    if (!e || !e.includes("@")) return showError("Please enter a valid email first.");
+    if (!e || !e.includes("@")) {
+      await trackAnalytics("register_resend_validation_failed", {
+        reason: "invalid_email",
+        next_url: nextUrl,
+        plan: planParam,
+      });
+      return showError("Please enter a valid email first.");
+    }
+
+    await trackAnalytics("register_resend_attempt", {
+      next_url: nextUrl,
+      plan: planParam,
+    });
 
     setResendLoading(true);
     setMsg(null);
@@ -138,7 +251,19 @@ export default function RegisterPage() {
         body: JSON.stringify({ email: e }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Failed to resend verification email");
+      if (!res.ok) {
+        await trackAnalytics("register_resend_failed", {
+          reason: data?.error || `http_${res.status}`,
+          next_url: nextUrl,
+          plan: planParam,
+        });
+        throw new Error(data?.error || "Failed to resend verification email");
+      }
+
+      await trackAnalytics("register_resend_success", {
+        next_url: nextUrl,
+        plan: planParam,
+      });
 
       setEmailSent(Boolean(data?.emailSent));
       setDevVerifyUrl(typeof data?.dev_verifyUrl === "string" ? data.dev_verifyUrl : null);
@@ -150,6 +275,31 @@ export default function RegisterPage() {
     }
   }
 
+async function handleLoginClick() {
+  await trackAnalytics("register_login_click", {
+    next_url: nextUrl,
+    plan: planParam,
+  });
+  router.push(loginHref);
+}
+
+  async function handleGoToLoginAfterRegister() {
+  const qs = new URLSearchParams();
+  qs.set("email", email.trim().toLowerCase());
+  qs.set("registered", "1");
+  qs.set("next", nextUrl);
+  if (planParam) qs.set("plan", planParam);
+
+  const destination = `/login?${qs.toString()}`;
+
+  await trackAnalytics("register_go_to_login_click", {
+    next_url: nextUrl,
+    plan: planParam,
+    registered: true,
+  });
+
+  router.push(destination);
+}
   return (
     <main className="bg-[#f6f9fb]">
       <div
@@ -216,7 +366,7 @@ export default function RegisterPage() {
                     <p className="text-sm text-white/90">
                       Already have an account?{" "}
                       <button
-                        onClick={() => router.push(loginHref)}
+                        onClick={handleLoginClick}
                         className="ml-1 inline-flex items-center font-semibold underline underline-offset-4 hover:text-white"
                         type="button"
                       >
@@ -265,14 +415,7 @@ export default function RegisterPage() {
                       <div className="mt-4 flex flex-wrap gap-3">
                         <button
                           type="button"
-                          onClick={() => {
-                            const qs = new URLSearchParams();
-                            qs.set("email", email.trim().toLowerCase());
-                            qs.set("registered", "1");
-                            qs.set("next", nextUrl);
-                            if (planParam) qs.set("plan", planParam);
-                            router.push(`/login?${qs.toString()}`);
-                          }}
+                          onClick={handleGoToLoginAfterRegister}
                           className="inline-flex items-center justify-center rounded-xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white"
                         >
                           Go to login
@@ -380,7 +523,7 @@ export default function RegisterPage() {
                   </button>
 
                   <button
-                    onClick={() => router.push(loginHref)}
+                    onClick={handleLoginClick}
                     disabled={loading || created}
                     className="w-full rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
                     type="button"

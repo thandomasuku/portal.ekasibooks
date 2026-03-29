@@ -1,10 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Msg = { type: "success" | "error" | "info"; text: string } | null;
+
+async function trackAnalytics(eventName: string, params?: Record<string, any>) {
+  try {
+    const analytics = (await import("@/lib/analytics")) as any;
+
+    if (typeof analytics.trackEvent === "function") {
+      analytics.trackEvent(eventName, params);
+      return;
+    }
+
+    if (typeof analytics.track === "function") {
+      analytics.track(eventName, params);
+      return;
+    }
+
+    if (typeof analytics.event === "function") {
+      analytics.event(eventName, params);
+      return;
+    }
+  } catch {
+    // Fall through to window.gtag
+  }
+
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("event", eventName, params ?? {});
+  }
+}
 
 export default function LoginClient() {
   const router = useRouter();
@@ -54,6 +81,14 @@ export default function LoginClient() {
     return `/register?${qs.toString()}`;
   }, [nextUrl, planParam]);
 
+  useEffect(() => {
+    trackAnalytics("login_page_view", {
+      page: "/login",
+      next_url: nextUrl,
+      plan: planParam || undefined,
+    });
+  }, [nextUrl, planParam]);
+
   function showError(text: string) {
     setMsg({ type: "error", text });
   }
@@ -68,8 +103,28 @@ export default function LoginClient() {
 
   async function loginWithPassword() {
     if (isBusy) return;
-    if (!emailOk) return showError("Please enter a valid email address.");
-    if (!password.trim()) return showError("Please enter your password.");
+    if (!emailOk) {
+      await trackAnalytics("login_password_validation_failed", {
+        reason: "invalid_email",
+        next_url: nextUrl,
+        plan: planParam || undefined,
+      });
+      return showError("Please enter a valid email address.");
+    }
+    if (!password.trim()) {
+      await trackAnalytics("login_password_validation_failed", {
+        reason: "missing_password",
+        next_url: nextUrl,
+        plan: planParam || undefined,
+      });
+      return showError("Please enter your password.");
+    }
+
+    await trackAnalytics("login_password_attempt", {
+      remember,
+      next_url: nextUrl,
+      plan: planParam || undefined,
+    });
 
     setPwLoading(true);
     setMsg(null);
@@ -92,10 +147,28 @@ export default function LoginClient() {
       if (!res.ok) {
         if (res.status === 403 && (data as any)?.code === "EMAIL_NOT_VERIFIED") {
           setNeedsVerify(true);
+          await trackAnalytics("login_password_failed", {
+            reason: "email_not_verified",
+            next_url: nextUrl,
+            plan: planParam || undefined,
+          });
           throw new Error((data as any)?.error || "Please verify your email before logging in.");
         }
+
+        await trackAnalytics("login_password_failed", {
+          reason: (data as any)?.code || (data as any)?.error || `http_${res.status}`,
+          next_url: nextUrl,
+          plan: planParam || undefined,
+        });
+
         throw new Error((data as any)?.error || "Login failed");
       }
+
+      await trackAnalytics("login_password_success", {
+        remember,
+        next_url: nextUrl,
+        plan: planParam || undefined,
+      });
 
       showSuccess("Login successful. Redirecting...");
       router.replace(nextUrl);
@@ -108,7 +181,20 @@ export default function LoginClient() {
 
   async function requestOtp() {
     if (isBusy) return;
-    if (!emailOk) return showError("Please enter a valid email address.");
+    if (!emailOk) {
+      await trackAnalytics("login_otp_validation_failed", {
+        reason: "invalid_email",
+        next_url: nextUrl,
+        plan: planParam || undefined,
+      });
+      return showError("Please enter a valid email address.");
+    }
+
+    await trackAnalytics("login_otp_request_attempt", {
+      remember,
+      next_url: nextUrl,
+      plan: planParam || undefined,
+    });
 
     setOtpLoading(true);
     setMsg(null);
@@ -131,14 +217,32 @@ export default function LoginClient() {
       if (!res.ok) {
         if (res.status === 403 && (data as any)?.code === "EMAIL_NOT_VERIFIED") {
           setNeedsVerify(true);
+          await trackAnalytics("login_otp_request_failed", {
+            reason: "email_not_verified",
+            next_url: nextUrl,
+            plan: planParam || undefined,
+          });
           throw new Error((data as any)?.error || "Please verify your email before using OTP login.");
         }
+
+        await trackAnalytics("login_otp_request_failed", {
+          reason: (data as any)?.code || (data as any)?.error || `http_${res.status}`,
+          next_url: nextUrl,
+          plan: planParam || undefined,
+        });
+
         throw new Error((data as any)?.error || "OTP request failed");
       }
 
       if (!isProd && (data as any)?.devCode) {
         setDevOtp(String((data as any).devCode));
       }
+
+      await trackAnalytics("login_otp_request_success", {
+        remember,
+        next_url: nextUrl,
+        plan: planParam || undefined,
+      });
 
       showSuccess(
         "OTP requested. If it doesn’t arrive within 2 minutes, check spam/promotions or tap Resend on the next screen."
@@ -162,7 +266,19 @@ export default function LoginClient() {
 
   async function resendVerification() {
     if (resendLoading) return;
-    if (!emailOk) return showError("Please enter a valid email address first.");
+    if (!emailOk) {
+      await trackAnalytics("login_resend_verification_validation_failed", {
+        reason: "invalid_email",
+        next_url: nextUrl,
+        plan: planParam || undefined,
+      });
+      return showError("Please enter a valid email address first.");
+    }
+
+    await trackAnalytics("login_resend_verification_attempt", {
+      next_url: nextUrl,
+      plan: planParam || undefined,
+    });
 
     setResendLoading(true);
     try {
@@ -172,7 +288,19 @@ export default function LoginClient() {
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.error || "Resend failed");
+      if (!res.ok) {
+        await trackAnalytics("login_resend_verification_failed", {
+          reason: (data as any)?.code || (data as any)?.error || `http_${res.status}`,
+          next_url: nextUrl,
+          plan: planParam || undefined,
+        });
+        throw new Error((data as any)?.error || "Resend failed");
+      }
+
+      await trackAnalytics("login_resend_verification_success", {
+        next_url: nextUrl,
+        plan: planParam || undefined,
+      });
 
       showSuccess("Verification email sent. Please check your inbox (and spam/promotions).");
       setNeedsVerify(false);
@@ -183,7 +311,12 @@ export default function LoginClient() {
     }
   }
 
-  function handleRegisterClick() {
+  async function handleRegisterClick() {
+    await trackAnalytics("login_register_click", {
+      next_url: nextUrl,
+      plan: planParam || undefined,
+      destination: registerHref,
+    });
     router.push(registerHref);
   }
 

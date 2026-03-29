@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
@@ -12,6 +12,33 @@ import { useSession } from "@/components/portal/session";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+async function trackAnalytics(eventName: string, params?: Record<string, any>) {
+  try {
+    const analytics = (await import("@/lib/analytics")) as any;
+
+    if (typeof analytics.trackEvent === "function") {
+      analytics.trackEvent(eventName, params);
+      return;
+    }
+
+    if (typeof analytics.track === "function") {
+      analytics.track(eventName, params);
+      return;
+    }
+
+    if (typeof analytics.event === "function") {
+      analytics.event(eventName, params);
+      return;
+    }
+  } catch {
+    // Fall through to window.gtag
+  }
+
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("event", eventName, params ?? {});
+  }
 }
 
 /* =========================
@@ -391,10 +418,10 @@ function BillingOnboardingView({
               )}
             >
               {plan.badge ? (
-              <div className="absolute right-12 top-4 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
-                {plan.badge}
-              </div>
-            ) : null}
+                <div className="absolute right-12 top-4 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
+                  {plan.badge}
+                </div>
+              ) : null}
 
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -491,6 +518,10 @@ export default function BillingPage() {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
+
+  const billingViewTrackedRef = useRef(false);
+  const paymentSuccessTrackedRef = useRef(false);
+  const lastTrackedPlanRef = useRef<string>("");
 
   const currentBillingUrl = useMemo(() => {
     const qs = sp.toString();
@@ -686,6 +717,42 @@ export default function BillingPage() {
     cycle === "annual" ? `${moneyZar(selected.annual)}/yr` : `${moneyZar(selected.monthly)}/mo`;
   const annualSaveForSelected = selected.monthly * 12 - selected.annual;
 
+  useEffect(() => {
+    if (state !== "ready") return;
+    if (billingViewTrackedRef.current) return;
+
+    billingViewTrackedRef.current = true;
+    void trackAnalytics("billing_page_view", {
+      has_subscription: isPaid,
+      status: effectiveStatus,
+      plan: isPaid ? planLabel.toLowerCase() : "free",
+    });
+  }, [state, isPaid, effectiveStatus, planLabel]);
+
+  useEffect(() => {
+    if (!isFreeOnboarding) return;
+
+    const key = `${selectedTier}:${cycle}`;
+    if (lastTrackedPlanRef.current === key) return;
+    lastTrackedPlanRef.current = key;
+
+    void trackAnalytics("billing_plan_selected", {
+      plan: selectedTier,
+      cycle,
+    });
+  }, [isFreeOnboarding, selectedTier, cycle]);
+
+  useEffect(() => {
+    const paidFlag = sp.get("paid") === "1";
+    if (!paidFlag || paymentSuccessTrackedRef.current) return;
+
+    paymentSuccessTrackedRef.current = true;
+    void trackAnalytics("payment_success", {
+      plan: selectedTier,
+      cycle,
+    });
+  }, [sp, selectedTier, cycle]);
+
   async function onUpgrade() {
     if (upgradeLoading) return;
 
@@ -693,6 +760,11 @@ export default function BillingPage() {
     setUpgradeLoading(true);
 
     try {
+      await trackAnalytics("checkout_started", {
+        plan: selectedTier,
+        cycle,
+      });
+
       const res = await fetch("/api/billing/subscribe", {
         method: "POST",
         credentials: "include",
@@ -724,6 +796,11 @@ export default function BillingPage() {
     setManageLoading(true);
 
     try {
+      await trackAnalytics("manage_plan_opened", {
+        status: effectiveStatus,
+        plan: planLabel.toLowerCase(),
+      });
+
       const res = await fetch("/api/billing/manage-link", {
         method: "GET",
         credentials: "include",
