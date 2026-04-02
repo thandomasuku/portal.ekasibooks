@@ -12,13 +12,11 @@ type EntStatus = "none" | "active" | "grace" | "blocked";
 type BillingCycle = "monthly" | "annual";
 
 type BillingEntitlementResponse = {
-  // legacy fields your UI already uses
   plan: Plan | string;
   status: string;
   currentPeriodEnd: string | null;
   graceUntil: string | null;
 
-  // safe additions
   tier: Tier;
   interval: BillingCycle | null;
   amount: number | null;
@@ -85,7 +83,7 @@ function normalizeTier(raw: unknown): Tier {
   if (t === "starter") return "starter";
   if (t === "free") return "free";
   if (t === "none") return "none";
-  return "free";
+  return "none";
 }
 
 function normalizeEntStatus(raw: unknown): EntStatus {
@@ -94,7 +92,7 @@ function normalizeEntStatus(raw: unknown): EntStatus {
   if (s === "grace") return "grace";
   if (s === "blocked") return "blocked";
   if (s === "none") return "none";
-  return "active";
+  return "none";
 }
 
 function toBooleanOverride(value: unknown): boolean | null {
@@ -117,10 +115,6 @@ function toNumberOverride(value: unknown): number | null {
   }
   return null;
 }
-
-/* =========================================================
-   Pricing + plan-code inference (matches subscribe route)
-   ========================================================= */
 
 const PLAN_CODES = {
   starter: {
@@ -156,7 +150,10 @@ function safeTrim(v: unknown) {
   return typeof v === "string" ? v.trim() : "";
 }
 
-function inferIntervalFromPlanCode(tier: Tier, planCode: string | null): BillingCycle | null {
+function inferIntervalFromPlanCode(
+  tier: Tier,
+  planCode: string | null
+): BillingCycle | null {
   const pc = safeTrim(planCode);
   if (!pc) return null;
 
@@ -226,11 +223,13 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    let tier = normalizeTier(ent?.tier);
-    let entStatus = normalizeEntStatus(ent?.status);
+    let tier: Tier = ent ? normalizeTier(ent.tier) : "none";
+    let entStatus: EntStatus = ent ? normalizeEntStatus(ent.status) : "none";
 
     const rawFeatures: unknown = ent?.features ?? null;
-    let featuresObj: Record<string, any> = isPlainObject(rawFeatures) ? { ...(rawFeatures as any) } : {};
+    let featuresObj: Record<string, any> = isPlainObject(rawFeatures)
+      ? { ...(rawFeatures as any) }
+      : {};
     if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
 
     const currentPeriodEndDate: Date | null = sub?.currentPeriodEnd ?? null;
@@ -238,7 +237,7 @@ export async function GET(req: NextRequest) {
 
     let graceUntil: string | null = null;
 
-    if (isPaidTier(tier) && currentPeriodEndDate) {
+    if (ent && isPaidTier(tier) && currentPeriodEndDate) {
       const nowMs = Date.now();
       const cpeMs = currentPeriodEndDate.getTime();
       const graceEndMs = cpeMs + GRACE_DAYS * MS_DAY;
@@ -299,9 +298,13 @@ export async function GET(req: NextRequest) {
       graceUntil = d ? d.toISOString() : null;
     }
 
-    let effectiveStatus = normalizeStatus(sub?.status ?? entStatus);
+    let effectiveStatus = entStatus === "none"
+      ? normalizeStatus(sub?.status ?? "none")
+      : normalizeStatus(sub?.status ?? entStatus);
+
     if (entStatus === "grace") effectiveStatus = "grace";
     if (entStatus === "blocked") effectiveStatus = "blocked";
+    if (entStatus === "none" && tier === "none") effectiveStatus = "none";
 
     const defaultFreeLimits = {
       invoice: 5,
@@ -373,7 +376,7 @@ export async function GET(req: NextRequest) {
     const payload: BillingEntitlementResponse = {
       plan,
       tier,
-      status: plan === "FREE" ? "free" : effectiveStatus || "active",
+      status: effectiveStatus || "none",
       currentPeriodEnd,
       graceUntil,
       interval,
