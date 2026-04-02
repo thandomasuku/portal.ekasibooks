@@ -27,6 +27,7 @@ type BillingEntitlementResponse = {
   features: {
     readOnly: boolean;
     cloudSync: boolean;
+    storesync: boolean;
     maxActiveSessions: number;
     limits: {
       invoice: number;
@@ -351,6 +352,10 @@ export async function GET(req: NextRequest) {
     const cloudSyncOverride = toBooleanOverride(featuresObj?.cloudSync);
     const cloudSync = isBlocked ? false : cloudSyncOverride ?? computedCloudSync;
 
+    const computedStoreSync = tier === "growth" || tier === "pro";
+    const storeSyncOverride = toBooleanOverride(featuresObj?.storesync);
+    const storesync = isBlocked ? false : storeSyncOverride ?? computedStoreSync;
+
     const computedMaxActiveSessions =
       tier === "pro" ? 4 : tier === "growth" ? 2 : 1;
     const maxActiveSessionsOverride = toNumberOverride(featuresObj?.maxActiveSessions);
@@ -377,6 +382,7 @@ export async function GET(req: NextRequest) {
       features: {
         readOnly,
         cloudSync,
+        storesync,
         maxActiveSessions,
         limits,
       },
