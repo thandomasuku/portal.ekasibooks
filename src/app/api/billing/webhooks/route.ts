@@ -453,43 +453,44 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // Only upgrade if payment matches one of OUR plan codes (and amount if supplied)
-        if (validation.ok) {
-          const meta = validation.meta;
+        // Always refresh the subscription record on successful charges so
+// currentPeriodEnd stays in sync even when the webhook payload does
+// not include a usable planCode for entitlement validation.
+await prisma.subscription.upsert({
+  where: { userId },
+  create: {
+    userId,
+    provider: "paystack",
+    status: "active" as any,
+    customerCode: customerCode ?? undefined,
+    subscriptionCode: subscriptionCode ?? undefined,
+    planCode: planCode ?? undefined,
+    currentPeriodEnd: computedPeriodEnd,
+    canceledAt: null,
+  },
+  update: {
+    status: "active" as any,
+    customerCode: customerCode ?? undefined,
+    subscriptionCode: subscriptionCode ?? undefined,
+    ...(planCode ? { planCode } : {}),
+    currentPeriodEnd: computedPeriodEnd,
+    canceledAt: null,
+  },
+});
 
-          await prisma.subscription.upsert({
-            where: { userId },
-            create: {
-              userId,
-              provider: "paystack",
-              status: "active" as any,
-              customerCode: customerCode ?? undefined,
-              subscriptionCode: subscriptionCode ?? undefined,
-              planCode: planCode ?? undefined,
-              currentPeriodEnd: computedPeriodEnd,
-              canceledAt: null,
-            },
-            update: {
-              status: "active" as any,
-              customerCode: customerCode ?? undefined,
-              subscriptionCode: subscriptionCode ?? undefined,
-              planCode: planCode ?? undefined,
-              currentPeriodEnd: computedPeriodEnd,
-              canceledAt: null,
-            },
-          });
+// Only upgrade/realign entitlement if payment matches one of OUR plan codes
+// (and amount if supplied). Renewal webhooks may still be valid for period-end
+// updates even when plan metadata is incomplete.
+if (validation.ok) {
+  const meta = validation.meta;
 
-          // ✅ Grant entitlement for the correct tier + limits
-          await setEntitlement(
-            userId,
-            meta.tier,
-            "active",
-            buildPaidFeatures(meta.tier, meta.companies)
-          );
-        } else {
-          // Payment succeeded, but doesn't match our plan codes/amounts.
-          // We keep the payment record but do NOT upgrade access.
-        }
+  await setEntitlement(
+    userId,
+    meta.tier,
+    "active",
+    buildPaidFeatures(meta.tier, meta.companies)
+  );
+}
 
         return NextResponse.json({ received: true }, { status: 200 });
       }
