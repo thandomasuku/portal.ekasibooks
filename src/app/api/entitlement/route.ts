@@ -228,12 +228,18 @@ export async function GET(req: NextRequest) {
 
     const rawFeatures: unknown = ent?.features ?? null;
     let featuresObj: Record<string, any> = isPlainObject(rawFeatures)
-      ? { ...(rawFeatures as any) }
+      ? { ...(rawFeatures as Record<string, any>) }
       : {};
     if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
 
     const currentPeriodEndDate: Date | null = sub?.currentPeriodEnd ?? null;
     const currentPeriodEnd = currentPeriodEndDate ? currentPeriodEndDate.toISOString() : null;
+
+    const subStatus = normalizeStatus(sub?.status);
+    const isUnpaid =
+      subStatus === "past_due" ||
+      subStatus === "unpaid" ||
+      subStatus === "failed";
 
     let graceUntil: string | null = null;
 
@@ -242,7 +248,7 @@ export async function GET(req: NextRequest) {
       const cpeMs = currentPeriodEndDate.getTime();
       const graceEndMs = cpeMs + GRACE_DAYS * MS_DAY;
 
-      if (nowMs > cpeMs && nowMs <= graceEndMs) {
+      if (isUnpaid && nowMs > cpeMs && nowMs <= graceEndMs) {
         graceUntil = new Date(graceEndMs).toISOString();
 
         if (entStatus !== "grace" || !featuresObj.graceUntil) {
@@ -266,7 +272,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      if (nowMs > graceEndMs) {
+      if (isUnpaid && nowMs > graceEndMs) {
         const nextFeatures = stripGraceFields(featuresObj);
 
         await prisma.entitlement.update({
@@ -288,7 +294,7 @@ export async function GET(req: NextRequest) {
         tier = "free";
         entStatus = "active";
         graceUntil = null;
-        featuresObj = isPlainObject(nextFeatures) ? (nextFeatures as any) : {};
+        featuresObj = isPlainObject(nextFeatures) ? (nextFeatures as Record<string, any>) : {};
         if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
       }
     }
@@ -298,9 +304,10 @@ export async function GET(req: NextRequest) {
       graceUntil = d ? d.toISOString() : null;
     }
 
-    let effectiveStatus = entStatus === "none"
-      ? normalizeStatus(sub?.status ?? "none")
-      : normalizeStatus(sub?.status ?? entStatus);
+    let effectiveStatus =
+      entStatus === "none"
+        ? normalizeStatus(sub?.status ?? "none")
+        : normalizeStatus(sub?.status ?? entStatus);
 
     if (entStatus === "grace") effectiveStatus = "grace";
     if (entStatus === "blocked") effectiveStatus = "blocked";
