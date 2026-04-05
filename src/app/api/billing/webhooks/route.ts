@@ -454,43 +454,43 @@ export async function POST(req: NextRequest) {
         });
 
         // Always refresh the subscription record on successful charges so
-// currentPeriodEnd stays in sync even when the webhook payload does
-// not include a usable planCode for entitlement validation.
-await prisma.subscription.upsert({
-  where: { userId },
-  create: {
-    userId,
-    provider: "paystack",
-    status: "active" as any,
-    customerCode: customerCode ?? undefined,
-    subscriptionCode: subscriptionCode ?? undefined,
-    planCode: planCode ?? undefined,
-    currentPeriodEnd: computedPeriodEnd,
-    canceledAt: null,
-  },
-  update: {
-    status: "active" as any,
-    customerCode: customerCode ?? undefined,
-    subscriptionCode: subscriptionCode ?? undefined,
-    ...(planCode ? { planCode } : {}),
-    currentPeriodEnd: computedPeriodEnd,
-    canceledAt: null,
-  },
-});
+        // currentPeriodEnd stays in sync even when the webhook payload does
+        // not include a usable planCode for entitlement validation.
+        await prisma.subscription.upsert({
+          where: { userId },
+          create: {
+            userId,
+            provider: "paystack",
+            status: "active" as any,
+            customerCode: customerCode ?? undefined,
+            subscriptionCode: subscriptionCode ?? undefined,
+            planCode: planCode ?? undefined,
+            currentPeriodEnd: computedPeriodEnd,
+            canceledAt: null,
+          },
+          update: {
+            status: "active" as any,
+            customerCode: customerCode ?? undefined,
+            subscriptionCode: subscriptionCode ?? undefined,
+            ...(planCode ? { planCode } : {}),
+            currentPeriodEnd: computedPeriodEnd,
+            canceledAt: null,
+          },
+        });
 
-// Only upgrade/realign entitlement if payment matches one of OUR plan codes
-// (and amount if supplied). Renewal webhooks may still be valid for period-end
-// updates even when plan metadata is incomplete.
-if (validation.ok) {
-  const meta = validation.meta;
+        // Only upgrade/realign entitlement if payment matches one of OUR plan codes
+        // (and amount if supplied). Renewal webhooks may still be valid for period-end
+        // updates even when plan metadata is incomplete.
+        if (validation.ok) {
+          const meta = validation.meta;
 
-  await setEntitlement(
-    userId,
-    meta.tier,
-    "active",
-    buildPaidFeatures(meta.tier, meta.companies)
-  );
-}
+          await setEntitlement(
+            userId,
+            meta.tier,
+            "active",
+            buildPaidFeatures(meta.tier, meta.companies)
+          );
+        }
 
         return NextResponse.json({ received: true }, { status: 200 });
       }
@@ -564,6 +564,26 @@ if (validation.ok) {
           userId,
           status: "failed" as any,
           raw: data,
+        },
+      });
+
+      await prisma.subscription.upsert({
+        where: { userId },
+        create: {
+          userId,
+          provider: "paystack",
+          status: "past_due" as any,
+          customerCode: customerCode ?? undefined,
+          subscriptionCode: subscriptionCode ?? undefined,
+          planCode: planCode ?? undefined,
+          currentPeriodEnd: computedPeriodEnd,
+        },
+        update: {
+          status: "past_due" as any,
+          customerCode: customerCode ?? undefined,
+          subscriptionCode: subscriptionCode ?? undefined,
+          ...(planCode ? { planCode } : {}),
+          currentPeriodEnd: computedPeriodEnd,
         },
       });
 
