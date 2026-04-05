@@ -240,6 +240,30 @@ export async function GET(req: NextRequest) {
       subStatus === "past_due" ||
       subStatus === "unpaid" ||
       subStatus === "failed";
+      const isActiveSubscription =
+  subStatus === "active" ||
+  subStatus === "trialing" ||
+  subStatus === "success";
+
+if (ent && isPaidTier(tier) && isActiveSubscription && entStatus === "grace") {
+  const nextFeatures = { ...featuresObj };
+  delete nextFeatures.graceUntil;
+  delete nextFeatures.graceReason;
+  delete nextFeatures.graceSetAt;
+
+  await prisma.entitlement
+    .update({
+      where: { userId },
+      data: {
+        status: "active" as any,
+        features: nextFeatures as any,
+      },
+    })
+    .catch(() => null);
+
+  entStatus = "active";
+  featuresObj = nextFeatures;
+}
 
     let graceUntil: string | null = null;
 
