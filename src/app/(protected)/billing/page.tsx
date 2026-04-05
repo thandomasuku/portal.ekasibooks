@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
+import { formatDateTime } from "@/lib/dates";
 
 /* =========================
    Small utilities
@@ -95,10 +96,7 @@ function moneyZar(v?: number | null) {
 }
 
 function fmtDate(d?: string | null) {
-  if (!d) return "—";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "—";
-  return dt.toLocaleString();
+  return formatDateTime(d);
 }
 
 function normalizeStatus(raw?: string | null) {
