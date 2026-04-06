@@ -670,8 +670,33 @@ export async function POST(req: NextRequest) {
       safeTrim(LEGACY_PLAN_CODE) ||
       undefined;
 
-    const nextPayment =
-      safeDate(data?.subscription?.next_payment_date) || safeDate(data?.next_payment_date) || null;
+    let nextPayment =
+  safeDate(data?.subscription?.next_payment_date) || 
+  safeDate(data?.next_payment_date) || 
+  null;
+
+// 🔥 NEW: if missing, fetch from Paystack subscription API
+if (!nextPayment && subscriptionCode) {
+  try {
+    const subResp = await fetch(
+      `${PAYSTACK_BASE}/subscription/${encodeURIComponent(subscriptionCode)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      }
+    );
+
+    const subJson = await subResp.json();
+
+    if (subJson?.status && subJson?.data?.next_payment_date) {
+      const fetched = safeDate(subJson.data.next_payment_date);
+      if (fetched) nextPayment = fetched;
+    }
+  } catch {
+    // ignore — fallback will handle
+  }
+}
 
     const fallbackDays = cycle === "annual" ? DEFAULT_PAID_PERIOD_DAYS_ANNUAL : DEFAULT_PAID_PERIOD_DAYS_MONTHLY;
     const currentPeriodEnd = nextPayment ? nextPayment : addDays(paidAt, fallbackDays);
