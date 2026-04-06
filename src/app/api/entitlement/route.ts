@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { getSessionCookieName, verifySession } from "@/lib/auth";
+import { syncSubscriptionFromPaystack } from "@/lib/paystackSync";
 
 export const dynamic = "force-dynamic";
+
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
+const PAYSTACK_BASE = "https://api.paystack.co";
 
 type Plan = "FREE" | "STARTER" | "GROWTH" | "PRO";
 
@@ -33,6 +37,28 @@ type BillingEntitlementResponse = {
       purchase_order: number;
       companies: number;
     };
+  };
+};
+
+type PaystackResponse<T> = {
+  status: boolean;
+  message?: string;
+  data?: T;
+};
+
+type PaystackCustomer = {
+  id: number;
+  email: string;
+  customer_code: string;
+};
+
+type PaystackSubscription = {
+  id: number;
+  status: string;
+  subscription_code: string;
+  next_payment_date?: string | null;
+  plan?: {
+    plan_code: string;
   };
 };
 
@@ -150,6 +176,20 @@ function safeTrim(v: unknown) {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function toLowerEmail(v: unknown) {
+  return typeof v === "string" ? v.trim().toLowerCase() : "";
+}
+
+function safeDate(v: unknown): Date | null {
+  if (typeof v !== "string" || !v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function lower(v: unknown) {
+  return String(v ?? "").toLowerCase();
+}
+
 function inferIntervalFromPlanCode(
   tier: Tier,
   planCode: string | null
@@ -180,10 +220,55 @@ function amountRandFor(tier: Tier, interval: BillingCycle | null): number | null
     tier === "starter"
       ? AMOUNTS_KOBO.starter[cyc]
       : tier === "growth"
-      ? AMOUNTS_KOBO.growth[cyc]
-      : AMOUNTS_KOBO.pro[cyc];
+        ? AMOUNTS_KOBO.growth[cyc]
+        : AMOUNTS_KOBO.pro[cyc];
 
   return Math.round((kobo || 0) / 100);
+}
+
+async function paystackGet<T>(path: string): Promise<PaystackResponse<T>> {
+  const res = await fetch(`${PAYSTACK_BASE}${path}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  const json = (await res.json().catch(() => null)) as PaystackResponse<T> | null;
+
+  if (!res.ok || !json?.status) {
+    const msg =
+      (json as any)?.message ||
+      (json as any)?.error ||
+      `Paystack request failed (${res.status}).`;
+    throw new Error(msg);
+  }
+
+  return json;
+}
+
+async function paystackGetSubscriptionByCode(subscriptionCode: string) {
+  const code = safeTrim(subscriptionCode);
+  if (!code) return null;
+
+  const resp = await paystackGet<PaystackSubscription>(
+    `/subscription/${encodeURIComponent(code)}`
+  );
+
+  return resp.data ?? null;
+}
+
+function pickManageableSubscription(list: PaystackSubscription[]): PaystackSubscription | null {
+  if (!Array.isArray(list) || list.length === 0) return null;
+
+  const active = list.find((s) => lower(s?.status) === "active");
+  if (active) return active;
+
+  const fallbacks = new Set(["trialing", "non-renewing", "paused", "attention"]);
+  const fb = list.find((s) => fallbacks.has(lower(s?.status)));
+  return fb ?? list[0] ?? null;
 }
 
 export async function GET(req: NextRequest) {
@@ -202,7 +287,7 @@ export async function GET(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true },
+      select: { id: true, email: true },
     });
 
     if (!user) {
@@ -211,6 +296,8 @@ export async function GET(req: NextRequest) {
         { status: 401, headers: { "Cache-Control": "no-store" } }
       );
     }
+
+    await syncSubscriptionFromPaystack(userId).catch(() => null);
 
     const [ent, sub] = await Promise.all([
       prisma.entitlement.findUnique({
@@ -240,30 +327,30 @@ export async function GET(req: NextRequest) {
       subStatus === "past_due" ||
       subStatus === "unpaid" ||
       subStatus === "failed";
-      const isActiveSubscription =
-  subStatus === "active" ||
-  subStatus === "trialing" ||
-  subStatus === "success";
+    const isActiveSubscription =
+      subStatus === "active" ||
+      subStatus === "trialing" ||
+      subStatus === "success";
 
-if (ent && isPaidTier(tier) && isActiveSubscription && entStatus === "grace") {
-  const nextFeatures = { ...featuresObj };
-  delete nextFeatures.graceUntil;
-  delete nextFeatures.graceReason;
-  delete nextFeatures.graceSetAt;
+    if (ent && isPaidTier(tier) && isActiveSubscription && entStatus === "grace") {
+      const nextFeatures = { ...featuresObj };
+      delete nextFeatures.graceUntil;
+      delete nextFeatures.graceReason;
+      delete nextFeatures.graceSetAt;
 
-  await prisma.entitlement
-    .update({
-      where: { userId },
-      data: {
-        status: "active" as any,
-        features: nextFeatures as any,
-      },
-    })
-    .catch(() => null);
+      await prisma.entitlement
+        .update({
+          where: { userId },
+          data: {
+            status: "active" as any,
+            features: nextFeatures as any,
+          },
+        })
+        .catch(() => null);
 
-  entStatus = "active";
-  featuresObj = nextFeatures;
-}
+      entStatus = "active";
+      featuresObj = nextFeatures;
+    }
 
     let graceUntil: string | null = null;
 

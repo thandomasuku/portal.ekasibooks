@@ -575,9 +575,20 @@ export default function BillingPage() {
   }, [state, fetchEntitlement]);
 
   const onRefreshAll = useCallback(async () => {
-    await refresh();
-    await fetchEntitlement();
-  }, [refresh, fetchEntitlement]);
+  try {
+    await fetch("/api/billing/verify", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+  } catch {
+    // ignore
+  }
+
+  await refresh();
+  await fetchEntitlement();
+}, [refresh, fetchEntitlement]);
 
   const derivedName = useMemo(() => {
     const em = (user as any)?.email as string | undefined;

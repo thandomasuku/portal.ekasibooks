@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 
 import { prisma } from "@/lib/db";
+import { syncSubscriptionFromPaystack } from "@/lib/paystackSync";
 
 export const dynamic = "force-dynamic";
 
 // Paystack signs webhooks with HMAC SHA-512 using your secret key.
 // Header: x-paystack-signature
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
+const PAYSTACK_BASE = "https://api.paystack.co";
 
 // For one-time upgrades (or when Paystack doesn't supply next payment date),
 // we approximate a period end for UI + entitlement checks.
@@ -227,7 +229,7 @@ function extractPlanCodeFromEvent(data: any): string | null {
  */
 function resolvePlanMeta(planCode: string | null): PlanMeta | null {
   const code = safeTrim(planCode);
-  if (!code) return null;
+  if (!code) return PLAN_MAP[code] ?? null;
   return PLAN_MAP[code] ?? null;
 }
 
@@ -369,6 +371,9 @@ export async function POST(req: NextRequest) {
 
     const reference: string | null = extractReference(data);
     const customerCode: string | null = data?.customer?.customer_code || null;
+    const eventEmail = toLowerEmail(
+      data?.customer?.email || data?.customer?.customer_email || data?.email || null
+    );
 
     // NOTE: Paystack subscription events usually put subscription info in `data`.
     const subscriptionCode: string | null =
@@ -453,9 +458,8 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // Always refresh the subscription record on successful charges so
-        // currentPeriodEnd stays in sync even when the webhook payload does
-        // not include a usable planCode for entitlement validation.
+        // Keep existing best-effort write so the row is never empty,
+        // then immediately correct it from Paystack authoritatively.
         await prisma.subscription.upsert({
           where: { userId },
           create: {
@@ -477,6 +481,10 @@ export async function POST(req: NextRequest) {
             canceledAt: null,
           },
         });
+
+        if (eventEmail) {
+          await syncSubscriptionFromPaystack(userId);
+        }
 
         // Only upgrade/realign entitlement if payment matches one of OUR plan codes
         // (and amount if supplied). Renewal webhooks may still be valid for period-end
@@ -528,6 +536,10 @@ export async function POST(req: NextRequest) {
           canceledAt: canceledAt ?? undefined,
         },
       });
+
+      if (eventEmail) {
+        await syncSubscriptionFromPaystack(userId);
+      }
 
       if (nextStatus === "active") {
         // Subscription became active: upgrade only if plan code matches one of ours.
@@ -586,6 +598,10 @@ export async function POST(req: NextRequest) {
           currentPeriodEnd: computedPeriodEnd,
         },
       });
+
+      if (eventEmail) {
+        await syncSubscriptionFromPaystack(userId);
+      }
 
       // Failed payment => put paid tier on grace
       await putPaidOnGrace(userId, "charge_failed");
