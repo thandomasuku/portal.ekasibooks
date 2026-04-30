@@ -36,6 +36,36 @@ function toDecimalOrNull(value: unknown): number | null {
   return null;
 }
 
+function parseDateValue(value: unknown): Date | null {
+  if (value == null) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return null;
+
+    const numeric = Number(raw);
+    const d = Number.isFinite(numeric) && /^\d+$/.test(raw) ? new Date(numeric) : new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+}
+
+function toBooleanFlag(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "string") return value.trim().toLowerCase() === "true";
+  return false;
+}
+
 async function requireAuthedUser(req: NextRequest) {
   const token = req.cookies.get(getSessionCookieName())?.value;
   if (!token) {
@@ -133,6 +163,51 @@ function mapSettingsForResponse(row: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+const companySettingsSelect = {
+  id: true,
+  userId: true,
+  companyId: true,
+  companyName: true,
+  tradingName: true,
+  registrationNo: true,
+  vatNumber: true,
+  email: true,
+  phone: true,
+  website: true,
+  addressLine1: true,
+  addressLine2: true,
+  suburb: true,
+  city: true,
+  province: true,
+  postalCode: true,
+  country: true,
+  currency: true,
+  vatRateDefault: true,
+  quotePrefix: true,
+  invoicePrefix: true,
+  quoteTerms: true,
+  invoiceTerms: true,
+  bankName: true,
+  bankAccountName: true,
+  bankAccountNo: true,
+  bankBranchCode: true,
+  bankAccountType: true,
+  logoUrl: true,
+  accentColor: true,
+  raw: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+async function loadCurrentSettingsForConflict(companyId: string) {
+  const current = await prisma.companySettings.findUnique({
+    where: { companyId },
+    select: companySettingsSelect,
+  });
+
+  return current ? mapSettingsForResponse(current) : null;
 }
 
 export async function GET(req: NextRequest) {
@@ -257,10 +332,50 @@ export async function POST(req: NextRequest) {
       raw: body?.raw ?? null,
     };
 
+    const incomingUpdatedAt = parseDateValue(body?.updatedAt);
+    const baseRemoteUpdatedAt = parseDateValue(body?.baseRemoteUpdatedAt ?? body?.lastKnownRemoteUpdatedAt);
+    const forceConflictResolution = toBooleanFlag(body?.forceConflictResolution);
+
     const existing = await prisma.companySettings.findUnique({
       where: { companyId },
-      select: { id: true },
+      select: {
+        id: true,
+        updatedAt: true,
+      },
     });
+
+    if (existing) {
+      if (!forceConflictResolution && baseRemoteUpdatedAt && existing.updatedAt > baseRemoteUpdatedAt) {
+        const current = await loadCurrentSettingsForConflict(companyId);
+
+        return NextResponse.json(
+          {
+            success: false,
+            conflict: true,
+            entityType: "company-settings",
+            entityId: companyId,
+            serverRecord: current,
+            serverUpdatedAt: existing.updatedAt,
+            message: "These company settings were changed in the cloud after this device last synced.",
+          },
+          { status: 409, headers: noStoreHeaders() }
+        );
+      }
+
+      if (!forceConflictResolution && incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
+        const current = await loadCurrentSettingsForConflict(companyId);
+
+        return NextResponse.json(
+          {
+            success: true,
+            settings: current,
+            ignored: true,
+            reason: "Incoming company settings are older than cloud copy.",
+          },
+          { status: 200, headers: noStoreHeaders() }
+        );
+      }
+    }
 
     const settings = existing
       ? await prisma.companySettings.update({

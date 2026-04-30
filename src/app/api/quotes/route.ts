@@ -22,6 +22,36 @@ function parseDateParam(value: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function parseDateValue(value: unknown): Date | null {
+  if (value == null) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return null;
+
+    const numeric = Number(raw);
+    const d = Number.isFinite(numeric) && /^\d+$/.test(raw) ? new Date(numeric) : new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+}
+
+function toBooleanFlag(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "string") return value.trim().toLowerCase() === "true";
+  return false;
+}
+
 function encodeCursor(updatedAt: Date, id: string): string {
   return Buffer.from(JSON.stringify({ updatedAt: updatedAt.toISOString(), id }), "utf8").toString("base64url");
 }
@@ -305,7 +335,9 @@ export async function POST(req: NextRequest) {
     const customerName = toRequiredString(body?.customerName, "Customer name", 200);
     const issueDate = toRequiredString(body?.issueDate, "Issue date", 30);
 
-    const incomingUpdatedAt = parseDateParam(body?.updatedAt ?? null);
+    const incomingUpdatedAt = parseDateValue(body?.updatedAt);
+    const baseRemoteUpdatedAt = parseDateValue(body?.baseRemoteUpdatedAt ?? body?.lastKnownRemoteUpdatedAt);
+    const forceConflictResolution = toBooleanFlag(body?.forceConflictResolution);
 
     const existing = await prisma.quote.findFirst({
       where: {
@@ -320,7 +352,49 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      if (incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
+      if (!forceConflictResolution && baseRemoteUpdatedAt && existing.updatedAt > baseRemoteUpdatedAt) {
+        const current = await prisma.quote.findUniqueOrThrow({
+          where: { id },
+          select: {
+            id: true,
+            number: true,
+            customerId: true,
+            customerName: true,
+            customerAddress: true,
+            issueDate: true,
+            expiryDate: true,
+            dueDate: true,
+            reference: true,
+            publicComments: true,
+            internalNotes: true,
+            currency: true,
+            status: true,
+            vatRate: true,
+            subtotal: true,
+            vat: true,
+            total: true,
+            data: true,
+            createdAt: true,
+            updatedAt: true,
+            deletedAt: true,
+          },
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            conflict: true,
+            entityType: "quote",
+            entityId: id,
+            serverRecord: mapQuoteForResponse(current),
+            serverUpdatedAt: current.updatedAt,
+            message: "This quote was changed in the cloud after this device last synced.",
+          },
+          { status: 409, headers: noStoreHeaders() }
+        );
+      }
+
+      if (!forceConflictResolution && incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
         const current = await prisma.quote.findUniqueOrThrow({
           where: { id },
           select: {

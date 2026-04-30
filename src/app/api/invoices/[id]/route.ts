@@ -22,6 +22,36 @@ function parseDateParam(value: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function parseDateValue(value: unknown): Date | null {
+  if (value == null) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return null;
+
+    const numeric = Number(raw);
+    const d = Number.isFinite(numeric) && /^\d+$/.test(raw) ? new Date(numeric) : new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+}
+
+function toBooleanFlag(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "string") return value.trim().toLowerCase() === "true";
+  return false;
+}
+
 function toNullableString(value: unknown, max = 1000): string | null {
   if (value == null) return null;
   const s = String(value).trim();
@@ -169,6 +199,38 @@ function mapInvoiceForResponse(row: {
   };
 }
 
+async function loadCurrentInvoiceForConflict(id: string) {
+  const current = await prisma.invoice.findUniqueOrThrow({
+    where: { id },
+    select: {
+      id: true,
+      number: true,
+      customerId: true,
+      customerName: true,
+      customerAddress: true,
+      issueDate: true,
+      dueDate: true,
+      paidDate: true,
+      reference: true,
+      publicComments: true,
+      internalNotes: true,
+      currency: true,
+      status: true,
+      vatRate: true,
+      subtotal: true,
+      vat: true,
+      total: true,
+      balance: true,
+      data: true,
+      createdAt: true,
+      updatedAt: true,
+      deletedAt: true,
+    },
+  });
+
+  return mapInvoiceForResponse(current);
+}
+
 export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
@@ -282,41 +344,34 @@ export async function PUT(
       return jsonError("Invoice not found.", 404);
     }
 
-    const incomingUpdatedAt = parseDateParam(body?.updatedAt ?? null);
+    const incomingUpdatedAt = parseDateValue(body?.updatedAt);
+    const baseRemoteUpdatedAt = parseDateValue(body?.baseRemoteUpdatedAt ?? body?.lastKnownRemoteUpdatedAt);
+    const forceConflictResolution = toBooleanFlag(body?.forceConflictResolution);
 
-    if (incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
-      const current = await prisma.invoice.findUniqueOrThrow({
-        where: { id },
-        select: {
-          id: true,
-          number: true,
-          customerId: true,
-          customerName: true,
-          customerAddress: true,
-          issueDate: true,
-          dueDate: true,
-          paidDate: true,
-          reference: true,
-          publicComments: true,
-          internalNotes: true,
-          currency: true,
-          status: true,
-          vatRate: true,
-          subtotal: true,
-          vat: true,
-          total: true,
-          balance: true,
-          data: true,
-          createdAt: true,
-          updatedAt: true,
-          deletedAt: true,
+    if (!forceConflictResolution && baseRemoteUpdatedAt && existing.updatedAt > baseRemoteUpdatedAt) {
+      const serverRecord = await loadCurrentInvoiceForConflict(id);
+
+      return NextResponse.json(
+        {
+          success: false,
+          conflict: true,
+          entityType: "invoice",
+          entityId: id,
+          serverRecord,
+          serverUpdatedAt: serverRecord.updatedAt,
+          message: "This invoice was changed in the cloud after this device last synced.",
         },
-      });
+        { status: 409, headers: noStoreHeaders() }
+      );
+    }
+
+    if (!forceConflictResolution && incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
+      const current = await loadCurrentInvoiceForConflict(id);
 
       return NextResponse.json(
         {
           success: true,
-          invoice: mapInvoiceForResponse(current),
+          invoice: current,
           ignored: true,
           reason: "Incoming invoice is older than cloud copy.",
         },

@@ -28,6 +28,42 @@ async function requireOwnedCompany(userId: string, companyId: string) {
   });
 }
 
+function parseOptionalDate(value: unknown): Date | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const date = new Date(value as any);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isCloudNewerThanBase(
+  cloudUpdatedAt: Date,
+  baseRemoteUpdatedAt: Date | null
+) {
+  if (!baseRemoteUpdatedAt) {
+    return false;
+  }
+
+  return cloudUpdatedAt.getTime() > baseRemoteUpdatedAt.getTime();
+}
+
+function customerConflictResponse(customer: any) {
+  return NextResponse.json(
+    {
+      success: false,
+      conflict: true,
+      entityType: "customer",
+      entityId: customer.id,
+      serverRecord: customer,
+      serverUpdatedAt: customer.updatedAt,
+      message:
+        "This customer was changed in the cloud after this device last synced.",
+    },
+    { status: 409 }
+  );
+}
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
@@ -94,30 +130,32 @@ export async function PUT(
     );
   }
 
-  const updatedAt =
-    body?.updatedAt && !Number.isNaN(new Date(body.updatedAt).getTime())
-      ? new Date(body.updatedAt)
-      : new Date();
+  const updatedAt = parseOptionalDate(body?.updatedAt) ?? new Date();
+  const deletedAt = parseOptionalDate(body?.deletedAt);
+  const baseRemoteUpdatedAt = parseOptionalDate(body?.baseRemoteUpdatedAt);
+  const forceConflictResolution = body?.forceConflictResolution === true;
 
-  const deletedAt =
-    body?.deletedAt && !Number.isNaN(new Date(body.deletedAt).getTime())
-      ? new Date(body.deletedAt)
-      : null;
+  if (
+    !forceConflictResolution &&
+    isCloudNewerThanBase(existing.updatedAt, baseRemoteUpdatedAt)
+  ) {
+    return customerConflictResponse(existing);
+  }
 
   const customer = await prisma.customer.update({
     where: { id },
-   data: {
-  name,
-  email: body?.email ?? null,
-  phone: body?.phone ?? null,
-  address: body?.address ?? null,
-  city: body?.city ?? null,
-  companyRegNo: body?.companyRegNo ?? null,
-  vatNumber: body?.vatNumber ?? null,
-  status: body?.status ?? "active", 
-  updatedAt,
-  deletedAt,
-},
+    data: {
+      name,
+      email: body?.email ?? null,
+      phone: body?.phone ?? null,
+      address: body?.address ?? null,
+      city: body?.city ?? null,
+      companyRegNo: body?.companyRegNo ?? null,
+      vatNumber: body?.vatNumber ?? null,
+      status: body?.status ?? "active",
+      updatedAt,
+      deletedAt,
+    },
   });
 
   return NextResponse.json({ success: true, customer });

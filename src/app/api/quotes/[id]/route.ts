@@ -52,6 +52,16 @@ function toBooleanOverride(value: unknown): boolean | null {
   return null;
 }
 
+function parseOptionalDate(value: unknown): Date | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "string") return parseDateParam(value);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
 async function requireAuthedUser(req: NextRequest) {
   const token = req.cookies.get(getSessionCookieName())?.value;
   if (!token) {
@@ -167,6 +177,37 @@ function mapQuoteForResponse(row: {
   };
 }
 
+async function loadCurrentQuoteForConflict(id: string) {
+  const current = await prisma.quote.findUniqueOrThrow({
+    where: { id },
+    select: {
+      id: true,
+      number: true,
+      customerId: true,
+      customerName: true,
+      customerAddress: true,
+      issueDate: true,
+      expiryDate: true,
+      dueDate: true,
+      reference: true,
+      publicComments: true,
+      internalNotes: true,
+      currency: true,
+      status: true,
+      vatRate: true,
+      subtotal: true,
+      vat: true,
+      total: true,
+      data: true,
+      createdAt: true,
+      updatedAt: true,
+      deletedAt: true,
+    },
+  });
+
+  return mapQuoteForResponse(current);
+}
+
 export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
@@ -279,40 +320,37 @@ export async function PUT(
       return jsonError("Quote not found.", 404);
     }
 
+    const forceConflictResolution = toBooleanOverride(body?.forceConflictResolution) === true;
+    const baseRemoteUpdatedAt =
+      parseOptionalDate(body?.baseRemoteUpdatedAt) ??
+      parseOptionalDate(body?.lastKnownRemoteUpdatedAt);
+
+    if (!forceConflictResolution && baseRemoteUpdatedAt && existing.updatedAt > baseRemoteUpdatedAt) {
+      const serverRecord = await loadCurrentQuoteForConflict(existing.id);
+
+      return NextResponse.json(
+        {
+          success: false,
+          conflict: true,
+          entityType: "quote",
+          entityId: existing.id,
+          serverRecord,
+          serverUpdatedAt: existing.updatedAt,
+          message: "This quote was changed in the cloud after this device last synced.",
+        },
+        { status: 409, headers: noStoreHeaders() }
+      );
+    }
+
     const incomingUpdatedAt = parseDateParam(body?.updatedAt ?? null);
 
-    if (incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
-      const current = await prisma.quote.findUniqueOrThrow({
-        where: { id },
-        select: {
-          id: true,
-          number: true,
-          customerId: true,
-          customerName: true,
-          customerAddress: true,
-          issueDate: true,
-          expiryDate: true,
-          dueDate: true,
-          reference: true,
-          publicComments: true,
-          internalNotes: true,
-          currency: true,
-          status: true,
-          vatRate: true,
-          subtotal: true,
-          vat: true,
-          total: true,
-          data: true,
-          createdAt: true,
-          updatedAt: true,
-          deletedAt: true,
-        },
-      });
+    if (!forceConflictResolution && !baseRemoteUpdatedAt && incomingUpdatedAt && existing.updatedAt > incomingUpdatedAt) {
+      const current = await loadCurrentQuoteForConflict(existing.id);
 
       return NextResponse.json(
         {
           success: true,
-          quote: mapQuoteForResponse(current),
+          quote: current,
           ignored: true,
           reason: "Incoming quote is older than cloud copy.",
         },
