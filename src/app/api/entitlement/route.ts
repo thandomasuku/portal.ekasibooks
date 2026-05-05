@@ -88,6 +88,16 @@ function stripGraceFields(prev: unknown) {
   return base;
 }
 
+function clearGraceFields(prev: unknown) {
+  const base = isPlainObject(prev) ? { ...(prev as Record<string, any>) } : {};
+  delete base.graceUntil;
+  delete base.graceReason;
+  delete base.graceSetAt;
+  delete base.downgradedAt;
+  delete base.downgradeReason;
+  return base;
+}
+
 const GRACE_DAYS = 7;
 const MS_DAY = 24 * 60 * 60 * 1000;
 
@@ -174,16 +184,6 @@ const AMOUNTS_KOBO = {
 
 function safeTrim(v: unknown) {
   return typeof v === "string" ? v.trim() : "";
-}
-
-function toLowerEmail(v: unknown) {
-  return typeof v === "string" ? v.trim().toLowerCase() : "";
-}
-
-function safeDate(v: unknown): Date | null {
-  if (typeof v !== "string" || !v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function lower(v: unknown) {
@@ -323,20 +323,41 @@ export async function GET(req: NextRequest) {
     const currentPeriodEnd = currentPeriodEndDate ? currentPeriodEndDate.toISOString() : null;
 
     const subStatus = normalizeStatus(sub?.status);
-    const isUnpaid =
-      subStatus === "past_due" ||
-      subStatus === "unpaid" ||
-      subStatus === "failed";
+
+    const isCanceledOrBlocked =
+      subStatus === "canceled" ||
+      subStatus === "cancelled" ||
+      subStatus === "blocked";
+
     const isActiveSubscription =
       subStatus === "active" ||
       subStatus === "trialing" ||
       subStatus === "success";
 
-    if (ent && isPaidTier(tier) && isActiveSubscription && entStatus === "grace") {
-      const nextFeatures = { ...featuresObj };
-      delete nextFeatures.graceUntil;
-      delete nextFeatures.graceReason;
-      delete nextFeatures.graceSetAt;
+    const nowMs = Date.now();
+    const cpeMs = currentPeriodEndDate?.getTime() ?? null;
+    const periodHasEnded = typeof cpeMs === "number" ? nowMs > cpeMs : false;
+    const paidPeriodIsCurrentlyValid =
+      isPaidTier(tier) &&
+      (!currentPeriodEndDate || (typeof cpeMs === "number" && nowMs <= cpeMs));
+
+    /**
+     * Important:
+     * Only clear an existing entitlement grace state when the paid period is actually valid.
+     *
+     * Paystack can still report a subscription as "active" after the billing period has ended
+     * and before a successful renewal extends currentPeriodEnd. In that case, the user must
+     * remain in grace, not be converted back to active without a valid period.
+     */
+    if (
+      ent &&
+      isPaidTier(tier) &&
+      isActiveSubscription &&
+      paidPeriodIsCurrentlyValid &&
+      entStatus === "grace"
+    ) {
+      const nextFeatures = clearGraceFields(featuresObj);
+      if (!isPlainObject(nextFeatures.limits)) nextFeatures.limits = {};
 
       await prisma.entitlement
         .update({
@@ -354,19 +375,39 @@ export async function GET(req: NextRequest) {
 
     let graceUntil: string | null = null;
 
-    if (ent && isPaidTier(tier) && currentPeriodEndDate) {
-      const nowMs = Date.now();
-      const cpeMs = currentPeriodEndDate.getTime();
+    if (ent && isPaidTier(tier) && currentPeriodEndDate && typeof cpeMs === "number") {
       const graceEndMs = cpeMs + GRACE_DAYS * MS_DAY;
 
-      if (isUnpaid && nowMs > cpeMs && nowMs <= graceEndMs) {
+      /**
+       * Business rule:
+       * If a paid user's billing period has ended and the portal has not received
+       * a new paid period yet, keep the paid tier in grace for 7 days.
+       *
+       * This intentionally does NOT depend only on subscription.status being
+       * "past_due"/"failed"/"unpaid", because providers can lag or keep the
+       * subscription object as "active" even when the latest renewal has not
+       * successfully extended currentPeriodEnd.
+       */
+      const shouldEnterGrace =
+        periodHasEnded &&
+        !isCanceledOrBlocked &&
+        nowMs <= graceEndMs;
+
+      if (shouldEnterGrace) {
         graceUntil = new Date(graceEndMs).toISOString();
 
-        if (entStatus !== "grace" || !featuresObj.graceUntil) {
+        if (entStatus !== "grace" || featuresObj.graceUntil !== graceUntil) {
           const nextFeatures = { ...featuresObj };
           nextFeatures.graceUntil = graceUntil;
           nextFeatures.graceReason = "period_ended";
-          nextFeatures.graceSetAt = new Date().toISOString();
+          nextFeatures.graceSetAt =
+            typeof featuresObj.graceSetAt === "string" && featuresObj.graceSetAt
+              ? featuresObj.graceSetAt
+              : new Date().toISOString();
+
+          delete nextFeatures.downgradedAt;
+          delete nextFeatures.downgradeReason;
+
           if (!isPlainObject(nextFeatures.limits)) nextFeatures.limits = {};
 
           await prisma.entitlement
@@ -383,8 +424,13 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      if (isUnpaid && nowMs > graceEndMs) {
+      /**
+       * Grace expired:
+       * only downgrade after the 7-day window has passed.
+       */
+      if (periodHasEnded && !isCanceledOrBlocked && nowMs > graceEndMs) {
         const nextFeatures = stripGraceFields(featuresObj);
+        if (!isPlainObject(nextFeatures.limits)) nextFeatures.limits = {};
 
         await prisma.entitlement.update({
           where: { userId },
@@ -405,8 +451,7 @@ export async function GET(req: NextRequest) {
         tier = "free";
         entStatus = "active";
         graceUntil = null;
-        featuresObj = isPlainObject(nextFeatures) ? (nextFeatures as Record<string, any>) : {};
-        if (!isPlainObject(featuresObj.limits)) featuresObj.limits = {};
+        featuresObj = nextFeatures;
       }
     }
 
