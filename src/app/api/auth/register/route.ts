@@ -152,7 +152,20 @@ export async function POST(req: NextRequest) {
       return { sent: false as const, reason: "send_failed" as const };
     });
 
-    // 4) Response (no session cookie)
+    // 4) Mark verification email as sent only after SMTP accepts it.
+    // This is best-effort and must not block registration if the timestamp update fails.
+    if (emailSend.sent === true) {
+      await prisma.user
+        .update({
+          where: { id: user.id },
+          data: { verifySentAt: new Date() },
+        })
+        .catch((err) => {
+          console.warn("[auth/register] verifySentAt update failed:", err?.message || err);
+        });
+    }
+
+    // 5) Response (no session cookie)
     const resBody: any = {
       success: true,
       user: { id: user.id, email: user.email },

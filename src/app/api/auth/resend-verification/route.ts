@@ -101,6 +101,19 @@ export async function POST(req: NextRequest) {
       return { sent: false as const, reason: "send_failed" as const };
     });
 
+    // Mark verification email as sent only after SMTP accepts it.
+    // This is best-effort and must not block the resend response if the timestamp update fails.
+    if (emailSend.sent === true) {
+      await prisma.user
+        .update({
+          where: { id: user.id },
+          data: { verifySentAt: new Date() },
+        })
+        .catch((err) => {
+          console.warn("[auth/resend-verification] verifySentAt update failed:", err?.message || err);
+        });
+    }
+
     const resBody: any = { success: true, emailSent: emailSend.sent === true };
     if (process.env.NODE_ENV !== "production" && emailSend.sent !== true) {
       resBody.dev_verifyUrl = verifyUrl;
@@ -108,6 +121,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(resBody, { status: 200 });
   } catch (e: any) {
+    console.error("[auth/resend-verification] error", e?.message || e);
+
     return NextResponse.json(
       { success: false, error: e?.message || "Resend failed." },
       { status: 500 }
