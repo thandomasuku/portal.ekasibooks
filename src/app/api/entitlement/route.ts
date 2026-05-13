@@ -271,6 +271,20 @@ function pickManageableSubscription(list: PaystackSubscription[]): PaystackSubsc
   return fb ?? list[0] ?? null;
 }
 
+async function markDesktopEntitlementActivity(userId: string) {
+  const now = new Date();
+
+  await prisma.user
+    .update({
+      where: { id: userId },
+      data: {
+        lastDesktopSeenAt: now,
+        lastEntitlementCheckAt: now,
+      } as any,
+    })
+    .catch(() => null);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const cookieName = getSessionCookieName();
@@ -296,6 +310,8 @@ export async function GET(req: NextRequest) {
         { status: 401, headers: { "Cache-Control": "no-store" } }
       );
     }
+
+    await markDesktopEntitlementActivity(userId);
 
     await syncSubscriptionFromPaystack(userId).catch(() => null);
 
