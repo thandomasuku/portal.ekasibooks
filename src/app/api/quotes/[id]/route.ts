@@ -452,6 +452,7 @@ export async function DELETE(
     }
 
     const { id } = await ctx.params;
+    const purge = req.nextUrl.searchParams.get("purge") === "true";
 
     const existing = await prisma.quote.findFirst({
       where: {
@@ -461,11 +462,46 @@ export async function DELETE(
       },
       select: {
         id: true,
+        number: true,
+        customerId: true,
+        customerName: true,
+        customerAddress: true,
+        issueDate: true,
+        expiryDate: true,
+        dueDate: true,
+        reference: true,
+        publicComments: true,
+        internalNotes: true,
+        currency: true,
+        status: true,
+        vatRate: true,
+        subtotal: true,
+        vat: true,
+        total: true,
+        data: true,
+        createdAt: true,
+        updatedAt: true,
+        deletedAt: true,
       },
     });
 
     if (!existing) {
       return jsonError("Quote not found.", 404);
+    }
+
+    if (purge) {
+      await prisma.quote.delete({
+        where: { id },
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          purged: true,
+          quoteId: id,
+        },
+        { status: 200, headers: noStoreHeaders() }
+      );
     }
 
     const deleted = await prisma.quote.update({
