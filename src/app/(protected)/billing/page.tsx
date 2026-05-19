@@ -597,6 +597,7 @@ export default function BillingPage() {
 
   const [manageLoading, setManageLoading] = useState(false);
   const [manageError, setManageError] = useState<string | null>(null);
+  const [showSnapshot, setShowSnapshot] = useState(false);
 
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [selectedTier, setSelectedTier] = useState<PaidTier>("starter");
@@ -943,79 +944,161 @@ export default function BillingPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* HERO */}
-          <PremiumCard className="portal-card-premium">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div className="min-w-0">
-                <Chip
-                  tone={
-                    heroTone === "success"
-                      ? "success"
-                      : heroTone === "brand"
-                      ? "brand"
-                      : "neutral"
-                  }
-                >
-                  <span className={cx("h-2 w-2 rounded-full", heroDot)} />
-                  {planLabel} • {heroStatusLabel}
-                </Chip>
+          {/* BILLING COMMAND CENTRE */}
+          <div className="overflow-hidden rounded-[1.75rem] bg-white shadow-[0_18px_55px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/80">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="relative overflow-hidden p-5 sm:p-6">
+                <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-teal-100/70 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-24 left-10 h-56 w-56 rounded-full bg-slate-100 blur-3xl" />
 
-                <h2 className="mt-3 text-xl font-semibold text-slate-900">
-                  {effectiveStatus === "read_only"
-                    ? "Your account is in read-only mode"
-                    : "Your subscription is active"}
-                </h2>
+                <div className="relative">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip
+                      tone={
+                        heroTone === "success"
+                          ? "success"
+                          : heroTone === "brand"
+                          ? "brand"
+                          : "neutral"
+                      }
+                    >
+                      <span className={cx("h-2 w-2 rounded-full", heroDot)} />
+                      {heroStatusLabel}
+                    </Chip>
+                    <Chip tone="neutral">{planLabel} plan</Chip>
+                    {renewsAt ? <Chip tone="neutral">Renews {fmtDate(renewsAt)}</Chip> : null}
+                  </div>
 
-                <p className="mt-1 text-sm text-slate-600">
-                  {effectiveStatus === "read_only"
-                    ? "Your subscription is not active. The desktop app will be read-only until billing is resolved."
-                    : "Manage billing securely on Paystack — update your card, cancel anytime."}
-                </p>
+                  <div className="mt-5 max-w-3xl">
+                    <p className="text-[11px] font-black uppercase tracking-[0.32em] text-teal-600">
+                      Billing command centre
+                    </p>
+                    <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                      {effectiveStatus === "read_only"
+                        ? "Payment attention needed."
+                        : "Your subscription is in good standing."}
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                      {effectiveStatus === "read_only"
+                        ? "Your desktop app will stay in read-only mode until billing is resolved."
+                        : "Manage your plan, payment method and entitlement status from one secure place."}
+                    </p>
+                  </div>
 
-                <p className="mt-2 text-xs text-slate-500">
-                  Company limit:{" "}
-                  <span className="font-semibold text-slate-700">{companyLimit}</span>
-                </p>
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                    <PortalButton
+                      onClick={onManagePlan}
+                      isLoading={manageLoading}
+                      title="Manage subscription on Paystack"
+                      type="button"
+                    >
+                      <span className={BTN_ICON_PRIMARY}>⚙</span>
+                      {manageLoading ? "Opening..." : "Manage plan"}
+                    </PortalButton>
+                    <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
+                      <span className={BTN_ICON_SECONDARY}>↻</span>
+                      Refresh status
+                    </PortalButton>
+                  </div>
 
-                {graceUntil ? (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Grace window until{" "}
-                    <span className="font-semibold text-slate-700">{fmtDate(graceUntil)}</span>
-                  </p>
-                ) : null}
+                  <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm">
+                      <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">
+                        Plan
+                      </p>
+                      <p className="mt-2 text-xl font-black text-slate-950">{planLabel}</p>
+                      <p className="mt-1 text-sm text-slate-500">{companyLimit} compan{companyLimit === 1 ? "y" : "ies"} allowed</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm">
+                      <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">
+                        Price
+                      </p>
+                      <p className="mt-2 text-xl font-black text-slate-950">{kpiPrice}</p>
+                      <p className="mt-1 text-sm text-slate-500">Current billing value</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm">
+                      <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">
+                        Access
+                      </p>
+                      <p className="mt-2 text-xl font-black text-slate-950">
+                        {featureReadOnly ? "Read-only" : "Full access"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">Desktop entitlement</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex w-full flex-col items-end gap-2 md:w-auto">
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <PortalButton
-                    onClick={onManagePlan}
-                    isLoading={manageLoading}
-                    title="Manage subscription on Paystack"
-                    type="button"
-                  >
-                    <span className={BTN_ICON_PRIMARY}>⚙</span>
-                    {manageLoading ? "Opening..." : "Manage plan"}
-                  </PortalButton>
+              <aside className="bg-[#1F3147] p-5 text-white sm:p-6">
+                <div className="inline-flex rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-white/75">
+                  Secure Paystack billing
+                </div>
+                <h3 className="mt-5 text-xl font-black tracking-tight">
+                  {effectiveStatus === "read_only" ? "Restore access quickly." : "Payment method protected."}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-200/85">
+                  Paystack handles checkout and card security. eKasiBooks stores only the subscription status your desktop app needs.
+                </p>
 
-                  <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
-                    <span className={BTN_ICON_SECONDARY}>↻</span>
-                    Refresh status
-                  </PortalButton>
+                <div className="mt-5 space-y-3">
+                  <button
+                    type="button"
+                    onClick={onManagePlan}
+                    className="group flex w-full items-center justify-between rounded-2xl bg-white/10 p-3 text-left ring-1 ring-white/10 transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-teal-300"
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-400/20 text-lg">
+                        ⚙
+                      </span>
+                      <span>
+                        <span className="block font-black">Manage subscription</span>
+                        <span className="block text-sm text-slate-300">Payment method, receipts and cancellation</span>
+                      </span>
+                    </span>
+                    <span className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-white">→</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onRefreshAll}
+                    className="group flex w-full items-center justify-between rounded-2xl bg-white/10 p-3 text-left ring-1 ring-white/10 transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-teal-300"
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-lg">
+                        ↻
+                      </span>
+                      <span>
+                        <span className="block font-black">Refresh entitlement</span>
+                        <span className="block text-sm text-slate-300">Pull the latest billing status</span>
+                      </span>
+                    </span>
+                    <span className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-white">→</span>
+                  </button>
                 </div>
 
-                <span className="text-[11px] leading-tight text-slate-500">
-                  Cancel anytime (secure Paystack portal).
-                </span>
-              </div>
+                <div className="mt-6 rounded-2xl bg-white/10 p-3 ring-1 ring-white/10">
+                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    Current status
+                  </p>
+                  <p className="mt-2 text-lg font-black">{heroStatusLabel}</p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    {withinGrace
+                      ? `Grace period active${graceCountdown != null ? ` • ${graceCountdown} day${graceCountdown === 1 ? "" : "s"} left` : ""}`
+                      : effectiveStatus === "read_only"
+                      ? "Resolve billing to unlock full access."
+                      : "No billing action required."}
+                  </p>
+                </div>
+              </aside>
             </div>
-          </PremiumCard>
+          </div>
 
           {/* GRACE STRIP */}
           {withinGrace ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <PortalAlert tone="info">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm font-semibold text-amber-900">Grace period active</div>
-                <div className="text-xs text-amber-800">
+                <span className="font-semibold">Grace period active</span>
+                <span className="text-xs">
                   {graceCountdown != null ? (
                     <>
                       <span className="font-semibold">{graceCountdown}</span> day
@@ -1027,118 +1110,119 @@ export default function BillingPage() {
                       Ends <span className="font-semibold">{fmtDate(graceUntil)}</span>
                     </>
                   )}
-                </div>
+                </span>
               </div>
-              <div className="mt-2 text-sm text-amber-900/80">
-                You still have paid access during grace. Update your payment method to avoid a
-                downgrade.
+              <div className="mt-1">
+                You still have paid access during grace. Update your payment method to avoid a downgrade.
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <PortalButton onClick={onManagePlan} isLoading={manageLoading} variant="secondary" type="button">
-                  <span className={BTN_ICON_SECONDARY}>⚙</span>
-                  {manageLoading ? "Opening..." : "Update payment method"}
-                </PortalButton>
-                <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
-                  <span className={BTN_ICON_SECONDARY}>↻</span>
-                  Refresh
-                </PortalButton>
-              </div>
-            </div>
+            </PortalAlert>
           ) : null}
 
           {/* ERRORS / NOTES */}
-          {entError ? (
-            <PortalAlert tone="danger">{entError}</PortalAlert>
-          ) : null}
-
-          {upgradeError ? (
-            <PortalAlert tone="danger">{upgradeError}</PortalAlert>
-          ) : null}
-
-          {manageError ? (
-            <PortalAlert tone="danger">{manageError}</PortalAlert>
-          ) : null}
-
+          {entError ? <PortalAlert tone="danger">{entError}</PortalAlert> : null}
+          {upgradeError ? <PortalAlert tone="danger">{upgradeError}</PortalAlert> : null}
+          {manageError ? <PortalAlert tone="danger">{manageError}</PortalAlert> : null}
           {verifyLoading ? (
             <PortalAlert tone="info">Verifying payment…</PortalAlert>
           ) : verifyNote ? (
             <PortalAlert tone="info">{verifyNote}</PortalAlert>
           ) : null}
 
-          {/* KPI */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Plan" value={planLabel} icon="★" />
-            <KpiCard label="Status" value={heroStatusLabel} icon="✓" />
-            <KpiCard label="Renews" value={fmtDate(renewsAt)} icon="⏱" />
-            <KpiCard label="Price" value={kpiPrice} icon="R" />
-          </div>
+          {/* ACCOUNT STRIP */}
+          <PremiumCard className="portal-card-premium">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-950">Subscription summary</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  The effective billing state your portal and desktop app will apply.
+                </p>
+              </div>
+              <Chip
+                tone={
+                  heroTone === "success"
+                    ? "success"
+                    : heroTone === "brand"
+                    ? "brand"
+                    : "neutral"
+                }
+              >
+                <span className={cx("h-2 w-2 rounded-full", heroDot)} />
+                {heroStatusLabel}
+              </Chip>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <KpiCard label="Plan" value={planLabel} icon="★" />
+              <KpiCard label="Renews" value={fmtDate(renewsAt)} icon="⏱" />
+              <KpiCard label="Companies" value={String(companyLimit)} icon="▣" />
+              <KpiCard label="Read-only" value={featureReadOnly ? "Yes" : "No"} icon="✓" />
+            </div>
+          </PremiumCard>
 
           {/* MAIN GRID */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <PremiumCard className="portal-card-premium lg:col-span-2">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Plan details</h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Subscription status and what’s included.
-                  </p>
-                </div>
-
-                <Chip
-                  tone={
-                    heroTone === "success"
-                      ? "success"
-                      : heroTone === "brand"
-                      ? "brand"
-                      : "neutral"
-                  }
-                >
-                  <span className={cx("mr-2 inline-block h-2 w-2 rounded-full", heroDot)} />
-                  {heroStatusLabel}
-                </Chip>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <DetailTile label="Plan" value={planLabel} />
-                <DetailTile label="Price" value={priceLabelForPaid} />
-                <DetailTile label="Renews" value={fmtDate(renewsAt)} />
-              </div>
-
-              <div className="mt-6 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                <p className="text-sm text-slate-700">
-                  {effectiveStatus === "read_only" ? (
-                    <>
-                      Your account is <span className="font-semibold">read-only</span>. Resolve
-                      billing to restore full access.
-                    </>
-                  ) : (
-                    <>
-                      Your subscription is{" "}
-                      <span className="font-semibold">
-                        {heroStatusLabel.toLowerCase()}
-                      </span>
-                      . Manage it securely via <span className="font-semibold">Paystack</span>.
-                    </>
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Paystack handles checkout & tokenization. We store subscription status only.
-                </p>
-              </div>
-
-              {/* PLAN COMPARISON */}
-              <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-                <div className="flex items-start justify-between gap-3">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="space-y-6">
+              <PremiumCard className="portal-card-premium">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Plan comparison</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      The main difference is the number of companies you can create.
+                    <h3 className="text-lg font-black text-slate-950">Current plan details</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Subscription status, renewal and payment verification tools.
                     </p>
                   </div>
-                  <Chip tone="neutral">Companies</Chip>
+                  <PortalButton onClick={onManagePlan} isLoading={manageLoading} type="button">
+                    {manageLoading ? "Opening..." : "Manage plan"}
+                  </PortalButton>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <DetailTile label="Plan" value={planLabel} />
+                  <DetailTile label="Status" value={heroStatusLabel} />
+                  <DetailTile label="Price" value={priceLabelForPaid} />
+                  <DetailTile label="Current period ends" value={fmtDate(renewsAt)} />
+                  <DetailTile label="Grace until" value={fmtDate(graceUntil)} />
+                  <DetailTile label="Companies allowed" value={String(companyLimit)} />
+                </div>
+
+                <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-black text-slate-950">Manual payment verification</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        If your plan did not update after checkout, paste the Paystack reference.
+                      </p>
+                    </div>
+                    <Chip tone="neutral">Fallback</Chip>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <PortalInput
+                      value={manualRef}
+                      onChange={(e) => setManualRef(e.target.value)}
+                      placeholder="e.g. 9t5k9m9d0x / trxref"
+                      className="h-11"
+                    />
+                    <PortalButton onClick={onManualVerify} isLoading={verifyLoading} variant="secondary" type="button">
+                      {verifyLoading ? "Verifying…" : "Verify"}
+                    </PortalButton>
+                  </div>
+
+                  {manualErr ? <PortalAlert tone="danger" className="mt-3">{manualErr}</PortalAlert> : null}
+                </div>
+              </PremiumCard>
+
+              <PremiumCard className="portal-card-premium">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-950">Compare plans</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      The main difference today is company allowance and access level.
+                    </p>
+                  </div>
+                  <Chip tone="neutral">Pricing</Chip>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
                   <PlanCard
                     title="STARTER"
                     price={
@@ -1186,41 +1270,19 @@ export default function BillingPage() {
                     ]}
                   />
                 </div>
-              </div>
+              </PremiumCard>
 
-              {/* VERIFY */}
-              <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-                <div className="flex items-start justify-between gap-3">
+              <PremiumCard className="portal-card-premium">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Verify payment</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      If your plan didn’t update after checkout, paste the Paystack reference.
+                    <h3 className="text-lg font-black text-slate-950">Questions customers may ask</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Short answers for payment and subscription concerns.
                     </p>
                   </div>
-                  <Chip tone="neutral">Manual</Chip>
+                  <Chip tone="neutral">FAQ</Chip>
                 </div>
-
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <PortalInput
-                    value={manualRef}
-                    onChange={(e) => setManualRef(e.target.value)}
-                    placeholder="e.g. 9t5k9m9d0x / trxref"
-                    className="h-10"
-                  />
-                  <PortalButton onClick={onManualVerify} isLoading={verifyLoading} variant="secondary" type="button">
-                    {verifyLoading ? "Verifying…" : "Verify"}
-                  </PortalButton>
-                </div>
-
-                {manualErr ? (
-                  <PortalAlert tone="danger" className="mt-3">{manualErr}</PortalAlert>
-                ) : null}
-              </div>
-
-              {/* FAQ */}
-              <div className="mt-6 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-                <p className="text-sm font-semibold text-slate-900">FAQ</p>
-                <div className="mt-3 space-y-3">
+                <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-3">
                   <Faq
                     q="Do you store my card details?"
                     a="No. Paystack stores and secures payment methods. eKasiBooks only stores your subscription status."
@@ -1234,14 +1296,14 @@ export default function BillingPage() {
                     a="Yes. Click “Manage plan” — you can cancel anytime from the secure Paystack portal."
                   />
                 </div>
-              </div>
-            </PremiumCard>
+              </PremiumCard>
+            </div>
 
-            <div className="space-y-6">
+            <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
               <PremiumCard tone="soft" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">Payment method</h3>
+                    <h3 className="text-lg font-black text-slate-950">Payment method</h3>
                     <p className="mt-1 text-sm text-slate-600">Handled securely by Paystack.</p>
                   </div>
                   <Chip tone="success">
@@ -1250,15 +1312,13 @@ export default function BillingPage() {
                   </Chip>
                 </div>
 
-                <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-slate-900">
-                      Stored on Paystack
-                    </span>
-                    <span className="text-xs font-semibold text-slate-600">Protected</span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-600">
-                    For security, we don’t store card details in the portal.
+                <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    Card security
+                  </p>
+                  <p className="mt-2 text-base font-black text-slate-950">Stored on Paystack</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    We do not store card details in the portal.
                   </p>
                 </div>
 
@@ -1266,7 +1326,7 @@ export default function BillingPage() {
                   onClick={onManagePlan}
                   isLoading={manageLoading}
                   variant="secondary"
-                  className="mt-6 w-full"
+                  className="mt-5 w-full"
                   title="Manage subscription on Paystack"
                   type="button"
                 >
@@ -1277,26 +1337,34 @@ export default function BillingPage() {
               <PremiumCard tone="soft" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">
-                      Entitlement snapshot
-                    </h3>
+                    <h3 className="text-lg font-black text-slate-950">Entitlement snapshot</h3>
                     <p className="mt-1 text-sm text-slate-600">
-                      This is what the desktop app will consume.
+                      Technical view used when debugging desktop access.
                     </p>
                   </div>
                   <CopyButton text={safeJson(entitlementSnapshot)} />
                 </div>
 
-                <pre className="mt-4 max-h-[260px] overflow-auto rounded-2xl bg-slate-900 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
-                  {safeJson(entitlementSnapshot)}
-                </pre>
+                <button
+                  type="button"
+                  onClick={() => setShowSnapshot((v) => !v)}
+                  className="mt-5 flex w-full items-center justify-between rounded-3xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-black text-slate-800 transition hover:border-teal-200 hover:bg-teal-50/60 focus:outline-none focus:ring-2 focus:ring-teal-300"
+                >
+                  <span>{showSnapshot ? "Hide technical snapshot" : "Show technical snapshot"}</span>
+                  <span>{showSnapshot ? "↑" : "↓"}</span>
+                </button>
 
-                <div className="mt-3 text-[11px] text-slate-500">
-                  Effective status:{" "}
-                  <span className="font-semibold text-slate-700">{heroStatusLabel}</span>
-                </div>
+                {showSnapshot ? (
+                  <pre className="mt-4 max-h-[260px] overflow-auto rounded-2xl bg-slate-950 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
+                    {safeJson(entitlementSnapshot)}
+                  </pre>
+                ) : (
+                  <p className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                    Hidden by default so billing stays focused. Open this only when debugging sync or entitlement issues.
+                  </p>
+                )}
               </PremiumCard>
-            </div>
+            </aside>
           </div>
         </div>
       )}

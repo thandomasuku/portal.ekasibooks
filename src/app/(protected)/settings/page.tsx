@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import {
   PremiumCard,
-  KpiCard,
   DetailTile,
   Chip,
   PortalButton,
@@ -451,68 +450,113 @@ export default function SettingsPage() {
         </PremiumCard>
       ) : (
         <div className="space-y-5">
-          {/* Hero */}
-          <PremiumCard tone="brand" className="portal-card-premium">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <Chip>
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Account security: Protected
-                </Chip>
+          {/* Compact settings header */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <PremiumCard className="portal-card-premium">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip>
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      Protected account
+                    </Chip>
+                    {readOnly ? (
+                      <Chip tone="neutral">Read-only</Chip>
+                    ) : (
+                      <Chip tone="success">Editable</Chip>
+                    )}
+                  </div>
 
-                <h2 className="mt-2 text-lg font-semibold text-slate-900">
-                  Keep your account safe.
-                </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Review your profile info and security options. Password
-                  changes are protected by OTP verification.
-                </p>
-
-                {readOnly ? (
-                  <p className="mt-2 text-xs text-amber-700">
-                    Your account is currently read-only. Profile and security
-                    updates are disabled.
+                  <h2 className="mt-3 text-xl font-semibold tracking-tight text-slate-950">
+                    Settings
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                    Manage your profile information and security preferences.
+                    Password updates are protected with OTP verification.
                   </p>
-                ) : null}
+
+                  {readOnly ? (
+                    <PortalAlert tone="warning" className="mt-4">
+                      Your account is currently read-only. Profile and security
+                      updates are disabled until access is restored.
+                    </PortalAlert>
+                  ) : null}
+                </div>
+
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+                  <PortalButton
+                    disabled={!canEditProfile}
+                    onClick={openEdit}
+                    type="button"
+                    className="justify-center rounded-2xl"
+                    title={
+                      !canEditProfile
+                        ? "Your account is read-only or unavailable right now"
+                        : "Edit your profile"
+                    }
+                  >
+                    Edit profile
+                  </PortalButton>
+
+                  <PortalButton
+                    disabled={!canManageSecurity}
+                    onClick={openPassword}
+                    variant="secondary"
+                    type="button"
+                    className="justify-center rounded-2xl"
+                    title={
+                      !canManageSecurity
+                        ? "Your account is read-only or unavailable right now"
+                        : "Set or change your password"
+                    }
+                  >
+                    Change password
+                  </PortalButton>
+                </div>
+              </div>
+            </PremiumCard>
+
+            <PremiumCard className="portal-card-premium">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-950">
+                    Account status
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Quick reference for the signed-in account.
+                  </p>
+                </div>
+                <Chip tone="success">Verified</Chip>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <PortalButton
-                  disabled
-                  variant="secondary"
-                  className="rounded-2xl opacity-60"
-                  title="Coming soon"
-                  type="button"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
-                    ✓
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-slate-500">Email</span>
+                  <span className="truncate text-right font-medium text-slate-900">
+                    {String(userEmail)}
                   </span>
-                  Enable MFA (soon)
-                </PortalButton>
-
-                <PortalButton
-                  onClick={() => router.push("/billing")}
-                  type="button"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/15 text-[12px]">
-                    ⟠
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-slate-500">Plan</span>
+                  <span className="font-medium text-slate-900">{planName}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-slate-500">Last login</span>
+                  <span className="text-right font-medium text-slate-900">
+                    {fmtDate(sessionUser?.lastLoginAt)}
                   </span>
-                  View plan
-                </PortalButton>
+                </div>
               </div>
-            </div>
-          </PremiumCard>
 
-          {/* KPI row */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Email" value={String(userEmail)} icon="✉" />
-            <KpiCard label="Plan" value={planName} icon="★" />
-            <KpiCard label="Account ID" value={String(userId)} icon="ID" />
-            <KpiCard
-              label="Last login"
-              value={fmtDate(sessionUser?.lastLoginAt)}
-              icon="✓"
-            />
+              <PortalButton
+                onClick={() => router.push("/billing")}
+                variant="secondary"
+                type="button"
+                className="mt-4 w-full justify-center rounded-2xl"
+              >
+                View billing & access
+              </PortalButton>
+            </PremiumCard>
           </div>
 
           {/* Main grid */}

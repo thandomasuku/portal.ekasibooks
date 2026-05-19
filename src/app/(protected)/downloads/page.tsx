@@ -336,54 +336,75 @@ export default function DownloadsPage() {
             </PortalAlert>
           ) : null}
 
-          {/* Top “product” card */}
-          <PremiumCard className="portal-card-premium">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
+          {/* Compact download centre */}
+          <PremiumCard className="portal-card-premium overflow-hidden p-0">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+              <div className="min-w-0 p-5 sm:p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <Chip tone={isPaid ? "success" : "neutral"}>
                     <span className={cx("h-2 w-2 rounded-full", isPaid ? "bg-emerald-500" : "bg-slate-400")} />
                     {isPaid ? "Subscription active" : "FREE plan"}
                   </Chip>
-
-                  <span className="text-xs text-slate-500">•</span>
-
-                  <span className="text-xs font-semibold text-slate-700">{latest.channel} channel</span>
+                  <Chip>{latest.channel} channel</Chip>
+                  <span className="text-xs font-semibold text-slate-500">Windows installer</span>
                 </div>
 
-                <h2 className="mt-3 text-xl font-semibold tracking-tight text-slate-900">{latest.name}</h2>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
-                  Install the desktop app on your Windows machine. Your portal manages billing, entitlement and downloads;
-                  daily accounting work happens inside eKasiBooks Desktop.
-                </p>
+                <div className="mt-4 max-w-3xl">
+                  <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Download eKasiBooks Desktop</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                    Install the latest Windows desktop app. Your portal handles billing, entitlement and secure downloads;
+                    your day-to-day accounting work happens in eKasiBooks Desktop.
+                  </p>
+                </div>
 
-                <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
-                  <span className="font-semibold text-slate-700">Download URL:</span>{" "}
-                  <span className="break-all">{latest.url}</span>
+                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <DetailTile label="Version" value={latest.version} />
+                  <DetailTile label="Released" value={latest.releaseDate ? fmtDate(latest.releaseDate) : "—"} />
+                  <DetailTile label="Size" value={latest.size} />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
-                <PortalButton onClick={onDownload} type="button">
-                  Download
-                </PortalButton>
+              <div className="bg-[#1F3147] p-5 text-white sm:p-6">
+                <div className="flex h-full flex-col justify-between gap-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/55">Latest build</p>
+                    <h3 className="mt-2 text-lg font-semibold text-white">{latest.version || "Latest version"}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-white/70">
+                      Recommended for Windows 10/11 users. Keep the installer link handy for client machines.
+                    </p>
+                  </div>
 
-                <PortalButton onClick={onCopyLink} variant="secondary" type="button">
-                  {copyMsg ?? "Copy link"}
-                </PortalButton>
+                  <div className="space-y-2">
+                    <button
+                      onClick={onDownload}
+                      type="button"
+                      className="inline-flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#1F3147] shadow-sm transition hover:-translate-y-[1px] hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1F3147]"
+                    >
+                      Download installer
+                    </button>
 
-                <PortalButton disabled variant="secondary" className="opacity-60" title="Coming soon" type="button">
-                  Versions soon
-                </PortalButton>
+                    <PortalButton
+                      onClick={onCopyLink}
+                      variant="secondary"
+                      type="button"
+                      className="w-full justify-center border-white/15 bg-white/10 text-white hover:bg-white/15"
+                    >
+                      {copyMsg ?? "Copy download link"}
+                    </PortalButton>
+
+                    <p className="pt-1 text-center text-[11px] leading-relaxed text-white/55">
+                      Stable channel · Windows 64-bit · Secure download
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </PremiumCard>
 
-          {/* KPIs */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Version" value={latest.version} icon="v" />
-            <KpiCard label="Released" value={latest.releaseDate ? fmtDate(latest.releaseDate) : "—"} icon="⏱" />
-            <KpiCard label="Size" value={latest.size} icon="⬇" />
+            <KpiCard label="Current version" value={latest.version} icon="v" />
+            <KpiCard label="Release date" value={latest.releaseDate ? fmtDate(latest.releaseDate) : "—"} icon="⏱" />
+            <KpiCard label="File size" value={latest.size} icon="⬇" />
             <KpiCard label="Channel" value={latest.channel} icon="★" />
           </div>
 

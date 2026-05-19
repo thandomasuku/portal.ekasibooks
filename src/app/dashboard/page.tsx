@@ -5,8 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
 import {
   PremiumCard,
-  KpiCard,
-  DetailTile,
   Chip,
   PortalButton,
   PortalEmptyState,
@@ -116,6 +114,7 @@ function statusFromEntitlement(ent: any) {
       tone: "neutral" as const,
       dot: "bg-slate-400",
       hint: "Limited access. Trial limits apply in the desktop app.",
+      summary: "You are currently on the FREE plan. Upgrade when you are ready for cloud sync and higher limits.",
       countdownTargetMs: Number.NaN,
       countdownLabel: null as string | null,
       isBillingProblem: false,
@@ -124,10 +123,11 @@ function statusFromEntitlement(ent: any) {
 
   if (readOnly) {
     return {
-      label: "READ_ONLY",
+      label: "READ ONLY",
       tone: "neutral" as const,
       dot: "bg-amber-500",
       hint: "Your subscription is not active or is blocked. Desktop will be read-only.",
+      summary: "Your portal can still be viewed, but desktop access may be restricted until billing is resolved.",
       countdownTargetMs: Number.NaN,
       countdownLabel: null as string | null,
       isBillingProblem: true,
@@ -140,6 +140,7 @@ function statusFromEntitlement(ent: any) {
       tone: "brand" as const,
       dot: "bg-amber-500",
       hint: "You’re in grace. Access remains enabled until grace ends.",
+      summary: "Your account is still usable during the grace period. Please confirm billing before grace ends.",
       countdownTargetMs: graceUntilMs,
       countdownLabel: "Grace ends in",
       isBillingProblem: true,
@@ -153,6 +154,7 @@ function statusFromEntitlement(ent: any) {
       tone: "success" as const,
       dot: "bg-emerald-500",
       hint: "Subscription active. Full access enabled.",
+      summary: "Your portal, desktop entitlement and cloud-enabled features are in good standing.",
       countdownTargetMs: Number.isFinite(periodEndMs) ? periodEndMs : Number.NaN,
       countdownLabel: Number.isFinite(periodEndMs) ? "Renews in" : null,
       isBillingProblem: false,
@@ -162,10 +164,11 @@ function statusFromEntitlement(ent: any) {
   const isProblem = ["past_due", "canceled", "cancelled", "blocked", "unpaid"].includes(statusRaw);
 
   return {
-    label: (statusRaw || "unknown").toUpperCase(),
+    label: (statusRaw || "UNKNOWN").toUpperCase(),
     tone: "neutral" as const,
     dot: isProblem ? "bg-amber-500" : "bg-slate-400",
     hint: "Status reported by billing system.",
+    summary: "This account status comes from the billing system. Refresh if you recently made a payment.",
     countdownTargetMs: Number.NaN,
     countdownLabel: null as string | null,
     isBillingProblem: isProblem,
@@ -206,12 +209,6 @@ function usePortalEntitlement(enabled: boolean, refreshKey: number) {
 
   return { entitlement, entitlementError: error };
 }
-
-/* =========================
-   Premium UI primitives
-   ========================= */
-
-const ICON_CHIP = "grid h-7 w-7 place-items-center rounded-lg bg-white/12 ring-1 ring-white/15 text-[12px]";
 
 /* =========================
    Billing CTA rules
@@ -272,13 +269,14 @@ export default function DashboardPage() {
   const { state, user, error, refresh } = useSession();
 
   const [entRefreshKey, setEntRefreshKey] = useState(0);
+  const [showSnapshot, setShowSnapshot] = useState(false);
   const { entitlement, entitlementError } = usePortalEntitlement(state === "ready", entRefreshKey);
 
   const subtitle =
     state === "ready"
       ? entitlementError
         ? `Session ok, but entitlement failed: ${entitlementError}`
-        : "Manage your account, subscription and downloads."
+        : "Manage access, billing, downloads and account security."
       : state === "unauth"
       ? "Your session has expired."
       : state === "error"
@@ -308,6 +306,14 @@ export default function DashboardPage() {
     };
   }, [entitlement]);
 
+  const companyLimit = String(entitlement?.features?.limits?.companies ?? 1);
+  const renewalLabel =
+    countdown && status.countdownLabel
+      ? `${status.countdownLabel} ${countdown}`
+      : entitlement?.currentPeriodEnd
+      ? `Renews ${fmtDate(entitlement.currentPeriodEnd)}`
+      : "No renewal date available";
+
   return (
     <PortalShell
       badge="Secure portal"
@@ -333,7 +339,6 @@ export default function DashboardPage() {
             </PortalButton>
 
             <PortalButton onClick={() => router.push(cta.href)} variant="primary" title={cta.subtitle} type="button">
-              <span className="rounded-lg bg-white/15 px-2 py-1 text-[11px] font-extrabold ring-1 ring-white/20">⟠</span>
               {cta.label}
             </PortalButton>
           </div>
@@ -372,167 +377,209 @@ export default function DashboardPage() {
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
         />
       ) : (
-        <div className="space-y-6">
-          {/* Hero */}
+        <div className="space-y-5">
           <Stagger delayMs={0}>
-            <PremiumCard tone="soft" className="portal-card-premium">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Chip tone={status.tone}>
-                      <span className={cx("h-2 w-2 rounded-full", status.dot)} />
-                      Status: {status.label}
-                    </Chip>
+            <PremiumCard className="overflow-hidden p-0 portal-card-premium">
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]">
+                <div className="relative overflow-hidden p-5 sm:p-6">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 opacity-80"
+                    style={{
+                      background:
+                        "radial-gradient(circle at 0% 0%, rgba(20,184,166,0.16), transparent 36%), radial-gradient(circle at 88% 18%, rgba(15,23,42,0.08), transparent 38%)",
+                    }}
+                  />
 
-                    <span className="text-xs text-slate-500">•</span>
-                    <span className="text-xs font-semibold text-slate-700">{planUpper} plan</span>
+                  <div className="relative">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Chip tone={status.tone}>
+                        <span className={cx("h-2 w-2 rounded-full", status.dot)} />
+                        {status.label}
+                      </Chip>
+                      <Chip>{planUpper} plan</Chip>
+                      {countdown && status.countdownLabel ? <Chip>{renewalLabel}</Chip> : null}
+                    </div>
 
-                    {countdown && status.countdownLabel ? (
-                      <>
-                        <span className="text-xs text-slate-500">•</span>
-                        <span className="text-xs font-semibold text-slate-700">
-                          {status.countdownLabel}: {countdown}
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
+                    <div className="mt-4 max-w-3xl">
+                      <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-[color:var(--primary)]">
+                        Account command centre
+                      </p>
+                      <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">
+                        Welcome back{name ? `, ${name}` : ""}.
+                      </h2>
+                      <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-600">{status.summary}</p>
+                    </div>
 
-                  <h2 className="mt-3 text-lg font-semibold text-slate-900">Welcome back{name ? `, ${name}` : ""}.</h2>
+                    <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
+                      <PortalButton onClick={() => router.push("/downloads")} variant="primary" type="button">
+                        Download desktop app
+                      </PortalButton>
+                      <PortalButton onClick={() => router.push(cta.href)} variant="secondary" title={cta.subtitle} type="button">
+                        {cta.label}
+                      </PortalButton>
+                    </div>
 
-                  <p className="mt-1 text-sm text-slate-600">{status.hint}</p>
-
-                  <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
-                    <span className="font-semibold text-slate-700">Note:</span> Accounting work happens in the desktop app.
-                    The portal manages access, billing and downloads.
+                    <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-3">
+                      <HeroFact label="Access" value={status.hint} />
+                      <HeroFact label="Companies" value={`${companyLimit} allowed`} />
+                      <HeroFact label="Desktop work" value="Accounting happens in the desktop app" />
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                  <PortalButton
-                    onClick={() => router.push("/downloads")}
-                    variant="primary"
-                    className="bg-slate-900 hover:bg-slate-800 hover:brightness-100"
-                    type="button"
-                  >
-                    <span className={ICON_CHIP}>⇩</span>
-                    Get desktop app
-                  </PortalButton>
+                <div className="border-t border-slate-200/80 bg-[#1F3147] p-5 text-white xl:border-l xl:border-t-0">
+                  <div className="flex h-full flex-col justify-between gap-4">
+                    <div>
+                      <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/80 ring-1 ring-white/10">
+                        Next best action
+                      </div>
+                      <h3 className="mt-3 text-lg font-black tracking-tight">
+                        {planUpper === "FREE" ? "Choose the right plan when you’re ready." : "Keep your desktop app up to date."}
+                      </h3>
+                      <p className="mt-2 text-sm leading-5 text-white/70">
+                        {planUpper === "FREE"
+                          ? "Compare Starter, Growth and Pro before enabling cloud sync and higher account limits."
+                          : "Download the latest installer when you need updates, fixes or a fresh setup."}
+                      </p>
+                    </div>
 
-                  <PortalButton onClick={() => router.push(cta.href)} variant="secondary" title={cta.subtitle} type="button">
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
-                      ⟠
-                    </span>
-                    {cta.label}
-                  </PortalButton>
-
-                  <PortalButton onClick={() => router.push("/settings")} variant="secondary" type="button">
-                    <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
-                      ⚙
-                    </span>
-                    Security
-                  </PortalButton>
+                    <div className="space-y-2">
+                      <ActionRow
+                        title="Download desktop"
+                        subtitle="Installer and updates"
+                        icon="⇩"
+                        tone="inverted"
+                        onClick={() => router.push("/downloads")}
+                      />
+                      <ActionRow title={cta.label} subtitle={cta.subtitle} icon="⟠" tone="inverted" onClick={() => router.push(cta.href)} />
+                      <ActionRow
+                        title="Profile & security"
+                        subtitle="Password, OTP and settings"
+                        icon="⚙"
+                        tone="inverted"
+                        onClick={() => router.push("/settings")}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </PremiumCard>
           </Stagger>
 
-          {/* KPI row */}
           <Stagger delayMs={70}>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-start">
-              <div className="ek-enter" style={{ animationDelay: "70ms" }}>
-                <KpiCard label="Plan" value={planUpper} icon="★" hint={`Companies allowed: ${String(entitlement?.features?.limits?.companies ?? 1)}`} />
+            <SectionCard title="Account details" subtitle="A quick summary of this portal user and account state.">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Plan" value={planUpper} helper={`${companyLimit} companies allowed`} icon="★" />
+                <MetricCard label="Email" value={String(user?.email ?? "—")} helper="Portal sign-in address" icon="✉" />
+                <MetricCard label="Created" value={fmtDate((user as any)?.createdAt)} helper="Account creation date" icon="⏱" />
+                <MetricCard label="Last login" value={fmtDate((user as any)?.lastLoginAt)} helper="Most recent portal access" icon="✓" />
               </div>
-              <div className="ek-enter" style={{ animationDelay: "110ms" }}>
-                <KpiCard label="Email" value={String(user?.email ?? "—")} icon="✉" />
-              </div>
-              <div className="ek-enter" style={{ animationDelay: "150ms" }}>
-                <KpiCard label="Created" value={fmtDate((user as any)?.createdAt)} icon="⏱" />
-              </div>
-              <div className="ek-enter" style={{ animationDelay: "190ms" }}>
-                <KpiCard label="Last login" value={fmtDate((user as any)?.lastLoginAt)} icon="✓" />
-              </div>
-            </div>
+            </SectionCard>
           </Stagger>
 
-          {/* Main grid */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 xl:items-start">
-            <Stagger delayMs={140} className="xl:col-span-2">
-              <PremiumCard className="portal-card-premium">
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">Subscription & access</h3>
-                    <p className="mt-1 text-sm text-slate-600">This is the effective entitlement the desktop app will apply.</p>
-                  </div>
-
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.75fr)] xl:items-start">
+            <Stagger delayMs={120}>
+              <SectionCard
+                title="Subscription & access"
+                subtitle="The entitlement your desktop app will apply."
+                action={
                   <div className="flex items-center gap-2">
                     <Chip tone={status.tone}>
                       <span className={cx("h-2 w-2 rounded-full", status.dot)} />
                       {status.label}
                     </Chip>
-
                     <CopyButton text={safeJson(entitlementSnapshot)} label="Copy snapshot" />
                   </div>
+                }
+              >
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <AccessItem label="Plan" value={planUpper} />
+                  <AccessItem label="Portal status" value={String(entitlement?.status ?? "—")} />
+                  <AccessItem label="Read-only" value={entitlement?.features?.readOnly ? "Yes" : "No"} />
+                  <AccessItem label="Companies" value={companyLimit} />
+                  <AccessItem label="Current period ends" value={fmtDate(entitlement?.currentPeriodEnd)} />
+                  <AccessItem label="Grace until" value={fmtDate(entitlement?.graceUntil)} />
                 </div>
 
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <DetailTile label="Plan" value={planUpper} />
-                  <DetailTile label="Portal status" value={String(entitlement?.status ?? "—")} />
-                  <DetailTile label="Read-only" value={entitlement?.features?.readOnly ? "Yes" : "No"} />
-                  <DetailTile label="Companies" value={String(entitlement?.features?.limits?.companies ?? 1)} />
-                  <DetailTile label="Current period ends" value={fmtDate(entitlement?.currentPeriodEnd)} />
-                  <DetailTile label="Grace until" value={fmtDate(entitlement?.graceUntil)} />
-                </div>
+                <div className="mt-5 rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200/80">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900">
+                        {planUpper === "FREE" ? "Free plan limits" : "Document limits"}
+                      </h4>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">
+                        {planUpper === "FREE"
+                          ? "These limits are enforced in the desktop app until the account is upgraded."
+                          : "These values come from the current entitlement and are shown for clarity."}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">
+                      Desktop enforced
+                    </span>
+                  </div>
 
-                <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                  <div className="text-sm font-semibold text-slate-900">Trial limits (FREE)</div>
-                  <p className="mt-1 text-xs text-slate-600">These limits are enforced in the desktop app and are shown here for clarity.</p>
-
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <DetailTile label="Invoices" value={String(entitlement?.features?.limits?.invoice ?? 5)} />
-                    <DetailTile label="Quotes" value={String(entitlement?.features?.limits?.quote ?? 5)} />
-                    <DetailTile label="Purchase orders" value={String(entitlement?.features?.limits?.purchase_order ?? 5)} />
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <LimitPill label="Invoices" value={String(entitlement?.features?.limits?.invoice ?? 5)} />
+                    <LimitPill label="Quotes" value={String(entitlement?.features?.limits?.quote ?? 5)} />
+                    <LimitPill label="Purchase orders" value={String(entitlement?.features?.limits?.purchase_order ?? 5)} />
                   </div>
                 </div>
 
-                <div className="mt-5">
-                  <div className="mb-2 text-xs font-semibold text-slate-700">Entitlement snapshot</div>
-                  <pre className="max-h-[200px] overflow-auto rounded-2xl bg-slate-950 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
-                    {safeJson(entitlementSnapshot)}
-                  </pre>
+                <div className="mt-5 rounded-3xl border border-slate-200 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setShowSnapshot((v) => !v)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-slate-900 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+                  >
+                    <span>Technical entitlement snapshot</span>
+                    <span className="text-xs text-slate-500">{showSnapshot ? "Hide" : "Show"}</span>
+                  </button>
+
+                  {showSnapshot ? (
+                    <pre className="max-h-[240px] overflow-auto border-t border-slate-200 bg-slate-950 p-4 text-[12px] text-slate-100">
+                      {safeJson(entitlementSnapshot)}
+                    </pre>
+                  ) : (
+                    <div className="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-500">
+                      Hidden by default so the dashboard stays focused. Use this when debugging entitlement sync.
+                    </div>
+                  )}
                 </div>
-              </PremiumCard>
+              </SectionCard>
             </Stagger>
 
-            <Stagger delayMs={180}>
-              <PremiumCard className="portal-card-premium">
-                <h3 className="text-base font-semibold text-slate-900">Quick actions</h3>
-                <p className="mt-1 text-sm text-slate-600">Get to what you need fast.</p>
-
-                <div className="mt-4 space-y-2">
+            <Stagger delayMs={170}>
+              <SectionCard title="Quick actions" subtitle="The common portal tasks, grouped in one place.">
+                <div className="space-y-2">
                   <ActionRow
                     title="Download eKasiBooks Desktop"
-                    subtitle="Windows installer & updates"
+                    subtitle="Windows installer and updates"
                     icon="⇩"
                     tone="brand"
                     onClick={() => router.push("/downloads")}
                   />
-                  <ActionRow title={cta.label} subtitle={cta.subtitle} icon="⟠" tone="primary" onClick={() => router.push(cta.href)} />
+                  <ActionRow title={cta.label} subtitle={cta.subtitle} icon="⟠" tone="dark" onClick={() => router.push(cta.href)} />
                   <ActionRow
                     title="Profile & security"
-                    subtitle="Password, OTP and settings"
+                    subtitle="Password, OTP and account details"
                     icon="⚙"
-                    tone="neutral"
+                    tone="light"
                     onClick={() => router.push("/settings")}
                   />
                 </div>
 
-                {countdown && status.countdownLabel ? (
-                  <div className="mt-4 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                    <div className="text-xs font-semibold text-slate-700">{status.countdownLabel}</div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900">{countdown}</div>
-                  </div>
-                ) : null}
-              </PremiumCard>
+                <div className="mt-5 rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Status note</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{status.hint}</p>
+                  {countdown && status.countdownLabel ? (
+                    <div className="mt-3 rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+                      <div className="text-xs font-semibold text-slate-500">{status.countdownLabel}</div>
+                      <div className="mt-1 text-base font-black text-slate-950">{countdown}</div>
+                    </div>
+                  ) : null}
+                </div>
+              </SectionCard>
             </Stagger>
           </div>
         </div>
@@ -542,6 +589,75 @@ export default function DashboardPage() {
 }
 
 /* ---------------- Local UI helpers ---------------- */
+
+function SectionCard({
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <PremiumCard className="portal-card-premium">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-base font-black tracking-tight text-slate-950">{title}</h3>
+          {subtitle ? <p className="mt-1 text-sm leading-6 text-slate-600">{subtitle}</p> : null}
+        </div>
+        {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+      </div>
+      {children}
+    </PremiumCard>
+  );
+}
+
+function HeroFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-white/70 p-2.5 ring-1 ring-slate-200/80 backdrop-blur">
+      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className="mt-1 text-[13px] font-semibold leading-5 text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, helper, icon }: { label: string; value: string; helper?: string; icon: string }) {
+  return (
+    <div className="group rounded-3xl bg-slate-50/80 p-4 ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-[2px] hover:bg-white hover:shadow-[var(--shadow-md)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</div>
+          <div className="mt-2 truncate text-base font-black text-slate-950">{value}</div>
+        </div>
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-sm text-slate-600 shadow-sm ring-1 ring-slate-200 transition group-hover:text-[color:var(--primary)]">
+          {icon}
+        </div>
+      </div>
+      {helper ? <div className="mt-2 truncate text-xs font-medium text-slate-500">{helper}</div> : null}
+    </div>
+  );
+}
+
+function AccessItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-3xl bg-slate-50/80 p-4 ring-1 ring-slate-200/70">
+      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</div>
+      <div className="mt-2 text-base font-black text-slate-950">{value}</div>
+    </div>
+  );
+}
+
+function LimitPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</div>
+      <div className="mt-1 text-base font-black text-slate-950">{value}</div>
+    </div>
+  );
+}
 
 function ActionRow({
   title,
@@ -553,53 +669,57 @@ function ActionRow({
   title: string;
   subtitle: string;
   icon: string;
-  tone: "primary" | "brand" | "neutral";
+  tone: "dark" | "brand" | "light" | "inverted";
   onClick: () => void;
 }) {
   const toneClass =
-    tone === "primary"
-      ? "bg-slate-900 text-white hover:bg-slate-800"
-      : tone === "brand"
+    tone === "brand"
       ? "text-white"
-      : "bg-white text-slate-900 hover:bg-slate-50";
-
-  const ringClass = tone === "neutral" ? "ring-1 ring-slate-200 shadow-sm" : "shadow-[var(--shadow-md)] ring-1 ring-white/10";
+      : tone === "dark"
+      ? "bg-slate-950 text-white hover:bg-slate-900"
+      : tone === "inverted"
+      ? "bg-white/10 text-white hover:bg-white/15 ring-white/15"
+      : "bg-white text-slate-900 hover:bg-slate-50 ring-slate-200";
 
   const iconChip =
-    tone === "neutral"
-      ? "bg-slate-900/5 ring-1 ring-slate-200 text-slate-700"
-      : "bg-white/15 ring-1 ring-white/20 text-white";
+    tone === "light"
+      ? "bg-slate-900/5 text-slate-700 ring-slate-200"
+      : tone === "inverted"
+      ? "bg-white/10 text-white ring-white/15"
+      : "bg-white/15 text-white ring-white/20";
+
+  const subClass = tone === "light" ? "text-slate-600" : "text-white/78";
+  const arrowClass = tone === "light" ? "text-slate-400" : "text-white/70";
 
   return (
     <button
       onClick={onClick}
-      className={[
-        "relative group w-full rounded-2xl px-3 py-2.5 text-left transition-all duration-300 will-change-transform",
-        "hover:-translate-y-[2px] active:translate-y-0",
+      className={cx(
+        "group relative w-full overflow-hidden rounded-2xl px-3.5 py-2.5 text-left shadow-sm ring-1 transition-all duration-300 will-change-transform",
+        "hover:-translate-y-[2px] hover:shadow-[var(--shadow-md)] active:translate-y-0",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]",
-        toneClass,
-        ringClass,
-      ].join(" ")}
+        toneClass
+      )}
       style={tone === "brand" ? { background: "var(--primary)" } : undefined}
       type="button"
     >
-      <div className="relative flex items-center gap-3">
-        <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>{icon}</div>
+      <div className="relative z-10 flex items-center gap-3">
+        <div className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm ring-1", iconChip)}>{icon}</div>
         <div className="min-w-0">
-          <div className="text-sm font-semibold">{title}</div>
-          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>{subtitle}</div>
+          <div className="truncate text-[13px] font-black">{title}</div>
+          <div className={cx("mt-0.5 truncate text-[11px] font-semibold", subClass)}>{subtitle}</div>
         </div>
-        <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
+        <div className={cx("ml-auto text-lg transition group-hover:translate-x-1", arrowClass)}>→</div>
       </div>
 
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
         style={{
           background:
-            tone === "neutral"
-              ? "radial-gradient(circle at 25% 50%, rgba(15,23,42,0.04), transparent 60%)"
-              : "radial-gradient(circle at 25% 50%, rgba(255,255,255,0.14), transparent 60%)",
+            tone === "light"
+              ? "radial-gradient(circle at 20% 50%, rgba(15,23,42,0.05), transparent 62%)"
+              : "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.14), transparent 62%)",
         }}
       />
     </button>
@@ -608,28 +728,39 @@ function ActionRow({
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
+    <div className="space-y-5">
+      <div className="rounded-3xl bg-white p-7 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
         <PortalSkeleton className="h-5 w-52" />
-        <PortalSkeleton className="mt-3 h-4 w-80 max-w-full" />
+        <PortalSkeleton className="mt-3 h-8 w-96 max-w-full" />
+        <PortalSkeleton className="mt-3 h-4 w-[36rem] max-w-full" />
 
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <PortalSkeleton className="h-16 rounded-3xl" />
-          <PortalSkeleton className="h-16 rounded-3xl" />
-          <PortalSkeleton className="h-16 rounded-3xl" />
-          <PortalSkeleton className="h-16 rounded-3xl" />
+        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <PortalSkeleton className="h-16 rounded-2xl" />
+          <PortalSkeleton className="h-16 rounded-2xl" />
+          <PortalSkeleton className="h-16 rounded-2xl" />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
+        <PortalSkeleton className="h-5 w-44" />
+        <PortalSkeleton className="mt-3 h-4 w-72 max-w-full" />
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <PortalSkeleton className="h-24 rounded-3xl" />
+          <PortalSkeleton className="h-24 rounded-3xl" />
+          <PortalSkeleton className="h-24 rounded-3xl" />
+          <PortalSkeleton className="h-24 rounded-3xl" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200 xl:col-span-2">
           <PortalSkeleton className="h-5 w-44" />
           <PortalSkeleton className="mt-3 h-4 w-72 max-w-full" />
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <PortalSkeleton className="h-14 rounded-2xl" />
-            <PortalSkeleton className="h-14 rounded-2xl" />
-            <PortalSkeleton className="h-14 rounded-2xl" />
-            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-20 rounded-3xl" />
+            <PortalSkeleton className="h-20 rounded-3xl" />
+            <PortalSkeleton className="h-20 rounded-3xl" />
+            <PortalSkeleton className="h-20 rounded-3xl" />
           </div>
         </div>
 
@@ -637,9 +768,9 @@ function DashboardSkeleton() {
           <PortalSkeleton className="h-5 w-40" />
           <PortalSkeleton className="mt-3 h-4 w-56 max-w-full" />
           <div className="mt-5 space-y-2">
-            <PortalSkeleton className="h-11 rounded-2xl" />
-            <PortalSkeleton className="h-11 rounded-2xl" />
-            <PortalSkeleton className="h-11 rounded-2xl" />
+            <PortalSkeleton className="h-16 rounded-3xl" />
+            <PortalSkeleton className="h-16 rounded-3xl" />
+            <PortalSkeleton className="h-16 rounded-3xl" />
           </div>
         </div>
       </div>
