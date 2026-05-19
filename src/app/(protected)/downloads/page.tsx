@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PremiumCard, KpiCard, DetailTile, MiniRow, Chip } from "@/components/portal/ui";
+import {
+  Chip,
+  DetailTile,
+  KpiCard,
+  MiniRow,
+  PortalAlert,
+  PortalButton,
+  PortalSectionHeader,
+  PortalSkeleton,
+  PremiumCard,
+  cx,
+} from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 
 type LatestManifest = {
@@ -39,10 +50,6 @@ function fmtDate(d?: string | null) {
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "—";
   return dt.toLocaleString();
-}
-
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
 }
 
 function normalizePlan(plan?: string | null) {
@@ -84,15 +91,6 @@ function formatBytes(bytes?: number | null) {
   const dp = i === 0 ? 0 : i === 1 ? 0 : 1; // KB no decimals, MB/GB 1 decimal
   return `${v.toFixed(dp)} ${units[i]}`;
 }
-
-/** Page-level UI primitives (keeps pages consistent) */
-const BTN_BASE =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition " +
-  "hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
-  "disabled:opacity-60 disabled:hover:translate-y-0";
-
-const BTN_PRIMARY = cx(BTN_BASE, "text-white");
-const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
 
 export default function DownloadsPage() {
   const router = useRouter();
@@ -274,21 +272,21 @@ export default function DownloadsPage() {
     <PortalShell
       badge="Downloads"
       title="Desktop installers"
-      subtitle="Download the eKasiBooks Desktop installer for Windows."
+      subtitle="Download the latest eKasiBooks Desktop installer for Windows."
       backHref="/dashboard"
       backLabel="Back to overview"
       userEmail={user?.email ?? null}
       planName={planName}
       headerRight={
         state === "ready" ? (
-          <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
+          <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
             Refresh
-          </button>
+          </PortalButton>
         ) : null
       }
       footerRight={
         <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-xs text-slate-500">Desktop: Windows</span>
+          <span className="hidden text-xs text-slate-500 sm:inline">Desktop: Windows</span>
           <Chip>
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             Downloads
@@ -300,38 +298,47 @@ export default function DownloadsPage() {
         <DownloadsSkeleton />
       ) : state === "error" ? (
         <PremiumCard className="portal-card-premium">
-          <h2 className="text-base font-semibold text-slate-900">Session check failed</h2>
-          <p className="mt-2 text-sm text-slate-600">{error ?? "Something went wrong. Please try again."}</p>
+          <PortalSectionHeader
+            title="Session check failed"
+            description={error ?? "Something went wrong. Please try again."}
+          />
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <button onClick={() => refresh()} className={BTN_PRIMARY} style={{ background: "var(--primary)" }} type="button">
+            <PortalButton onClick={() => refresh()} type="button">
               Retry
-            </button>
-            <button onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)} className={BTN_SECONDARY} type="button">
+            </PortalButton>
+            <PortalButton onClick={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)} variant="secondary" type="button">
               Go to login
-            </button>
+            </PortalButton>
           </div>
         </PremiumCard>
       ) : state === "unauth" ? (
         <PremiumCard className="portal-card-premium">
-          <h2 className="text-base font-semibold text-slate-900">Redirecting…</h2>
-          <p className="mt-2 text-sm text-slate-600">Your session isn’t active. Taking you to login.</p>
+          <PortalSectionHeader title="Redirecting…" description="Your session isn’t active. Taking you to login." />
         </PremiumCard>
       ) : (
         <div className="space-y-6">
           {/* Entitlement / manifest status strips */}
-          {entLoading ? <div className="text-xs text-slate-600">Loading entitlement…</div> : null}
-          {entError ? <div className="text-xs text-amber-700">Couldn’t load entitlement. ({entError})</div> : null}
+          {entLoading ? (
+            <PortalAlert tone="info">Loading your entitlement and plan access…</PortalAlert>
+          ) : null}
+          {entError ? (
+            <PortalAlert tone="warning" title="Couldn’t load entitlement">
+              {entError}
+            </PortalAlert>
+          ) : null}
 
-          {manifestLoading ? <div className="text-xs text-slate-600">Loading latest build info…</div> : null}
+          {manifestLoading ? (
+            <PortalAlert tone="info">Loading the latest desktop build information…</PortalAlert>
+          ) : null}
           {manifestError ? (
-            <div className="text-xs text-amber-700">
-              Couldn’t load latest manifest — using fallback values. ({manifestError})
-            </div>
+            <PortalAlert tone="warning" title="Using fallback download details">
+              Couldn’t load the latest manifest. {manifestError}
+            </PortalAlert>
           ) : null}
 
           {/* Top “product” card */}
           <PremiumCard className="portal-card-premium">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Chip tone={isPaid ? "success" : "neutral"}>
@@ -344,34 +351,30 @@ export default function DownloadsPage() {
                   <span className="text-xs font-semibold text-slate-700">{latest.channel} channel</span>
                 </div>
 
-                <h2 className="mt-3 text-lg font-semibold text-slate-900">{latest.name}</h2>
-                <p className="mt-1 text-sm text-slate-600">Latest stable release for Windows.</p>
+                <h2 className="mt-3 text-xl font-semibold tracking-tight text-slate-900">{latest.name}</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600">
+                  Install the desktop app on your Windows machine. Your portal manages billing, entitlement and downloads;
+                  daily accounting work happens inside eKasiBooks Desktop.
+                </p>
 
-                <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
                   <span className="font-semibold text-slate-700">Download URL:</span>{" "}
                   <span className="break-all">{latest.url}</span>
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
-                <button onClick={onDownload} className={BTN_PRIMARY} style={{ background: "var(--primary)" }} type="button">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-[12px]">⇩</span>
+              <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+                <PortalButton onClick={onDownload} type="button">
                   Download
-                </button>
+                </PortalButton>
 
-                <button onClick={onCopyLink} className={BTN_SECONDARY} type="button">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
-                    ⧉
-                  </span>
+                <PortalButton onClick={onCopyLink} variant="secondary" type="button">
                   {copyMsg ?? "Copy link"}
-                </button>
+                </PortalButton>
 
-                <button disabled className={cx(BTN_SECONDARY, "opacity-60")} title="Coming soon" type="button">
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200 text-[12px]">
-                    ⋯
-                  </span>
-                  Versions (soon)
-                </button>
+                <PortalButton disabled variant="secondary" className="opacity-60" title="Coming soon" type="button">
+                  Versions soon
+                </PortalButton>
               </div>
             </div>
           </PremiumCard>
@@ -387,15 +390,13 @@ export default function DownloadsPage() {
           {/* Main grid */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Left */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="space-y-6 lg:col-span-2">
               <PremiumCard className="portal-card-premium">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">Latest installer</h3>
-                    <p className="mt-1 text-sm text-slate-600">Version details and compatibility.</p>
-                  </div>
-                  <Chip tone="success">Live</Chip>
-                </div>
+                <PortalSectionHeader
+                  title="Latest installer"
+                  description="Version details, compatibility and desktop access."
+                  action={<Chip tone="success">Live</Chip>}
+                />
 
                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <DetailTile label="Version" value={latest.version} />
@@ -408,20 +409,19 @@ export default function DownloadsPage() {
                     <span className="font-semibold">Access:</span>{" "}
                     {isPaid ? "You have an active subscription." : "You’re on the FREE plan."}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    This portal manages your account and subscription. The accounting work happens in the desktop app.
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    This page always points users to the current Windows installer. Future version history can be added here
+                    without changing the main portal flow.
                   </p>
                 </div>
               </PremiumCard>
 
               <PremiumCard className="portal-card-premium">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">Changelog</h3>
-                    <p className="mt-1 text-sm text-slate-600">Release notes and improvements.</p>
-                  </div>
-                  <span className="text-xs text-slate-500">{changelog.length} entries</span>
-                </div>
+                <PortalSectionHeader
+                  title="Changelog"
+                  description="Release notes and improvements."
+                  action={<span className="text-xs text-slate-500">{changelog.length} entries</span>}
+                />
 
                 <div className="mt-5 space-y-2">
                   {changelog.map((c) => {
@@ -430,9 +430,8 @@ export default function DownloadsPage() {
                       <div
                         key={c.id}
                         className={cx(
-                          "rounded-2xl border border-slate-200 bg-white",
-                          // Keep shadows subtle; avoid clipping inner content
-                          open ? "shadow-[0_12px_34px_rgba(15,23,42,0.08)]" : ""
+                          "rounded-2xl border border-slate-200 bg-white transition-all",
+                          open ? "shadow-[0_12px_34px_rgba(15,23,42,0.08)]" : "hover:bg-slate-50"
                         )}
                       >
                         <button
@@ -478,16 +477,16 @@ export default function DownloadsPage() {
             {/* Right */}
             <div className="space-y-6">
               <PremiumCard tone="soft" className="portal-card-premium">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">What’s included</h3>
-                    <p className="mt-1 text-sm text-slate-600">Desktop highlights.</p>
-                  </div>
-                  <Chip tone="success">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Desktop
-                  </Chip>
-                </div>
+                <PortalSectionHeader
+                  title="What’s included"
+                  description="Desktop highlights."
+                  action={
+                    <Chip tone="success">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Desktop
+                    </Chip>
+                  }
+                />
 
                 <ul className="mt-4 space-y-2 text-sm text-slate-700">
                   {latest.highlights.map((n) => (
@@ -502,13 +501,11 @@ export default function DownloadsPage() {
               </PremiumCard>
 
               <PremiumCard tone="soft" className="portal-card-premium">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">Integrity & system info</h3>
-                    <p className="mt-1 text-sm text-slate-600">Compatibility details.</p>
-                  </div>
-                  <Chip tone="success">Secure</Chip>
-                </div>
+                <PortalSectionHeader
+                  title="Integrity & system info"
+                  description="Compatibility details."
+                  action={<Chip tone="success">Secure</Chip>}
+                />
 
                 <div className="mt-4 space-y-3">
                   <MiniRow label="SHA-256 checksum" value={latest.checksum} />
@@ -518,8 +515,7 @@ export default function DownloadsPage() {
               </PremiumCard>
 
               <PremiumCard tone="soft" className="portal-card-premium">
-                <h3 className="text-base font-semibold text-slate-900">Release channels</h3>
-                <p className="mt-1 text-sm text-slate-600">Stable is recommended for most users.</p>
+                <PortalSectionHeader title="Release channels" description="Stable is recommended for most users." />
 
                 <div className="mt-4 space-y-3">
                   <MiniRow label="Stable" value="Best for daily use" />
@@ -527,9 +523,9 @@ export default function DownloadsPage() {
                   <MiniRow label="Alpha" value="Experimental (internal)" />
                 </div>
 
-                <button disabled className={cx(BTN_SECONDARY, "mt-5 w-full opacity-60")} title="Coming soon" type="button">
-                  Join beta channel (soon)
-                </button>
+                <PortalButton disabled variant="secondary" className="mt-5 w-full opacity-60" title="Coming soon" type="button">
+                  Join beta channel soon
+                </PortalButton>
               </PremiumCard>
             </div>
           </div>
@@ -543,36 +539,36 @@ function DownloadsSkeleton() {
   return (
     <div className="space-y-6">
       <PremiumCard className="portal-card-premium">
-        <div className="h-5 w-64 rounded-lg bg-slate-200 animate-pulse" />
-        <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
+        <PortalSkeleton className="h-5 w-64" />
+        <PortalSkeleton className="mt-3 h-4 w-80 max-w-full" />
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
         </div>
       </PremiumCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
-          <div className="h-5 w-44 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-3 h-4 w-72 rounded-lg bg-slate-200 animate-pulse" />
+        <PremiumCard className="portal-card-premium lg:col-span-2">
+          <PortalSkeleton className="h-5 w-44" />
+          <PortalSkeleton className="mt-3 h-4 w-72 max-w-full" />
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
           </div>
-        </div>
+        </PremiumCard>
 
-        <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
-          <div className="h-5 w-40 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-3 h-4 w-56 rounded-lg bg-slate-200 animate-pulse" />
+        <PremiumCard className="portal-card-premium">
+          <PortalSkeleton className="h-5 w-40" />
+          <PortalSkeleton className="mt-3 h-4 w-56 max-w-full" />
           <div className="mt-5 space-y-2">
-            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
+            <PortalSkeleton className="h-11 rounded-2xl" />
+            <PortalSkeleton className="h-11 rounded-2xl" />
+            <PortalSkeleton className="h-11 rounded-2xl" />
           </div>
-        </div>
+        </PremiumCard>
       </div>
     </div>
   );

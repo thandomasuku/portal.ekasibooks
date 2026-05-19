@@ -301,249 +301,258 @@ async function handleLoginClick() {
   router.push(destination);
 }
   return (
-    <main className="bg-[#f6f9fb]">
-      <div
-        className="
-          min-h-screen min-h-[100svh] md:min-h-[100dvh]
-          overflow-x-hidden
-          touch-pan-y
-          [overscroll-behavior-y:auto]
-          [-webkit-overflow-scrolling:touch]
-        "
-      >
-        <div className="mx-auto w-full max-w-6xl px-4 pt-4 pb-6 sm:px-6 sm:pt-6 sm:pb-8 lg:px-8 lg:py-10">
-          <div className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_60px_rgba(15,23,42,0.12)] ring-1 ring-slate-200">
-            <div className="grid grid-cols-1 lg:grid-cols-2">
-              {/* LEFT brand panel */}
-              <div className="relative bg-gradient-to-br from-[#0b2a3a] via-[#0e3a4f] to-[#215D63] p-6 text-white sm:p-8 lg:p-12">
-                <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-black/10 blur-3xl" />
+    <main className="min-h-screen bg-[#f6f9fb] text-slate-950">
+      <div className="grid min-h-screen min-h-[100svh] grid-cols-1 overflow-x-hidden lg:grid-cols-2">
+        {/* LEFT brand panel */}
+        <section className="relative flex min-h-[42vh] items-center overflow-hidden bg-gradient-to-br from-[#0b2a3a] via-[#0e3a4f] to-[#215D63] px-6 py-10 text-white sm:px-10 lg:min-h-screen lg:px-16 xl:px-20">
+          <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-1/4 right-[-8rem] h-96 w-96 rounded-full bg-[#3bb7a6]/15 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-28 left-1/3 h-80 w-80 rounded-full bg-black/15 blur-3xl" />
 
-                <div className="relative">
-                  <div className="flex justify-center">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/15">
-                      <span className="h-2 w-2 rounded-full bg-emerald-300" />
-                      Create your account
-                    </div>
-                  </div>
-
-                  <div className="mb-6 mt-5 flex justify-center">
-                    <Image
-                      src="/logo/ekasibooks.png"
-                      alt="eKasiBooks"
-                      width={120}
-                      height={120}
-                      priority
-                      className="h-auto w-[104px] sm:w-[120px]"
-                    />
-                  </div>
-
-                  <h1 className="text-center text-3xl font-semibold tracking-tight lg:text-4xl">
-                    Join eKasiBooks
-                  </h1>
-
-                  <p className="mt-3 text-center leading-relaxed text-white/85">
-                    Set your password once, then sign in with password or OTP whenever
-                    you want.
-                  </p>
-
-                  <div className="mt-8 space-y-3 text-sm text-white/90">
-                    <BrandFeature
-                      title="Secure by design"
-                      desc="Sessions, logout, and account access are properly managed."
-                    />
-                    <BrandFeature
-                      title="Password required"
-                      desc="Your password is mandatory on registration for trust and security."
-                    />
-                    <BrandFeature
-                      title="OTP is optional"
-                      desc="Use OTP when you don’t want to type your password."
-                    />
-                  </div>
-
-                  <div className="mt-8 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 sm:mt-10">
-                    <p className="text-sm text-white/90">
-                      Already have an account?{" "}
-                      <button
-                        onClick={handleLoginClick}
-                        className="ml-1 inline-flex items-center font-semibold underline underline-offset-4 hover:text-white"
-                        type="button"
-                      >
-                        Login
-                      </button>
-                    </p>
-                  </div>
-                </div>
+          <div className="relative w-full max-w-2xl">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white shadow-[0_16px_45px_rgba(0,0,0,0.18)] ring-1 ring-white/30">
+                <Image
+                  src="/logo/ekasibooks.png"
+                  alt="eKasiBooks"
+                  width={76}
+                  height={76}
+                  priority
+                  className="h-auto w-[62px]"
+                />
               </div>
 
-              {/* RIGHT form */}
-              <div className="p-6 sm:p-8 lg:p-12">
-                <div>
-                  <h2 className="text-2xl font-semibold text-slate-900">Create account</h2>
-                  <p className="mt-1 text-slate-600">
-                    Use your email and set a password to get started.
-                  </p>
+              <div>
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/15">
+                  <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                  Create your account
                 </div>
-
-                <div className="mt-8 space-y-4">
-                  {msg && (
-                    <div className={`rounded-xl border px-3 py-2 text-sm ${msgClass(msg)}`}>
-                      {msg.text}
-                    </div>
-                  )}
-
-                  {created && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-                      <div className="font-semibold">Almost there — verify your email</div>
-                      <div className="mt-1 text-sm text-emerald-900/80">
-                        We require email verification before login.
-                        {emailSent
-                          ? " Check your inbox (and spam/promotions)."
-                          : " If you don’t receive an email, click ‘Resend verification email’."}
-                      </div>
-
-                      {devVerifyUrl && (
-                        <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs text-slate-800 ring-1 ring-emerald-200">
-                          <div className="font-semibold text-slate-900">
-                            Dev verify link (SMTP not configured):
-                          </div>
-                          <div className="mt-1 break-all">{devVerifyUrl}</div>
-                        </div>
-                      )}
-
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={handleGoToLoginAfterRegister}
-                          className="inline-flex items-center justify-center rounded-xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white"
-                        >
-                          Go to login
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={resendVerification}
-                          disabled={resendLoading}
-                          className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 disabled:opacity-60"
-                        >
-                          {resendLoading ? "Sending..." : "Resend verification email"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">
-                      Full name (required)
-                    </span>
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Syrus Example"
-                      autoComplete="name"
-                      disabled={loading || created}
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Email</span>
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@company.com"
-                      autoComplete="email"
-                      inputMode="email"
-                      disabled={loading || created}
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Password</span>
-                    <input
-                      type="password"
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimum 8 characters"
-                      autoComplete="new-password"
-                      disabled={loading || created}
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Confirm password</span>
-                    <input
-                      type="password"
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#215D63]/30 disabled:bg-slate-50 disabled:text-slate-500"
-                      value={confirm}
-                      onChange={(e) => setConfirm(e.target.value)}
-                      placeholder="Re-type your password"
-                      autoComplete="new-password"
-                      disabled={loading || created}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !created) register();
-                      }}
-                    />
-                  </label>
-
-                  <label className="flex select-none items-center gap-2 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={remember}
-                      onChange={(e) => setRemember(e.target.checked)}
-                      disabled={loading || created}
-                    />
-                    Remember me for 7 days
-                  </label>
-
-                  <label className="flex select-none items-start gap-2 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={agree}
-                      onChange={(e) => setAgree(e.target.checked)}
-                      disabled={loading || created}
-                      className="mt-1"
-                    />
-                    <span>
-                      I agree to the <span className="font-semibold">Terms</span> &{" "}
-                      <span className="font-semibold">Privacy Policy</span>.
-                    </span>
-                  </label>
-
-                  <button
-                    onClick={() => (!created ? register() : undefined)}
-                    disabled={loading || created}
-                    className="w-full rounded-xl bg-[#215D63] py-2 font-semibold text-white shadow-sm hover:bg-[#1c4f54] disabled:opacity-60"
-                    type="button"
-                  >
-                    {created ? "Account created" : loading ? "Creating account..." : "Create account"}
-                  </button>
-
-                  <button
-                    onClick={handleLoginClick}
-                    disabled={loading || created}
-                    className="w-full rounded-xl border border-slate-300 py-2 font-semibold hover:bg-slate-50 disabled:opacity-60"
-                    type="button"
-                  >
-                    Back to login
-                  </button>
-
-                  <p className="text-xs leading-relaxed text-slate-500">
-                    You can still use OTP for login later — it’s optional. Your password
-                    is the primary credential.
-                  </p>
+                <div className="text-xs font-semibold uppercase tracking-[0.34em] text-white/70">
+                  eKasiBooks Portal
                 </div>
               </div>
             </div>
-          </div>
 
-          <p className="mt-6 px-1 text-center text-xs text-slate-500">
-            By continuing, you agree to our Terms and Privacy Policy.
-          </p>
-        </div>
+            <h1 className="mt-10 max-w-xl text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
+              Start managing your business access properly.
+            </h1>
+
+            <p className="mt-7 max-w-xl text-base leading-8 text-white/85 sm:text-lg">
+              Create your portal account to manage subscriptions, company access,
+              desktop downloads, cloud sync and account security from one calm,
+              secure place.
+            </p>
+
+            <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-2">
+              <BrandFeature
+                title="Secure by design"
+                desc="Sessions, logout and account access are properly managed."
+              />
+              <BrandFeature
+                title="Password required"
+                desc="Your password is mandatory on registration for trust and security."
+              />
+              <BrandFeature
+                title="Cloud sync ready"
+                desc="Keep your desktop entitlement and company access aligned."
+              />
+              <BrandFeature
+                title="OTP remains optional"
+                desc="Use OTP later when you don’t want to type your password."
+              />
+            </div>
+
+            <div className="mt-8 max-w-xl rounded-2xl bg-white/10 px-5 py-4 text-sm text-white/90 ring-1 ring-white/15">
+              Already have an account?{" "}
+              <button
+                onClick={handleLoginClick}
+                className="font-semibold underline underline-offset-4 hover:text-white"
+                type="button"
+              >
+                Login
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* RIGHT form panel */}
+        <section className="relative flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
+          <div className="pointer-events-none absolute right-0 top-0 h-72 w-72 rounded-full bg-[#215D63]/10 blur-3xl" />
+
+          <div className="relative w-full max-w-[520px]">
+            <div className="rounded-3xl bg-white p-6 shadow-[0_22px_70px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 sm:p-8">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-[0.32em] text-[#215D63]">
+                  Get started
+                </div>
+                <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">
+                  Create account
+                </h2>
+                <p className="mt-2 leading-relaxed text-slate-600">
+                  Use your email and set a password to get started.
+                </p>
+              </div>
+
+              <div className="mt-7 space-y-4">
+                {msg && (
+                  <div className={`rounded-xl border px-3 py-2 text-sm ${msgClass(msg)}`}>
+                    {msg.text}
+                  </div>
+                )}
+
+                {created && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                    <div className="font-semibold">Almost there — verify your email</div>
+                    <div className="mt-1 text-sm text-emerald-900/80">
+                      We require email verification before login.
+                      {emailSent
+                        ? " Check your inbox (and spam/promotions)."
+                        : " If you don’t receive an email, click ‘Resend verification email’."}
+                    </div>
+
+                    {devVerifyUrl && (
+                      <div className="mt-3 rounded-xl bg-white/70 p-3 text-xs text-slate-800 ring-1 ring-emerald-200">
+                        <div className="font-semibold text-slate-900">
+                          Dev verify link (SMTP not configured):
+                        </div>
+                        <div className="mt-1 break-all">{devVerifyUrl}</div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={handleGoToLoginAfterRegister}
+                        className="inline-flex items-center justify-center rounded-xl bg-[#215D63] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#1c4f54]"
+                      >
+                        Go to login
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={resendVerification}
+                        disabled={resendLoading}
+                        className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-50 disabled:opacity-60"
+                      >
+                        {resendLoading ? "Sending..." : "Resend verification email"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">
+                    Full name (required)
+                  </span>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-[#215D63] focus:ring-2 focus:ring-[#215D63]/20 disabled:bg-slate-50 disabled:text-slate-500"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Syrus Example"
+                    autoComplete="name"
+                    disabled={loading || created}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Email</span>
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-[#215D63] focus:ring-2 focus:ring-[#215D63]/20 disabled:bg-slate-50 disabled:text-slate-500"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@company.com"
+                    autoComplete="email"
+                    inputMode="email"
+                    disabled={loading || created}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">Password</span>
+                  <input
+                    type="password"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-[#215D63] focus:ring-2 focus:ring-[#215D63]/20 disabled:bg-slate-50 disabled:text-slate-500"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    autoComplete="new-password"
+                    disabled={loading || created}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-medium text-slate-700">
+                    Confirm password
+                  </span>
+                  <input
+                    type="password"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-[#215D63] focus:ring-2 focus:ring-[#215D63]/20 disabled:bg-slate-50 disabled:text-slate-500"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="Re-type your password"
+                    autoComplete="new-password"
+                    disabled={loading || created}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !created) register();
+                    }}
+                  />
+                </label>
+
+                <label className="flex select-none items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    disabled={loading || created}
+                    className="h-4 w-4 accent-[#215D63]"
+                  />
+                  Remember me for 7 days
+                </label>
+
+                <label className="flex select-none items-start gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={agree}
+                    onChange={(e) => setAgree(e.target.checked)}
+                    disabled={loading || created}
+                    className="mt-1 h-4 w-4 accent-[#215D63]"
+                  />
+                  <span>
+                    I agree to the <span className="font-semibold">Terms</span> &{" "}
+                    <span className="font-semibold">Privacy Policy</span>.
+                  </span>
+                </label>
+
+                <button
+                  onClick={() => (!created ? register() : undefined)}
+                  disabled={loading || created}
+                  className="w-full rounded-xl bg-[#215D63] py-3 font-semibold text-white shadow-sm transition hover:bg-[#1c4f54] disabled:opacity-60"
+                  type="button"
+                >
+                  {created ? "Account created" : loading ? "Creating account..." : "Create account"}
+                </button>
+
+                <button
+                  onClick={handleLoginClick}
+                  disabled={loading || created}
+                  className="w-full rounded-xl border border-slate-300 bg-white py-3 font-semibold text-slate-900 transition hover:bg-slate-50 disabled:opacity-60"
+                  type="button"
+                >
+                  Back to login
+                </button>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
+                  You can still use OTP for login later — it’s optional. Your
+                  password is the primary credential.
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-6 px-1 text-center text-xs text-slate-500">
+              By continuing, you agree to our Terms and Privacy Policy.
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   );

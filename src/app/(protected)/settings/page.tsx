@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
+import {
+  PremiumCard,
+  KpiCard,
+  DetailTile,
+  Chip,
+  PortalButton,
+  PortalInput,
+  PortalAlert,
+  PortalEmptyState,
+  PortalSkeleton,
+  cx,
+} from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 
 type UserProfile = {
@@ -63,20 +74,13 @@ function capitalizeWords(s: string) {
     .join(" ");
 }
 
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
+function messageTone(
+  type?: "success" | "error" | "info",
+): "success" | "danger" | "info" {
+  if (type === "success") return "success";
+  if (type === "error") return "danger";
+  return "info";
 }
-
-/** Page-level UI primitives (keep consistent with Dashboard/Downloads) */
-const BTN_BASE =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold " +
-  "shadow-sm transition will-change-transform " +
-  "hover:-translate-y-[1px] active:translate-y-0 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
-  "disabled:opacity-60 disabled:hover:translate-y-0";
-
-const BTN_PRIMARY = cx(BTN_BASE, "text-white");
-const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -113,7 +117,9 @@ export default function SettingsPage() {
       }
 
       if (!res.ok) {
-        throw new Error(data?.error || data?.message || `Entitlement failed (${res.status}).`);
+        throw new Error(
+          data?.error || data?.message || `Entitlement failed (${res.status}).`,
+        );
       }
 
       setEnt((data ?? null) as Entitlement);
@@ -140,8 +146,15 @@ export default function SettingsPage() {
   // ---- Edit Profile Modal state ----
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formMsg, setFormMsg] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
-  const [form, setForm] = useState<{ fullName: string; companyName: string; phone: string }>({
+  const [formMsg, setFormMsg] = useState<{
+    type: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
+  const [form, setForm] = useState<{
+    fullName: string;
+    companyName: string;
+    phone: string;
+  }>({
     fullName: "",
     companyName: "",
     phone: "",
@@ -152,8 +165,15 @@ export default function SettingsPage() {
   const [pwStep, setPwStep] = useState<"request" | "verify">("request");
   const [pwSending, setPwSending] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
-  const [pwMsg, setPwMsg] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
-  const [pwForm, setPwForm] = useState<{ otpCode: string; newPassword: string; confirmPassword: string }>({
+  const [pwMsg, setPwMsg] = useState<{
+    type: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
+  const [pwForm, setPwForm] = useState<{
+    otpCode: string;
+    newPassword: string;
+    confirmPassword: string;
+  }>({
     otpCode: "",
     newPassword: "",
     confirmPassword: "",
@@ -185,10 +205,10 @@ export default function SettingsPage() {
     state === "ready"
       ? "Manage your personal details and security settings."
       : state === "unauth"
-      ? "Your session has expired."
-      : state === "error"
-      ? "We couldn’t confirm your session."
-      : "Loading account details...";
+        ? "Your session has expired."
+        : state === "error"
+          ? "We couldn’t confirm your session."
+          : "Loading account details...";
 
   const readOnly = !!ent?.features?.readOnly;
 
@@ -228,7 +248,8 @@ export default function SettingsPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.error || "Failed to save profile");
+      if (!res.ok)
+        throw new Error((data as any)?.error || "Failed to save profile");
 
       setFormMsg({ type: "success", text: "Profile saved." });
 
@@ -243,7 +264,10 @@ export default function SettingsPage() {
       // Best-effort refetch (sync)
       void refresh();
     } catch (e: any) {
-      setFormMsg({ type: "error", text: e?.message || "Failed to save profile" });
+      setFormMsg({
+        type: "error",
+        text: e?.message || "Failed to save profile",
+      });
     } finally {
       setSaving(false);
     }
@@ -270,7 +294,8 @@ export default function SettingsPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.error || "Failed to send OTP");
+      if (!res.ok)
+        throw new Error((data as any)?.error || "Failed to send OTP");
 
       setPwMsg({
         type: "success",
@@ -294,9 +319,12 @@ export default function SettingsPage() {
       const newPassword = String(pwForm.newPassword ?? "");
       const confirmPassword = String(pwForm.confirmPassword ?? "");
 
-      if (!otpCode || otpCode.length < 4) throw new Error("Please enter the OTP code.");
-      if (!newPassword || newPassword.length < 8) throw new Error("Password must be at least 8 characters.");
-      if (newPassword !== confirmPassword) throw new Error("Passwords do not match.");
+      if (!otpCode || otpCode.length < 4)
+        throw new Error("Please enter the OTP code.");
+      if (!newPassword || newPassword.length < 8)
+        throw new Error("Password must be at least 8 characters.");
+      if (newPassword !== confirmPassword)
+        throw new Error("Passwords do not match.");
 
       const res = await fetch("/api/auth/password/update", {
         method: "POST",
@@ -307,7 +335,8 @@ export default function SettingsPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as any)?.error || "Failed to update password");
+      if (!res.ok)
+        throw new Error((data as any)?.error || "Failed to update password");
 
       setPwMsg({ type: "success", text: "Password updated successfully." });
 
@@ -317,29 +346,14 @@ export default function SettingsPage() {
         setPwForm({ otpCode: "", newPassword: "", confirmPassword: "" });
       }, 600);
     } catch (e: any) {
-      setPwMsg({ type: "error", text: e?.message || "Failed to update password" });
+      setPwMsg({
+        type: "error",
+        text: e?.message || "Failed to update password",
+      });
     } finally {
       setPwSaving(false);
     }
   }
-
-  const formMsgClass =
-    !formMsg
-      ? ""
-      : formMsg.type === "success"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-      : formMsg.type === "error"
-      ? "border-red-200 bg-red-50 text-red-800"
-      : "border-sky-200 bg-sky-50 text-sky-800";
-
-  const pwMsgClass =
-    !pwMsg
-      ? ""
-      : pwMsg.type === "success"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-      : pwMsg.type === "error"
-      ? "border-red-200 bg-red-50 text-red-800"
-      : "border-sky-200 bg-sky-50 text-sky-800";
 
   const onRefreshAll = useCallback(async () => {
     await refresh();
@@ -354,8 +368,8 @@ export default function SettingsPage() {
         entLoading && state === "ready"
           ? "Loading account details..."
           : entError
-          ? `Account loaded, but entitlement failed (${entError})`
-          : subtitle
+            ? `Account loaded, but entitlement failed (${entError})`
+            : subtitle
       }
       backHref="/dashboard"
       backLabel="Back to overview"
@@ -364,14 +378,20 @@ export default function SettingsPage() {
       planName={planName}
       headerRight={
         state === "ready" ? (
-          <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
+          <PortalButton
+            onClick={onRefreshAll}
+            variant="secondary"
+            type="button"
+          >
             Refresh
-          </button>
+          </PortalButton>
         ) : null
       }
       footerRight={
         <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-xs text-slate-500">Security & profile</span>
+          <span className="hidden sm:inline text-xs text-slate-500">
+            Security & profile
+          </span>
           <Chip>Settings</Chip>
         </div>
       }
@@ -379,23 +399,56 @@ export default function SettingsPage() {
       {state === "loading" ? (
         <SettingsSkeleton />
       ) : state === "unauth" ? (
-        <EmptyState
-          title="Please log in to continue"
-          body="Your session isn’t active. Log in again to manage your settings."
-          primaryLabel="Go to login"
-          onPrimary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
-          secondaryLabel="Back to home"
-          onSecondary={() => router.push("/")}
-        />
+        <PremiumCard className="portal-card-premium">
+          <PortalEmptyState
+            icon="🔐"
+            title="Please log in to continue"
+            description="Your session isn’t active. Log in again to manage your settings."
+            action={
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <PortalButton
+                  onClick={() =>
+                    router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+                  }
+                  type="button"
+                >
+                  Go to login
+                </PortalButton>
+                <PortalButton
+                  onClick={() => router.push("/")}
+                  variant="secondary"
+                  type="button"
+                >
+                  Back to home
+                </PortalButton>
+              </div>
+            }
+          />
+        </PremiumCard>
       ) : state === "error" ? (
-        <EmptyState
-          title="Session check failed"
-          body={error ?? "Something went wrong. Please try again."}
-          primaryLabel="Retry"
-          onPrimary={() => refresh()}
-          secondaryLabel="Go to login"
-          onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
-        />
+        <PremiumCard className="portal-card-premium">
+          <PortalEmptyState
+            icon="⚠️"
+            title="Session check failed"
+            description={error ?? "Something went wrong. Please try again."}
+            action={
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <PortalButton onClick={() => refresh()} type="button">
+                  Retry
+                </PortalButton>
+                <PortalButton
+                  onClick={() =>
+                    router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+                  }
+                  variant="secondary"
+                  type="button"
+                >
+                  Go to login
+                </PortalButton>
+              </div>
+            }
+          />
+        </PremiumCard>
       ) : (
         <div className="space-y-5">
           {/* Hero */}
@@ -407,22 +460,27 @@ export default function SettingsPage() {
                   Account security: Protected
                 </Chip>
 
-                <h2 className="mt-2 text-lg font-semibold text-slate-900">Keep your account safe.</h2>
+                <h2 className="mt-2 text-lg font-semibold text-slate-900">
+                  Keep your account safe.
+                </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Review your profile info and security options. Password changes are protected by OTP verification.
+                  Review your profile info and security options. Password
+                  changes are protected by OTP verification.
                 </p>
 
                 {readOnly ? (
                   <p className="mt-2 text-xs text-amber-700">
-                    Your account is currently read-only. Profile and security updates are disabled.
+                    Your account is currently read-only. Profile and security
+                    updates are disabled.
                   </p>
                 ) : null}
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button
+                <PortalButton
                   disabled
-                  className={cx(BTN_SECONDARY, "rounded-2xl opacity-60")}
+                  variant="secondary"
+                  className="rounded-2xl opacity-60"
                   title="Coming soon"
                   type="button"
                 >
@@ -430,17 +488,17 @@ export default function SettingsPage() {
                     ✓
                   </span>
                   Enable MFA (soon)
-                </button>
+                </PortalButton>
 
-                <button
+                <PortalButton
                   onClick={() => router.push("/billing")}
-                  className={BTN_PRIMARY}
-                  style={{ background: "var(--primary)" }}
                   type="button"
                 >
-                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/15 text-[12px]">⟠</span>
+                  <span className="grid h-6 w-6 place-items-center rounded-lg bg-white/15 text-[12px]">
+                    ⟠
+                  </span>
                   View plan
-                </button>
+                </PortalButton>
               </div>
             </div>
           </PremiumCard>
@@ -450,7 +508,11 @@ export default function SettingsPage() {
             <KpiCard label="Email" value={String(userEmail)} icon="✉" />
             <KpiCard label="Plan" value={planName} icon="★" />
             <KpiCard label="Account ID" value={String(userId)} icon="ID" />
-            <KpiCard label="Last login" value={fmtDate(sessionUser?.lastLoginAt)} icon="✓" />
+            <KpiCard
+              label="Last login"
+              value={fmtDate(sessionUser?.lastLoginAt)}
+              icon="✓"
+            />
           </div>
 
           {/* Main grid */}
@@ -459,8 +521,12 @@ export default function SettingsPage() {
             <PremiumCard className="portal-card-premium">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900">Profile details</h2>
-                  <p className="mt-1 text-sm text-slate-600">Your basic account information.</p>
+                  <h2 className="text-base font-semibold text-slate-900">
+                    Profile details
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Your basic account information.
+                  </p>
                 </div>
 
                 <Chip tone="success">
@@ -473,42 +539,65 @@ export default function SettingsPage() {
                 <DetailTile label="Email" value={String(userEmail)} />
                 <DetailTile label="Plan" value={planName} />
                 <DetailTile label="Account ID" value={String(userId)} />
-                <DetailTile label="Last login" value={fmtDate(sessionUser?.lastLoginAt)} />
+                <DetailTile
+                  label="Last login"
+                  value={fmtDate(sessionUser?.lastLoginAt)}
+                />
 
-                <DetailTile label="Full name" value={String(sessionUser?.fullName ?? "—")} />
-                <DetailTile label="Company" value={String(sessionUser?.companyName ?? "—")} />
-                <DetailTile label="Phone" value={String(sessionUser?.phone ?? "—")} />
-                <DetailTile label="Created" value={fmtDate(sessionUser?.createdAt)} />
+                <DetailTile
+                  label="Full name"
+                  value={String(sessionUser?.fullName ?? "—")}
+                />
+                <DetailTile
+                  label="Company"
+                  value={String(sessionUser?.companyName ?? "—")}
+                />
+                <DetailTile
+                  label="Phone"
+                  value={String(sessionUser?.phone ?? "—")}
+                />
+                <DetailTile
+                  label="Created"
+                  value={fmtDate(sessionUser?.createdAt)}
+                />
               </div>
 
               <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                 <p className="text-sm text-slate-700">
-                  You can edit your profile details below. Email changes will be added later with verification.
+                  You can edit your profile details below. Email changes will be
+                  added later with verification.
                 </p>
-                <p className="mt-1 text-xs text-slate-500">If your account is read-only, profile updates are disabled.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  If your account is read-only, profile updates are disabled.
+                </p>
               </div>
 
-              <button
+              <PortalButton
                 disabled={!canEditProfile}
                 onClick={openEdit}
-                className={cx(
-                  BTN_SECONDARY,
-                  "mt-5 w-full rounded-2xl",
-                  !canEditProfile && "cursor-not-allowed opacity-60"
-                )}
-                title={!canEditProfile ? "Your account is read-only or unavailable right now" : "Edit your profile"}
+                variant="secondary"
+                className="mt-5 w-full rounded-2xl"
+                title={
+                  !canEditProfile
+                    ? "Your account is read-only or unavailable right now"
+                    : "Edit your profile"
+                }
                 type="button"
               >
                 Edit profile
-              </button>
+              </PortalButton>
             </PremiumCard>
 
             {/* Security */}
             <PremiumCard className="portal-card-premium">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900">Security</h2>
-                  <p className="mt-1 text-sm text-slate-600">Password, sessions, and access controls.</p>
+                  <h2 className="text-base font-semibold text-slate-900">
+                    Security
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Password, sessions, and access controls.
+                  </p>
                 </div>
                 <Chip tone="success">Secure</Chip>
               </div>
@@ -516,14 +605,19 @@ export default function SettingsPage() {
               <div className="mt-5 space-y-3">
                 <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <p className="text-sm text-slate-800">
-                    <span className="font-semibold">Login methods enabled:</span>
+                    <span className="font-semibold">
+                      Login methods enabled:
+                    </span>
                   </p>
                   <ul className="mt-2 space-y-1 text-xs text-slate-600">
                     <li>• OTP sign-in (enabled)</li>
-                    <li>• Email + password (optional — once you set a password)</li>
+                    <li>
+                      • Email + password (optional — once you set a password)
+                    </li>
                   </ul>
                   <p className="mt-2 text-xs text-slate-500">
-                    Changing your password requires OTP verification to protect your account.
+                    Changing your password requires OTP verification to protect
+                    your account.
                   </p>
                 </div>
 
@@ -547,24 +641,29 @@ export default function SettingsPage() {
 
                 <div className="rounded-2xl bg-gradient-to-br from-[#0b2a3a]/5 via-[#0e3a4f]/5 to-[#215D63]/10 p-4 ring-1 ring-slate-200">
                   <p className="text-sm text-slate-800">
-                    <span className="font-semibold">Sessions policy:</span> Max 2 active sessions allowed per account.
+                    <span className="font-semibold">Sessions policy:</span> Max
+                    2 active sessions allowed per account.
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    When session management is enabled, you’ll be able to sign out other devices here.
+                    When session management is enabled, you’ll be able to sign
+                    out other devices here.
                   </p>
                 </div>
               </div>
 
-              <button
+              <PortalButton
                 disabled={!canManageSecurity}
                 onClick={openPassword}
-                className={cx(BTN_PRIMARY, "mt-5 w-full rounded-2xl", !canManageSecurity && "cursor-not-allowed opacity-60")}
-                style={{ background: "rgb(15 23 42)" }}
-                title={!canManageSecurity ? "Your account is read-only or unavailable right now" : "Set / change password"}
+                className="mt-5 w-full rounded-2xl bg-slate-900 hover:bg-slate-800"
+                title={
+                  !canManageSecurity
+                    ? "Your account is read-only or unavailable right now"
+                    : "Set / change password"
+                }
                 type="button"
               >
                 Set / change password
-              </button>
+              </PortalButton>
             </PremiumCard>
           </div>
         </div>
@@ -576,8 +675,13 @@ export default function SettingsPage() {
           <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Edit profile</h3>
-                <p className="mt-1 text-sm text-slate-600">Update your profile details. Email changes are not supported yet.</p>
+                <h3 className="text-base font-semibold text-slate-900">
+                  Edit profile
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Update your profile details. Email changes are not supported
+                  yet.
+                </p>
               </div>
 
               <button
@@ -593,63 +697,62 @@ export default function SettingsPage() {
 
             <div className="mt-4 space-y-3">
               {formMsg ? (
-                <div className={cx("rounded-xl border px-3 py-2 text-sm", formMsgClass)}>{formMsg.text}</div>
+                <PortalAlert tone={messageTone(formMsg.type)}>
+                  {formMsg.text}
+                </PortalAlert>
               ) : null}
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">Full name</span>
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
-                  value={form.fullName}
-                  onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
-                  placeholder="e.g. Syrus Masuku"
-                  disabled={saving}
-                />
-              </label>
+              <PortalInput
+                label="Full name"
+                value={form.fullName}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, fullName: e.target.value }))
+                }
+                placeholder="e.g. Syrus Masuku"
+                disabled={saving}
+              />
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">Company name</span>
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
-                  value={form.companyName}
-                  onChange={(e) => setForm((p) => ({ ...p, companyName: e.target.value }))}
-                  placeholder="e.g. Onkabetse IT Solutions"
-                  disabled={saving}
-                />
-              </label>
+              <PortalInput
+                label="Company name"
+                value={form.companyName}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, companyName: e.target.value }))
+                }
+                placeholder="e.g. Onkabetse IT Solutions"
+                disabled={saving}
+              />
 
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">Phone</span>
-                <input
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
-                  value={form.phone}
-                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                  placeholder="e.g. +27 71 234 5678"
-                  disabled={saving}
-                />
-                <p className="mt-1 text-xs text-slate-500">Tip: Use numbers, spaces, +, dashes, brackets.</p>
-              </label>
+              <PortalInput
+                label="Phone"
+                value={form.phone}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, phone: e.target.value }))
+                }
+                placeholder="e.g. +27 71 234 5678"
+                disabled={saving}
+                hint="Tip: Use numbers, spaces, +, dashes, brackets."
+              />
             </div>
 
             <div className="mt-5 flex gap-3">
-              <button
+              <PortalButton
                 type="button"
                 onClick={() => setEditOpen(false)}
-                className={cx(BTN_SECONDARY, "flex-1")}
+                variant="secondary"
+                className="flex-1"
                 disabled={saving}
               >
                 Cancel
-              </button>
+              </PortalButton>
 
-              <button
+              <PortalButton
                 type="button"
                 onClick={saveProfile}
-                className={cx(BTN_PRIMARY, "flex-1")}
-                style={{ background: "var(--primary)" }}
-                disabled={saving}
+                className="flex-1"
+                isLoading={saving}
               >
                 {saving ? "Saving..." : "Save changes"}
-              </button>
+              </PortalButton>
             </div>
           </div>
         </div>
@@ -661,9 +764,12 @@ export default function SettingsPage() {
           <div className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-xl ring-1 ring-slate-200">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Set / change password</h3>
+                <h3 className="text-base font-semibold text-slate-900">
+                  Set / change password
+                </h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  For security, we’ll verify your account with an OTP before updating your password.
+                  For security, we’ll verify your account with an OTP before
+                  updating your password.
                 </p>
               </div>
 
@@ -679,33 +785,40 @@ export default function SettingsPage() {
             </div>
 
             <div className="mt-4 space-y-3">
-              {pwMsg ? <div className={cx("rounded-xl border px-3 py-2 text-sm", pwMsgClass)}>{pwMsg.text}</div> : null}
+              {pwMsg ? (
+                <PortalAlert tone={messageTone(pwMsg.type)}>
+                  {pwMsg.text}
+                </PortalAlert>
+              ) : null}
 
               {pwStep === "request" ? (
                 <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
                   <p className="text-sm text-slate-800">
-                    We’ll send an OTP to <span className="font-semibold">{userEmail}</span>.
+                    We’ll send an OTP to{" "}
+                    <span className="font-semibold">{userEmail}</span>.
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">Click “Send OTP”, then enter the code and your new password.</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Click “Send OTP”, then enter the code and your new password.
+                  </p>
 
-                  <button
+                  <PortalButton
                     type="button"
                     onClick={requestPasswordOtp}
-                    className={cx(BTN_PRIMARY, "mt-4 w-full")}
-                    style={{ background: "var(--primary)" }}
-                    disabled={pwSending}
+                    className="mt-4 w-full"
+                    isLoading={pwSending}
                   >
                     {pwSending ? "Sending..." : "Send OTP"}
-                  </button>
+                  </PortalButton>
                 </div>
               ) : (
                 <>
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">OTP code</span>
-                    <input
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
+                  <div>
+                    <PortalInput
+                      label="OTP code"
                       value={pwForm.otpCode}
-                      onChange={(e) => setPwForm((p) => ({ ...p, otpCode: e.target.value }))}
+                      onChange={(e) =>
+                        setPwForm((p) => ({ ...p, otpCode: e.target.value }))
+                      }
                       placeholder="Enter OTP"
                       disabled={pwSaving}
                     />
@@ -718,57 +831,67 @@ export default function SettingsPage() {
                       >
                         {pwSending ? "Sending..." : "Resend OTP"}
                       </button>
-                      <span className="text-xs text-slate-500">Check spam if you don’t see it.</span>
+                      <span className="text-xs text-slate-500">
+                        Check spam if you don’t see it.
+                      </span>
                     </div>
-                  </label>
+                  </div>
 
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">New password</span>
-                    <input
-                      type="password"
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
-                      value={pwForm.newPassword}
-                      onChange={(e) => setPwForm((p) => ({ ...p, newPassword: e.target.value }))}
-                      placeholder="At least 8 characters"
-                      disabled={pwSaving}
-                    />
-                  </label>
+                  <PortalInput
+                    label="New password"
+                    type="password"
+                    value={pwForm.newPassword}
+                    onChange={(e) =>
+                      setPwForm((p) => ({
+                        ...p,
+                        newPassword: e.target.value,
+                      }))
+                    }
+                    placeholder="At least 8 characters"
+                    disabled={pwSaving}
+                  />
 
-                  <label className="block">
-                    <span className="text-sm font-medium text-slate-700">Confirm new password</span>
-                    <input
-                      type="password"
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[color:var(--ring)]"
-                      value={pwForm.confirmPassword}
-                      onChange={(e) => setPwForm((p) => ({ ...p, confirmPassword: e.target.value }))}
-                      placeholder="Repeat password"
-                      disabled={pwSaving}
-                    />
-                  </label>
+                  <PortalInput
+                    label="Confirm new password"
+                    type="password"
+                    value={pwForm.confirmPassword}
+                    onChange={(e) =>
+                      setPwForm((p) => ({
+                        ...p,
+                        confirmPassword: e.target.value,
+                      }))
+                    }
+                    placeholder="Repeat password"
+                    disabled={pwSaving}
+                  />
 
                   <div className="mt-2 flex gap-3">
-                    <button
+                    <PortalButton
                       type="button"
                       onClick={() => {
                         setPwMsg(null);
                         setPwStep("request");
-                        setPwForm({ otpCode: "", newPassword: "", confirmPassword: "" });
+                        setPwForm({
+                          otpCode: "",
+                          newPassword: "",
+                          confirmPassword: "",
+                        });
                       }}
-                      className={cx(BTN_SECONDARY, "flex-1")}
+                      variant="secondary"
+                      className="flex-1"
                       disabled={pwSaving || pwSending}
                     >
                       Back
-                    </button>
+                    </PortalButton>
 
-                    <button
+                    <PortalButton
                       type="button"
                       onClick={submitPasswordUpdate}
-                      className={cx(BTN_PRIMARY, "flex-1")}
-                      style={{ background: "rgb(15 23 42)" }}
-                      disabled={pwSaving}
+                      className="flex-1 bg-slate-900 hover:bg-slate-800"
+                      isLoading={pwSaving}
                     >
                       {pwSaving ? "Updating..." : "Update password"}
-                    </button>
+                    </PortalButton>
                   </div>
                 </>
               )}
@@ -801,8 +924,8 @@ function ActionRow({
     tone === "primary"
       ? "bg-slate-900 text-white hover:bg-slate-800"
       : tone === "brand"
-      ? "text-white"
-      : "bg-white text-slate-900 hover:bg-slate-50";
+        ? "text-white"
+        : "bg-white text-slate-900 hover:bg-slate-50";
 
   const ringClass =
     tone === "neutral"
@@ -830,12 +953,35 @@ function ActionRow({
       type="button"
     >
       <div className="relative flex items-center gap-3">
-        <div className={["grid h-9 w-9 place-items-center rounded-2xl text-[14px]", iconChip].join(" ")}>{icon}</div>
+        <div
+          className={[
+            "grid h-9 w-9 place-items-center rounded-2xl text-[14px]",
+            iconChip,
+          ].join(" ")}
+        >
+          {icon}
+        </div>
         <div className="min-w-0">
           <div className="text-sm font-semibold">{title}</div>
-          <div className={tone === "neutral" ? "text-xs text-slate-600" : "text-xs text-white/80"}>{subtitle}</div>
+          <div
+            className={
+              tone === "neutral"
+                ? "text-xs text-slate-600"
+                : "text-xs text-white/80"
+            }
+          >
+            {subtitle}
+          </div>
         </div>
-        <div className={tone === "neutral" ? "ml-auto text-slate-400" : "ml-auto text-white/80"}>→</div>
+        <div
+          className={
+            tone === "neutral"
+              ? "ml-auto text-slate-400"
+              : "ml-auto text-white/80"
+          }
+        >
+          →
+        </div>
       </div>
 
       <div
@@ -856,71 +1002,39 @@ function SettingsSkeleton() {
   return (
     <div className="space-y-5">
       <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-        <div className="h-5 w-48 rounded-lg bg-slate-200 animate-pulse" />
-        <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
+        <PortalSkeleton className="h-5 w-48" />
+        <PortalSkeleton className="mt-3 h-4 w-80 max-w-full" />
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-          <div className="h-5 w-40 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-3 h-4 w-64 rounded-lg bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="h-5 w-40" />
+          <PortalSkeleton className="mt-3 h-4 w-64 max-w-full" />
           <div className="mt-5 space-y-3">
-            <div className="h-12 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-12 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-12 rounded-2xl bg-slate-200 animate-pulse" />
+            <PortalSkeleton className="h-12 rounded-2xl" />
+            <PortalSkeleton className="h-12 rounded-2xl" />
+            <PortalSkeleton className="h-12 rounded-2xl" />
           </div>
-          <div className="mt-5 h-16 rounded-2xl bg-slate-200 animate-pulse" />
-          <div className="mt-5 h-11 rounded-2xl bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="mt-5 h-16 rounded-2xl" />
+          <PortalSkeleton className="mt-5 h-11 rounded-2xl" />
         </div>
 
         <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-          <div className="h-5 w-32 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-3 h-4 w-56 rounded-lg bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="h-5 w-32" />
+          <PortalSkeleton className="mt-3 h-4 w-56 max-w-full" />
           <div className="mt-5 space-y-3">
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-20 rounded-2xl bg-slate-200 animate-pulse" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-20 rounded-2xl" />
           </div>
-          <div className="mt-5 h-11 rounded-2xl bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="mt-5 h-11 rounded-2xl" />
         </div>
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({
-  title,
-  body,
-  primaryLabel,
-  onPrimary,
-  secondaryLabel,
-  onSecondary,
-}: {
-  title: string;
-  body: string;
-  primaryLabel: string;
-  onPrimary: () => void;
-  secondaryLabel: string;
-  onSecondary: () => void;
-}) {
-  return (
-    <div className="rounded-3xl bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-slate-600">{body}</p>
-
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button onClick={onPrimary} className={cx(BTN_PRIMARY)} style={{ background: "var(--primary)" }} type="button">
-          {primaryLabel}
-        </button>
-        <button onClick={onSecondary} className={BTN_SECONDARY} type="button">
-          {secondaryLabel}
-        </button>
       </div>
     </div>
   );

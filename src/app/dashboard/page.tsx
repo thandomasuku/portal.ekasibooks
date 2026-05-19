@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
+import {
+  PremiumCard,
+  KpiCard,
+  DetailTile,
+  Chip,
+  PortalButton,
+  PortalEmptyState,
+  PortalSkeleton,
+  cx,
+} from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 
 /* =========================
@@ -55,10 +64,6 @@ function capitalizeWords(s: string) {
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
-}
-
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
 }
 
 function safeJson(v: any) {
@@ -206,16 +211,6 @@ function usePortalEntitlement(enabled: boolean, refreshKey: number) {
    Premium UI primitives
    ========================= */
 
-const BTN_BASE =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold " +
-  "shadow-sm transition will-change-transform " +
-  "hover:-translate-y-[1px] active:translate-y-0 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
-  "disabled:opacity-60 disabled:hover:translate-y-0";
-
-const BTN_PRIMARY = cx(BTN_BASE, "text-white");
-const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
-
 const ICON_CHIP = "grid h-7 w-7 place-items-center rounded-lg bg-white/12 ring-1 ring-white/15 text-[12px]";
 
 /* =========================
@@ -259,9 +254,9 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
   }
 
   return (
-    <button onClick={onCopy} className={BTN_SECONDARY} type="button">
+    <PortalButton onClick={onCopy} variant="secondary" type="button">
       {copied ? "Copied ✓" : label}
-    </button>
+    </PortalButton>
   );
 }
 
@@ -326,29 +321,21 @@ export default function DashboardPage() {
       headerRight={
         state === "ready" ? (
           <div className="flex items-center gap-2">
-            <button
+            <PortalButton
               onClick={() => {
                 refresh();
                 setEntRefreshKey((n) => n + 1);
               }}
-              className={BTN_SECONDARY}
+              variant="secondary"
               type="button"
             >
               Refresh
-            </button>
+            </PortalButton>
 
-            <button
-              onClick={() => router.push(cta.href)}
-              className={BTN_PRIMARY}
-              style={{ background: "var(--primary)" }}
-              title={cta.subtitle}
-              type="button"
-            >
-              <span className={cx("rounded-lg px-2 py-1 text-[11px] font-extrabold", "bg-white/15 ring-1 ring-white/20")}>
-                ⟠
-              </span>
+            <PortalButton onClick={() => router.push(cta.href)} variant="primary" title={cta.subtitle} type="button">
+              <span className="rounded-lg bg-white/15 px-2 py-1 text-[11px] font-extrabold ring-1 ring-white/20">⟠</span>
               {cta.label}
-            </button>
+            </PortalButton>
           </div>
         ) : null
       }
@@ -421,29 +408,29 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                  <button
+                  <PortalButton
                     onClick={() => router.push("/downloads")}
-                    className={BTN_PRIMARY}
-                    style={{ background: "rgb(15 23 42)" }}
+                    variant="primary"
+                    className="bg-slate-900 hover:bg-slate-800 hover:brightness-100"
                     type="button"
                   >
                     <span className={ICON_CHIP}>⇩</span>
                     Get desktop app
-                  </button>
+                  </PortalButton>
 
-                  <button onClick={() => router.push(cta.href)} className={BTN_SECONDARY} title={cta.subtitle} type="button">
+                  <PortalButton onClick={() => router.push(cta.href)} variant="secondary" title={cta.subtitle} type="button">
                     <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
                       ⟠
                     </span>
                     {cta.label}
-                  </button>
+                  </PortalButton>
 
-                  <button onClick={() => router.push("/settings")} className={BTN_SECONDARY} type="button">
+                  <PortalButton onClick={() => router.push("/settings")} variant="secondary" type="button">
                     <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 text-[12px] ring-1 ring-slate-200">
                       ⚙
                     </span>
                     Security
-                  </button>
+                  </PortalButton>
                 </div>
               </div>
             </PremiumCard>
@@ -623,36 +610,36 @@ function DashboardSkeleton() {
   return (
     <div className="space-y-6">
       <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
-        <div className="h-5 w-52 rounded-lg bg-slate-200 animate-pulse" />
-        <div className="mt-3 h-4 w-80 rounded-lg bg-slate-200 animate-pulse" />
+        <PortalSkeleton className="h-5 w-52" />
+        <PortalSkeleton className="mt-3 h-4 w-80 max-w-full" />
 
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
-          <div className="h-16 rounded-3xl bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="xl:col-span-2 rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
-          <div className="h-5 w-44 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-3 h-4 w-72 rounded-lg bg-slate-200 animate-pulse" />
+        <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200 xl:col-span-2">
+          <PortalSkeleton className="h-5 w-44" />
+          <PortalSkeleton className="mt-3 h-4 w-72 max-w-full" />
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-14 rounded-2xl bg-slate-200 animate-pulse" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
+            <PortalSkeleton className="h-14 rounded-2xl" />
           </div>
         </div>
 
         <div className="rounded-3xl bg-white p-6 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
-          <div className="h-5 w-40 rounded-lg bg-slate-200 animate-pulse" />
-          <div className="mt-3 h-4 w-56 rounded-lg bg-slate-200 animate-pulse" />
+          <PortalSkeleton className="h-5 w-40" />
+          <PortalSkeleton className="mt-3 h-4 w-56 max-w-full" />
           <div className="mt-5 space-y-2">
-            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
-            <div className="h-11 rounded-2xl bg-slate-200 animate-pulse" />
+            <PortalSkeleton className="h-11 rounded-2xl" />
+            <PortalSkeleton className="h-11 rounded-2xl" />
+            <PortalSkeleton className="h-11 rounded-2xl" />
           </div>
         </div>
       </div>
@@ -675,25 +662,21 @@ function EmptyState({
   secondaryLabel: string;
   onSecondary: () => void;
 }) {
-  const BTN_BASE =
-    "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition " +
-    "hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]";
-  const BTN_PRIMARY = cx(BTN_BASE, "text-white");
-  const BTN_SECONDARY = cx(BTN_BASE, "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50");
-
   return (
-    <div className="rounded-3xl bg-white p-8 shadow-[var(--shadow-md)] ring-1 ring-slate-200">
-      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-slate-600">{body}</p>
-
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button onClick={onPrimary} className={BTN_PRIMARY} style={{ background: "var(--primary)" }} type="button">
-          {primaryLabel}
-        </button>
-        <button onClick={onSecondary} className={BTN_SECONDARY} type="button">
-          {secondaryLabel}
-        </button>
-      </div>
-    </div>
+    <PortalEmptyState
+      title={title}
+      description={body}
+      className="bg-white p-8 text-left shadow-[var(--shadow-md)] ring-1 ring-slate-200"
+      action={
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <PortalButton onClick={onPrimary} variant="primary" type="button">
+            {primaryLabel}
+          </PortalButton>
+          <PortalButton onClick={onSecondary} variant="secondary" type="button">
+            {secondaryLabel}
+          </PortalButton>
+        </div>
+      }
+    />
   );
 }

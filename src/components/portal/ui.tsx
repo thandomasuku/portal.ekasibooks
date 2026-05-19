@@ -2,7 +2,7 @@
 
 import React from "react";
 
-function cx(...classes: Array<string | false | null | undefined>) {
+export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
@@ -36,7 +36,7 @@ export function PremiumCard({
   return (
     <div
       className={cx(
-        "relative rounded-2xl ring-1",
+        "portal-card-sheen relative rounded-2xl ring-1",
         "transition-all duration-300 will-change-transform",
         "hover:-translate-y-[2px]",
         className
@@ -270,5 +270,210 @@ export function Chip({
     >
       {children}
     </span>
+  );
+}
+
+/* =========================
+   PORTAL BUTTON (shared action styles)
+   ========================= */
+export function PortalButton({
+  children,
+  className = "",
+  variant = "primary",
+  size = "md",
+  isLoading = false,
+  disabled,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  size?: "sm" | "md";
+  isLoading?: boolean;
+}) {
+  const base =
+    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+
+  const sizes = {
+    sm: "px-3 py-2 text-xs",
+    md: "px-4 py-2.5 text-sm",
+  };
+
+  const variants = {
+    primary:
+      "bg-[color:var(--primary)] text-white shadow-sm hover:-translate-y-[1px] hover:brightness-105 focus-visible:ring-[color:var(--primary)]",
+    secondary:
+      "bg-white text-[color:var(--foreground)] ring-1 ring-[color:var(--border-soft)] shadow-sm hover:-translate-y-[1px] hover:ring-[color:var(--border-hover)] focus-visible:ring-[color:var(--primary)]",
+    ghost:
+      "bg-transparent text-[color:var(--muted)] hover:bg-slate-100 hover:text-[color:var(--foreground)] focus-visible:ring-[color:var(--primary)]",
+    danger:
+      "bg-rose-600 text-white shadow-sm hover:-translate-y-[1px] hover:bg-rose-700 focus-visible:ring-rose-500",
+  };
+
+  return (
+    <button
+      className={cx(base, sizes[size], variants[variant], className)}
+      disabled={disabled || isLoading}
+      {...props}
+    >
+      {isLoading ? (
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+      ) : null}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+/* =========================
+   PORTAL INPUT (shared form field styles)
+   ========================= */
+export function PortalInput({
+  label,
+  hint,
+  error,
+  className = "",
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & {
+  label?: string;
+  hint?: string;
+  error?: string;
+}) {
+  return (
+    <label className="block">
+      {label ? <span className="mb-1.5 block text-sm font-semibold text-[color:var(--foreground)]">{label}</span> : null}
+      <input
+        className={cx(
+          "w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-[color:var(--foreground)] shadow-sm outline-none transition",
+          "placeholder:text-slate-400 focus:border-[color:var(--primary)] focus:ring-4 focus:ring-[color:var(--primary)]/15",
+          error ? "border-rose-300" : "border-[color:var(--border-soft)]",
+          className
+        )}
+        aria-invalid={error ? "true" : undefined}
+        {...props}
+      />
+      {error ? <span className="mt-1.5 block text-xs font-medium text-rose-600">{error}</span> : null}
+      {!error && hint ? <span className="mt-1.5 block text-xs text-[color:var(--muted)]">{hint}</span> : null}
+    </label>
+  );
+}
+
+/* =========================
+   PORTAL ALERT (shared feedback banner)
+   ========================= */
+export function PortalAlert({
+  title,
+  children,
+  tone = "info",
+  className = "",
+}: {
+  title?: string;
+  children: React.ReactNode;
+  tone?: "info" | "success" | "warning" | "danger";
+  className?: string;
+}) {
+  const tones = {
+    info: {
+      background: "color-mix(in srgb, var(--primary) 9%, white)",
+      borderColor: "color-mix(in srgb, var(--primary) 20%, transparent)",
+      color: "var(--foreground)",
+    },
+    success: {
+      background: "rgba(16, 185, 129, 0.10)",
+      borderColor: "rgba(16, 185, 129, 0.22)",
+      color: "rgb(6, 95, 70)",
+    },
+    warning: {
+      background: "rgba(245, 158, 11, 0.12)",
+      borderColor: "rgba(245, 158, 11, 0.26)",
+      color: "rgb(120, 53, 15)",
+    },
+    danger: {
+      background: "rgba(244, 63, 94, 0.10)",
+      borderColor: "rgba(244, 63, 94, 0.24)",
+      color: "rgb(159, 18, 57)",
+    },
+  };
+
+  return (
+    <div className={cx("rounded-2xl border p-4 text-sm", className)} style={tones[tone]}>
+      {title ? <div className="mb-1 font-semibold">{title}</div> : null}
+      <div className="leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
+/* =========================
+   PORTAL SECTION HEADER
+   ========================= */
+export function PortalSectionHeader({
+  eyebrow,
+  title,
+  description,
+  action,
+  className = "",
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}>
+      <div className="min-w-0">
+        {eyebrow ? (
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+            {eyebrow}
+          </div>
+        ) : null}
+        <h2 className="text-lg font-semibold tracking-tight text-[color:var(--foreground)]">{title}</h2>
+        {description ? <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[color:var(--muted)]">{description}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
+/* =========================
+   PORTAL EMPTY STATE
+   ========================= */
+export function PortalEmptyState({
+  icon,
+  title,
+  description,
+  action,
+  className = "",
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx("rounded-2xl border border-dashed p-6 text-center", className)}
+      style={{
+        background: "color-mix(in srgb, var(--surface) 65%, white)",
+        borderColor: "var(--border-soft)",
+      }}
+    >
+      {icon ? <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-white shadow-sm">{icon}</div> : null}
+      <div className="text-sm font-semibold text-[color:var(--foreground)]">{title}</div>
+      {description ? <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-[color:var(--muted)]">{description}</p> : null}
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+    </div>
+  );
+}
+
+/* =========================
+   PORTAL SKELETON
+   ========================= */
+export function PortalSkeleton({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={cx("animate-pulse rounded-xl", className)}
+      style={{
+        background: "linear-gradient(90deg, rgba(15,23,42,0.06), rgba(15,23,42,0.10), rgba(15,23,42,0.06))",
+      }}
+    />
   );
 }

@@ -3,17 +3,24 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PortalShell } from "@/components/portal/PortalShell";
-import { PremiumCard, KpiCard, DetailTile, Chip } from "@/components/portal/ui";
+import {
+  PremiumCard,
+  KpiCard,
+  DetailTile,
+  Chip,
+  PortalAlert,
+  PortalButton,
+  PortalEmptyState,
+  PortalInput,
+  PortalSkeleton,
+  cx,
+} from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 import { formatDateTime } from "@/lib/dates";
 
 /* =========================
    Small utilities
    ========================= */
-
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
 
 async function trackAnalytics(eventName: string, params?: Record<string, any>) {
   try {
@@ -45,18 +52,6 @@ async function trackAnalytics(eventName: string, params?: Record<string, any>) {
 /* =========================
    Page-level UI primitives
    ========================= */
-
-const BTN_BASE =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition " +
-  "will-change-transform hover:-translate-y-[1px] active:translate-y-0 " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] " +
-  "disabled:opacity-70 disabled:hover:translate-y-0";
-
-const BTN_PRIMARY = cx(BTN_BASE, "text-white");
-const BTN_SECONDARY = cx(
-  BTN_BASE,
-  "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"
-);
 
 const BTN_ICON_PRIMARY = "grid h-7 w-7 place-items-center rounded-lg bg-white/15";
 const BTN_ICON_SECONDARY =
@@ -275,9 +270,9 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button onClick={onCopy} className={BTN_SECONDARY} type="button">
+    <PortalButton onClick={onCopy} variant="secondary" type="button">
       {copied ? "Copied ✓" : "Copy snapshot"}
-    </button>
+    </PortalButton>
   );
 }
 
@@ -496,16 +491,10 @@ function BillingOnboardingView({
             ) : null}
           </div>
 
-          <button
-            onClick={onUpgrade}
-            disabled={upgradeLoading}
-            className={BTN_PRIMARY}
-            style={{ background: "var(--primary)" }}
-            type="button"
-          >
+          <PortalButton onClick={onUpgrade} isLoading={upgradeLoading} type="button">
             <span className={BTN_ICON_PRIMARY}>⟠</span>
             {upgradeLoading ? "Redirecting..." : `Continue with ${selected.title}`}
-          </button>
+          </PortalButton>
         </div>
       </PremiumCard>
     </div>
@@ -888,9 +877,9 @@ export default function BillingPage() {
       planName={planLabel}
       headerRight={
         state === "ready" ? (
-          <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
+          <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
             Refresh
-          </button>
+          </PortalButton>
         ) : null
       }
       footerRight={
@@ -928,25 +917,17 @@ export default function BillingPage() {
       ) : isFreeOnboarding ? (
         <div className="space-y-6">
           {entError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {entError}
-            </div>
+            <PortalAlert tone="danger">{entError}</PortalAlert>
           ) : null}
 
           {upgradeError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {upgradeError}
-            </div>
+            <PortalAlert tone="danger">{upgradeError}</PortalAlert>
           ) : null}
 
           {verifyLoading ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              Verifying payment…
-            </div>
+            <PortalAlert tone="info">Verifying payment…</PortalAlert>
           ) : verifyNote ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              {verifyNote}
-            </div>
+            <PortalAlert tone="info">{verifyNote}</PortalAlert>
           ) : null}
 
           <BillingOnboardingView
@@ -1006,22 +987,20 @@ export default function BillingPage() {
 
               <div className="flex w-full flex-col items-end gap-2 md:w-auto">
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
+                  <PortalButton
                     onClick={onManagePlan}
-                    disabled={manageLoading}
-                    className={BTN_PRIMARY}
-                    style={{ background: "var(--primary)" }}
+                    isLoading={manageLoading}
                     title="Manage subscription on Paystack"
                     type="button"
                   >
                     <span className={BTN_ICON_PRIMARY}>⚙</span>
                     {manageLoading ? "Opening..." : "Manage plan"}
-                  </button>
+                  </PortalButton>
 
-                  <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
+                  <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
                     <span className={BTN_ICON_SECONDARY}>↻</span>
                     Refresh status
-                  </button>
+                  </PortalButton>
                 </div>
 
                 <span className="text-[11px] leading-tight text-slate-500">
@@ -1055,50 +1034,35 @@ export default function BillingPage() {
                 downgrade.
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  onClick={onManagePlan}
-                  disabled={manageLoading}
-                  className={BTN_SECONDARY}
-                  type="button"
-                >
+                <PortalButton onClick={onManagePlan} isLoading={manageLoading} variant="secondary" type="button">
                   <span className={BTN_ICON_SECONDARY}>⚙</span>
                   {manageLoading ? "Opening..." : "Update payment method"}
-                </button>
-                <button onClick={onRefreshAll} className={BTN_SECONDARY} type="button">
+                </PortalButton>
+                <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
                   <span className={BTN_ICON_SECONDARY}>↻</span>
                   Refresh
-                </button>
+                </PortalButton>
               </div>
             </div>
           ) : null}
 
           {/* ERRORS / NOTES */}
           {entError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {entError}
-            </div>
+            <PortalAlert tone="danger">{entError}</PortalAlert>
           ) : null}
 
           {upgradeError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {upgradeError}
-            </div>
+            <PortalAlert tone="danger">{upgradeError}</PortalAlert>
           ) : null}
 
           {manageError ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {manageError}
-            </div>
+            <PortalAlert tone="danger">{manageError}</PortalAlert>
           ) : null}
 
           {verifyLoading ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              Verifying payment…
-            </div>
+            <PortalAlert tone="info">Verifying payment…</PortalAlert>
           ) : verifyNote ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              {verifyNote}
-            </div>
+            <PortalAlert tone="info">{verifyNote}</PortalAlert>
           ) : null}
 
           {/* KPI */}
@@ -1237,26 +1201,19 @@ export default function BillingPage() {
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <input
+                  <PortalInput
                     value={manualRef}
                     onChange={(e) => setManualRef(e.target.value)}
                     placeholder="e.g. 9t5k9m9d0x / trxref"
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-slate-300 focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+                    className="h-10"
                   />
-                  <button
-                    onClick={onManualVerify}
-                    disabled={verifyLoading}
-                    className={BTN_SECONDARY}
-                    type="button"
-                  >
+                  <PortalButton onClick={onManualVerify} isLoading={verifyLoading} variant="secondary" type="button">
                     {verifyLoading ? "Verifying…" : "Verify"}
-                  </button>
+                  </PortalButton>
                 </div>
 
                 {manualErr ? (
-                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                    {manualErr}
-                  </div>
+                  <PortalAlert tone="danger" className="mt-3">{manualErr}</PortalAlert>
                 ) : null}
               </div>
 
@@ -1305,15 +1262,16 @@ export default function BillingPage() {
                   </p>
                 </div>
 
-                <button
+                <PortalButton
                   onClick={onManagePlan}
-                  disabled={manageLoading}
-                  className={cx(BTN_SECONDARY, "mt-6 w-full")}
+                  isLoading={manageLoading}
+                  variant="secondary"
+                  className="mt-6 w-full"
                   title="Manage subscription on Paystack"
                   type="button"
                 >
                   {manageLoading ? "Opening..." : "Manage payment method"}
-                </button>
+                </PortalButton>
               </PremiumCard>
 
               <PremiumCard tone="soft" className="portal-card-premium">
@@ -1413,13 +1371,13 @@ function BillingSkeleton() {
   return (
     <div className="space-y-6">
       <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-        <div className="h-5 w-52 animate-pulse rounded-lg bg-slate-200" />
-        <div className="mt-3 h-4 w-80 animate-pulse rounded-lg bg-slate-200" />
+        <PortalSkeleton className="h-5 w-52" />
+        <PortalSkeleton className="mt-3 h-4 w-80" />
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
-          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
-          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
-          <div className="h-16 animate-pulse rounded-3xl bg-slate-200" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
+          <PortalSkeleton className="h-16 rounded-3xl" />
         </div>
       </div>
     </div>
@@ -1442,23 +1400,21 @@ function EmptyState({
   onSecondary: () => void;
 }) {
   return (
-    <div className="rounded-3xl bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
-      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-slate-600">{body}</p>
-
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button
-          onClick={onPrimary}
-          className={BTN_PRIMARY}
-          style={{ background: "var(--primary)" }}
-          type="button"
-        >
-          {primaryLabel}
-        </button>
-        <button onClick={onSecondary} className={BTN_SECONDARY} type="button">
-          {secondaryLabel}
-        </button>
-      </div>
-    </div>
+    <PremiumCard className="portal-card-premium">
+      <PortalEmptyState
+        title={title}
+        description={body}
+        action={
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <PortalButton onClick={onPrimary} type="button">
+              {primaryLabel}
+            </PortalButton>
+            <PortalButton onClick={onSecondary} variant="secondary" type="button">
+              {secondaryLabel}
+            </PortalButton>
+          </div>
+        }
+      />
+    </PremiumCard>
   );
 }

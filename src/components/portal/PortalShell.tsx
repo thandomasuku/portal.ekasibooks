@@ -1,9 +1,11 @@
 "use client";
 
 import Image from "next/image";
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { PortalFooter } from "../PortalFooter";
+import { PortalButton, cx } from "./ui";
 
 export type NavItem = {
   label: string;
@@ -47,10 +49,6 @@ type PortalShellProps = {
   mobileTopOffsetPx?: number;
   brandLogoSrc?: string;
 };
-
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
 
 function resolveMarketingHref(marketingBase: string, href: string) {
   if (/^https?:\/\//i.test(href)) return href;
@@ -190,10 +188,10 @@ function SidebarRow({
       className={cx(
         "relative w-full select-none text-left",
         "flex items-center gap-3",
-        "rounded-md px-3 py-2",
-        "transition-colors",
+        "rounded-xl px-3 py-2.5",
+        "transition-all duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]",
-        active ? "bg-white/10 text-white" : "text-white/80 hover:bg-white/7 hover:text-white"
+        active ? "bg-white/12 text-white shadow-sm" : "text-white/78 hover:bg-white/8 hover:text-white"
       )}
     >
       <span
@@ -202,7 +200,7 @@ function SidebarRow({
         style={{ background: "var(--primary)" }}
       />
 
-      <span aria-hidden="true" className={cx("grid h-8 w-8 place-items-center rounded-md", active ? "bg-white/10" : "bg-white/5")}>
+      <span aria-hidden="true" className={cx("grid h-8 w-8 place-items-center rounded-lg transition-colors", active ? "bg-white/12" : "bg-white/6")}>
         <Icon name={iconName} className="h-[16px] w-[16px] text-white/85" />
       </span>
 
@@ -290,7 +288,7 @@ export function PortalShell({
   }
 
   // Shared sidebar look
-  const SIDEBAR_BG = "#2f3b46"; // Prosperworks-ish charcoal
+  const SIDEBAR_BG = "#1f3147"; // eKasiBooks navy
   const SIDEBAR_DIV = "rgba(255,255,255,0.08)";
 
   return (
@@ -303,6 +301,7 @@ export function PortalShell({
             onClick={() => setSidebarOpen(true)}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-900 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
             aria-label="Open menu"
+            aria-expanded={sidebarOpen}
           >
             <span className="text-base leading-none">☰</span>
             Menu
@@ -319,6 +318,7 @@ export function PortalShell({
         {/* Desktop sidebar */}
         <aside
           className="hidden h-full text-white lg:block"
+          aria-label="Portal navigation"
           style={{
             background: SIDEBAR_BG,
             borderRight: `1px solid ${SIDEBAR_DIV}`,
@@ -422,6 +422,9 @@ export function PortalShell({
             />
             <div
               className="absolute left-0 top-0 h-full w-[344px] max-w-[88vw] text-white shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Portal navigation menu"
               style={{ background: SIDEBAR_BG }}
             >
               <div className="flex h-full flex-col p-4">
@@ -515,13 +518,16 @@ export function PortalShell({
 
         {/* Right column scroll area */}
 <main
-  className={cx(
-    "h-full overflow-y-auto overscroll-contain",
-    "px-3 py-4 lg:px-10 lg:py-8",
-    "lg:pt-8"
-  )}
-  style={{ paddingTop: `${mobileTopOffsetPx + 8}px` }}
->
+          className={cx(
+            "h-full overflow-y-auto overscroll-contain",
+            "px-3 pb-4 pt-[var(--portal-mobile-top)] lg:px-10 lg:py-8"
+          )}
+          style={
+            {
+              "--portal-mobile-top": `${mobileTopOffsetPx + 8}px`,
+            } as CSSProperties
+          }
+        >
           <div className="mx-auto flex min-h-full max-w-[1600px] flex-col">
             <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
               <div>
@@ -537,12 +543,9 @@ export function PortalShell({
               <div className="flex items-center gap-2 self-start sm:self-auto">
                 {headerRight}
                 {backLabel ? (
-                  <button
-                    onClick={() => router.push(backHref)}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold shadow-sm transition hover:-translate-y-[1px] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] sm:px-4 sm:text-sm"
-                  >
+                  <PortalButton type="button" variant="secondary" size="sm" onClick={() => router.push(backHref)}>
                     {backLabel}
-                  </button>
+                  </PortalButton>
                 ) : null}
               </div>
             </div>
