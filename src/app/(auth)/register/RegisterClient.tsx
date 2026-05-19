@@ -304,21 +304,21 @@ async function handleLoginClick() {
     <main className="min-h-screen bg-[#f6f9fb] text-slate-950">
       <div className="grid min-h-screen min-h-[100svh] grid-cols-1 overflow-x-hidden lg:grid-cols-2">
         {/* LEFT brand panel */}
-        <section className="relative flex min-h-[42vh] items-center overflow-hidden bg-gradient-to-br from-[#0b2a3a] via-[#0e3a4f] to-[#215D63] px-6 py-10 text-white sm:px-10 lg:min-h-screen lg:px-16 xl:px-20">
+        <section className="relative flex min-h-[36svh] items-center overflow-hidden bg-gradient-to-br from-[#0b2a3a] via-[#0e3a4f] to-[#215D63] px-6 py-8 text-white sm:px-10 lg:min-h-screen lg:px-12 xl:px-16">
           <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
           <div className="pointer-events-none absolute bottom-1/4 right-[-8rem] h-96 w-96 rounded-full bg-[#3bb7a6]/15 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-28 left-1/3 h-80 w-80 rounded-full bg-black/15 blur-3xl" />
 
-          <div className="relative w-full max-w-2xl">
+          <div className="relative mx-auto w-full max-w-lg lg:mx-0">
             <div className="flex flex-wrap items-center gap-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white shadow-[0_16px_45px_rgba(0,0,0,0.18)] ring-1 ring-white/30">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-[0_16px_45px_rgba(0,0,0,0.16)] ring-1 ring-white/30">
                 <Image
                   src="/logo/ekasibooks.png"
                   alt="eKasiBooks"
                   width={76}
                   height={76}
                   priority
-                  className="h-auto w-[62px]"
+                  className="h-auto w-[50px]"
                 />
               </div>
 
@@ -333,67 +333,59 @@ async function handleLoginClick() {
               </div>
             </div>
 
-            <h1 className="mt-10 max-w-xl text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Start managing your business access properly.
+            <h1 className="mt-7 max-w-md text-3xl font-semibold leading-[1.08] tracking-tight sm:text-4xl lg:text-5xl">
+              Create your portal account.
             </h1>
 
-            <p className="mt-7 max-w-xl text-base leading-8 text-white/85 sm:text-lg">
-              Create your portal account to manage subscriptions, company access,
-              desktop downloads, cloud sync and account security from one calm,
-              secure place.
+            <p className="mt-4 max-w-lg text-sm leading-7 text-white/80 sm:text-base">
+              Manage subscriptions, company access, downloads and cloud sync from one secure place.
             </p>
 
-            <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-2">
+            <div className="mt-7 grid max-w-lg gap-3 sm:grid-cols-2">
               <BrandFeature
-                title="Secure by design"
-                desc="Sessions, logout and account access are properly managed."
+                title="Secure access"
+                desc="Password login, OTP and account security are managed in one place."
               />
               <BrandFeature
-                title="Password required"
-                desc="Your password is mandatory on registration for trust and security."
-              />
-              <BrandFeature
-                title="Cloud sync ready"
-                desc="Keep your desktop entitlement and company access aligned."
-              />
-              <BrandFeature
-                title="OTP remains optional"
-                desc="Use OTP later when you don’t want to type your password."
+                title="Portal ready"
+                desc="Manage subscriptions, downloads and cloud sync access."
               />
             </div>
 
-            <div className="mt-8 max-w-xl rounded-2xl bg-white/10 px-5 py-4 text-sm text-white/90 ring-1 ring-white/15">
-              Already have an account?{" "}
-              <button
-                onClick={handleLoginClick}
-                className="font-semibold underline underline-offset-4 hover:text-white"
-                type="button"
-              >
-                Login
-              </button>
+            <div className="mt-6 rounded-2xl bg-white/10 p-3.5 ring-1 ring-white/15 backdrop-blur">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm font-medium text-white/82">Already have an account?</p>
+                <button
+                  onClick={handleLoginClick}
+                  className="inline-flex min-h-10 items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#123b4a] shadow-sm transition hover:-translate-y-0.5 hover:bg-white/92 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-white/60 active:translate-y-0"
+                  type="button"
+                >
+                  Back to login
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
         {/* RIGHT form panel */}
-        <section className="relative flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
+        <section className="relative flex min-h-[64svh] items-center justify-center bg-[#f6f9fb] px-5 py-8 sm:px-8 lg:min-h-screen lg:px-12">
           <div className="pointer-events-none absolute right-0 top-0 h-72 w-72 rounded-full bg-[#215D63]/10 blur-3xl" />
 
-          <div className="relative w-full max-w-[520px]">
-            <div className="rounded-3xl bg-white p-6 shadow-[0_22px_70px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 sm:p-8">
+          <div className="relative w-full max-w-[560px]">
+            <div className="rounded-[1.75rem] bg-white p-5 shadow-[0_22px_70px_rgba(15,23,42,0.10)] ring-1 ring-slate-200 sm:p-7">
               <div>
                 <div className="text-xs font-bold uppercase tracking-[0.32em] text-[#215D63]">
                   Get started
                 </div>
-                <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
                   Create account
                 </h2>
-                <p className="mt-2 leading-relaxed text-slate-600">
-                  Use your email and set a password to get started.
+                <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                  Use your email and password to get started.
                 </p>
               </div>
 
-              <div className="mt-7 space-y-4">
+              <div className="mt-5 space-y-3">
                 {msg && (
                   <div className={`rounded-xl border px-3 py-2 text-sm ${msgClass(msg)}`}>
                     {msg.text}
@@ -518,15 +510,32 @@ async function handleLoginClick() {
                     className="mt-1 h-4 w-4 accent-[#215D63]"
                   />
                   <span>
-                    I agree to the <span className="font-semibold">Terms</span> &{" "}
-                    <span className="font-semibold">Privacy Policy</span>.
+                    I agree to the{" "}
+                    <a
+                      href="https://www.ekasibooks.co.za/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-[#215D63] underline underline-offset-2 transition hover:text-[#163f43] focus:outline-none focus:ring-2 focus:ring-[#215D63]/25"
+                    >
+                      Terms
+                    </a>{" "}
+                    and{" "}
+                    <a
+                      href="https://www.ekasibooks.co.za/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-[#215D63] underline underline-offset-2 transition hover:text-[#163f43] focus:outline-none focus:ring-2 focus:ring-[#215D63]/25"
+                    >
+                      Privacy Policy
+                    </a>
+                    .
                   </span>
                 </label>
 
                 <button
                   onClick={() => (!created ? register() : undefined)}
                   disabled={loading || created}
-                  className="w-full rounded-xl bg-[#215D63] py-3 font-semibold text-white shadow-sm transition hover:bg-[#1c4f54] disabled:opacity-60"
+                  className="w-full rounded-xl bg-[#215D63] py-2.5 font-semibold text-white shadow-sm transition hover:bg-[#1c4f54] disabled:opacity-60"
                   type="button"
                 >
                   {created ? "Account created" : loading ? "Creating account..." : "Create account"}
@@ -535,21 +544,38 @@ async function handleLoginClick() {
                 <button
                   onClick={handleLoginClick}
                   disabled={loading || created}
-                  className="w-full rounded-xl border border-slate-300 bg-white py-3 font-semibold text-slate-900 transition hover:bg-slate-50 disabled:opacity-60"
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 font-semibold text-slate-900 transition hover:bg-slate-50 disabled:opacity-60"
                   type="button"
                 >
                   Back to login
                 </button>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
-                  You can still use OTP for login later — it’s optional. Your
-                  password is the primary credential.
-                </div>
+                <p className="text-xs leading-relaxed text-slate-500">
+                  OTP remains available later for quick sign-ins when needed.
+                </p>
               </div>
             </div>
 
             <p className="mt-6 px-1 text-center text-xs text-slate-500">
-              By continuing, you agree to our Terms and Privacy Policy.
+              By continuing, you agree to our{" "}
+              <a
+                href="https://www.ekasibooks.co.za/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[#215D63] underline underline-offset-2 hover:text-[#163f43]"
+              >
+                Terms
+              </a>{" "}
+              and{" "}
+              <a
+                href="https://www.ekasibooks.co.za/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-[#215D63] underline underline-offset-2 hover:text-[#163f43]"
+              >
+                Privacy Policy
+              </a>
+              .
             </p>
           </div>
         </section>
@@ -560,14 +586,9 @@ async function handleLoginClick() {
 
 function BrandFeature({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="flex gap-3">
-      <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/20">
-        <span className="h-2 w-2 rounded-full bg-white/70" />
-      </div>
-      <div>
-        <div className="font-semibold text-white">{title}</div>
-        <div className="text-white/80">{desc}</div>
-      </div>
+    <div className="rounded-2xl bg-white/10 p-3.5 ring-1 ring-white/15 backdrop-blur">
+      <div className="text-sm font-semibold text-white">{title}</div>
+      <div className="mt-1 text-sm leading-6 text-white/70">{desc}</div>
     </div>
   );
 }
