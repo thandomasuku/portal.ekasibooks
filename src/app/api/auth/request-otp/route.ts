@@ -63,9 +63,9 @@ function buildTransporter(env: SmtpEnv): Transporter {
     maxConnections: 2,
     maxMessages: 100,
 
-    connectionTimeout: 8_000,
-    greetingTimeout: 8_000,
-    socketTimeout: 15_000,
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 30_000,
 
     tls: { servername: env.host },
   });
@@ -87,6 +87,58 @@ function resetTransporter() {
   } catch {}
   globalThis.__ekasiOtpMailer = undefined;
   globalThis.__ekasiOtpMailerKey = undefined;
+}
+
+function getOtpSendErrorMessage(err: any) {
+  const code = String(err?.code || "").toUpperCase();
+  const command = String(err?.command || "").toUpperCase();
+  const message = String(err?.message || "Email send failed");
+
+  if (code === "ETIMEDOUT" || message.toLowerCase().includes("timeout")) {
+    return {
+      status: 504,
+      error:
+        "The email service timed out while sending your OTP. Please try again shortly.",
+      detail: command ? `${code || "TIMEOUT"} during ${command}` : code || "TIMEOUT",
+    };
+  }
+
+  if (code === "EAUTH") {
+    return {
+      status: 502,
+      error: "The email service could not authenticate. Please contact support.",
+      detail: code,
+    };
+  }
+
+  if (code === "ECONNECTION" || code === "ECONNREFUSED" || code === "ENOTFOUND") {
+    return {
+      status: 502,
+      error:
+        "The email service is currently unreachable. Please try again shortly.",
+      detail: code,
+    };
+  }
+
+  return {
+    status: 502,
+    error: "We could not send the OTP email right now. Please try again shortly.",
+    detail: code || message,
+  };
+}
+
+async function discardUnsentOtp(email: string, code: string) {
+  try {
+    await prisma.otpCode.deleteMany({
+      where: {
+        email,
+        code,
+        usedAt: null,
+      },
+    });
+  } catch (err) {
+    console.warn("[auth/request-otp] Could not discard unsent OTP:", err);
+  }
 }
 
 async function resolveTargetEmail(req: NextRequest): Promise<{ email: string; mode: "PUBLIC" | "SESSION" }> {
@@ -258,22 +310,54 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (err: any) {
-      console.warn("[auth/request-otp] sendMail failed, retrying once:", err?.message || err);
-      resetTransporter();
-
-      const retryTransporter = getTransporter(env);
-      const info = await retryTransporter.sendMail({
-        from: env.from,
-        to: e,
-        subject,
-        text,
-        html,
+      console.warn("[auth/request-otp] sendMail failed, retrying once:", {
+        message: err?.message,
+        code: err?.code,
+        command: err?.command,
       });
 
-      if (Array.isArray(info.rejected) && info.rejected.length > 0) {
+      resetTransporter();
+
+      try {
+        const retryTransporter = getTransporter(env);
+        const t0 = Date.now();
+        const info = await retryTransporter.sendMail({
+          from: env.from,
+          to: e,
+          subject,
+          text,
+          html,
+        });
+        const ms = Date.now() - t0;
+
+        console.log("🔐 [OTP] retry sendMail ms:", ms);
+        console.log("🔐 [OTP] retry messageId:", info.messageId);
+        console.log("🔐 [OTP] retry response:", info.response);
+
+        if (Array.isArray(info.rejected) && info.rejected.length > 0) {
+          await discardUnsentOtp(e, code);
+          return NextResponse.json(
+            { error: `Email rejected by SMTP server: ${info.rejected.join(", ")}` },
+            { status: 502, headers: noStoreHeaders() }
+          );
+        }
+      } catch (retryErr: any) {
+        console.error("[auth/request-otp] sendMail retry failed:", {
+          message: retryErr?.message,
+          code: retryErr?.code,
+          command: retryErr?.command,
+        });
+
+        await discardUnsentOtp(e, code);
+
+        const safeError = getOtpSendErrorMessage(retryErr);
         return NextResponse.json(
-          { error: `Email rejected by SMTP server: ${info.rejected.join(", ")}` },
-          { status: 502, headers: noStoreHeaders() }
+          {
+            error: safeError.error,
+            code: "OTP_EMAIL_SEND_FAILED",
+            detail: safeError.detail,
+          },
+          { status: safeError.status, headers: noStoreHeaders() }
         );
       }
     }
