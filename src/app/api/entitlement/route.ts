@@ -271,8 +271,35 @@ function pickManageableSubscription(list: PaystackSubscription[]): PaystackSubsc
   return fb ?? list[0] ?? null;
 }
 
-async function markDesktopEntitlementActivity(userId: string) {
+function cleanDesktopMeta(value: string | null, max = 80) {
+  const v = safeTrim(value);
+  if (!v) return null;
+  return v.slice(0, max);
+}
+
+async function markDesktopEntitlementActivity(userId: string, req: NextRequest) {
   const now = new Date();
+
+  const desktopVersion = cleanDesktopMeta(
+    req.headers.get("x-ekasi-desktop-version") ||
+      req.headers.get("x-app-version") ||
+      req.nextUrl.searchParams.get("desktopVersion") ||
+      req.nextUrl.searchParams.get("appVersion")
+  );
+
+  const desktopPlatform = cleanDesktopMeta(
+    req.headers.get("x-ekasi-desktop-platform") ||
+      req.headers.get("x-platform") ||
+      req.nextUrl.searchParams.get("desktopPlatform") ||
+      req.nextUrl.searchParams.get("platform")
+  );
+
+  const desktopArch = cleanDesktopMeta(
+    req.headers.get("x-ekasi-desktop-arch") ||
+      req.headers.get("x-arch") ||
+      req.nextUrl.searchParams.get("desktopArch") ||
+      req.nextUrl.searchParams.get("arch")
+  );
 
   await prisma.user
     .update({
@@ -280,6 +307,9 @@ async function markDesktopEntitlementActivity(userId: string) {
       data: {
         lastDesktopSeenAt: now,
         lastEntitlementCheckAt: now,
+        ...(desktopVersion ? { lastDesktopVersion: desktopVersion } : {}),
+        ...(desktopPlatform ? { lastDesktopPlatform: desktopPlatform } : {}),
+        ...(desktopArch ? { lastDesktopArch: desktopArch } : {}),
       } as any,
     })
     .catch(() => null);
@@ -311,7 +341,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    await markDesktopEntitlementActivity(userId);
+    await markDesktopEntitlementActivity(userId, req);
 
     await syncSubscriptionFromPaystack(userId).catch(() => null);
 

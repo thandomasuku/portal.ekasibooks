@@ -63,6 +63,9 @@ model User {
 
   lastDesktopSeenAt      DateTime?
   lastEntitlementCheckAt DateTime?
+  lastDesktopVersion     String?
+  lastDesktopPlatform    String?
+  lastDesktopArch        String?
 
   fullName    String?
   companyName String?
