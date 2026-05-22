@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PortalShell } from "@/components/portal/PortalShell";
 import {
   PremiumCard,
   DetailTile,
@@ -12,7 +11,6 @@ import {
   PortalAlert,
   PortalEmptyState,
   PortalSkeleton,
-  cx,
 } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 
@@ -58,20 +56,6 @@ function cleanStr(v: any, max: number) {
   return s ? s.slice(0, max) : "";
 }
 
-function displayNameFromEmail(email?: string | null) {
-  if (!email) return null;
-  const local = String(email).split("@")[0] ?? "";
-  const cleaned = local.replace(/[._-]+/g, " ").trim();
-  return cleaned || null;
-}
-
-function capitalizeWords(s: string) {
-  return s
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
 
 function messageTone(
   type?: "success" | "error" | "info",
@@ -195,19 +179,6 @@ export default function SettingsPage() {
   const userEmail = String(u.email ?? "—");
   const userId = String(u.id ?? "—");
 
-  const userName =
-    (u.fullName && String(u.fullName).trim()) ||
-    (u.email ? capitalizeWords(displayNameFromEmail(u.email) ?? "") : "") ||
-    null;
-
-  const subtitle =
-    state === "ready"
-      ? "Manage your personal details and security settings."
-      : state === "unauth"
-        ? "Your session has expired."
-        : state === "error"
-          ? "We couldn’t confirm your session."
-          : "Loading account details...";
 
   const readOnly = !!ent?.features?.readOnly;
 
@@ -354,48 +325,9 @@ export default function SettingsPage() {
     }
   }
 
-  const onRefreshAll = useCallback(async () => {
-    await refresh();
-    if (state === "ready") await fetchEntitlement();
-  }, [refresh, state, fetchEntitlement]);
 
   return (
-    <PortalShell
-      badge="Settings"
-      title="Profile & Security"
-      subtitle={
-        entLoading && state === "ready"
-          ? "Loading account details..."
-          : entError
-            ? `Account loaded, but entitlement failed (${entError})`
-            : subtitle
-      }
-      backHref="/dashboard"
-      backLabel="Back to overview"
-      userEmail={sessionUser?.email ?? null}
-      userName={userName}
-      userRole={(sessionUser as any)?.role ?? null}
-      planName={planName}
-      headerRight={
-        state === "ready" ? (
-          <PortalButton
-            onClick={onRefreshAll}
-            variant="secondary"
-            type="button"
-          >
-            Refresh
-          </PortalButton>
-        ) : null
-      }
-      footerRight={
-        <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-xs text-slate-500">
-            Security & profile
-          </span>
-          <Chip>Settings</Chip>
-        </div>
-      }
-    >
+    <>
       {state === "loading" ? (
         <SettingsSkeleton />
       ) : state === "unauth" ? (
@@ -451,6 +383,16 @@ export default function SettingsPage() {
         </PremiumCard>
       ) : (
         <div className="space-y-5">
+          {entLoading ? (
+            <PortalAlert tone="info">Loading account entitlement…</PortalAlert>
+          ) : null}
+
+          {entError ? (
+            <PortalAlert tone="warning" title="Couldn’t load entitlement">
+              {entError}
+            </PortalAlert>
+          ) : null}
+
           {/* Compact settings header */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
             <PremiumCard className="portal-card-premium">
@@ -944,7 +886,7 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-    </PortalShell>
+    </>
   );
 }
 

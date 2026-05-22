@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { PortalShell } from "@/components/portal/PortalShell";
 import {
   PremiumCard,
   KpiCard,
@@ -867,35 +866,7 @@ export default function BillingPage() {
   const companyLimit = Number(limits?.companies ?? 1);
 
   return (
-    <PortalShell
-      badge="Billing"
-      title="Subscription & Billing"
-      subtitle={subtitle}
-      backHref="/dashboard"
-      backLabel="Back to overview"
-      userEmail={(user as any)?.email ?? null}
-      userName={derivedName}
-      userRole={state === "ready" ? ((user as any)?.role ?? null) : null}
-      planName={planLabel}
-      headerRight={
-        state === "ready" ? (
-          <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
-            Refresh
-          </PortalButton>
-        ) : null
-      }
-      footerRight={
-        <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-slate-500 sm:inline">
-            Payments powered by Paystack
-          </span>
-          <Chip>
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Billing
-          </Chip>
-        </div>
-      }
-    >
+    <>
       {state === "loading" ? (
         <BillingSkeleton />
       ) : state === "unauth" ? (
@@ -1369,7 +1340,7 @@ export default function BillingPage() {
           </div>
         </div>
       )}
-    </PortalShell>
+    </>
   );
 }
 

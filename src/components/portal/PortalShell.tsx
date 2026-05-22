@@ -43,8 +43,8 @@ type PortalShellProps = {
 
   userEmail?: string | null;
   userName?: string | null;
-  planName?: string | null;
   userRole?: string | null;
+  planName?: string | null;
 
   compact?: boolean;
   mobileTopOffsetPx?: number;
@@ -109,7 +109,7 @@ async function bestEffortLogout() {
 
 /* ---------------- Icons ---------------- */
 
-type IconName = "home" | "billing" | "downloads" | "settings" | "admin" | "logout";
+type IconName = "home" | "billing" | "downloads" | "settings" | "logout" | "admin";
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const base = "stroke-current fill-none stroke-[2] vector-effect-non-scaling-stroke";
@@ -149,8 +149,8 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
     case "admin":
       return (
         <svg viewBox="0 0 24 24" className={cx(base, className)}>
-          <path d="M12 3 4 6.5v5.8c0 4.4 3.1 7.6 8 8.7 4.9-1.1 8-4.3 8-8.7V6.5L12 3Z" />
-          <path d="M9.2 12.2 11.1 14l3.8-4" />
+          <path d="M12 3 4 6v5c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-3Z" />
+          <path d="M9 12l2 2 4-5" />
         </svg>
       );
     case "logout":
@@ -278,15 +278,21 @@ export function PortalShell({
   const plan = String(planName ?? "FREE").toUpperCase();
   const isAdmin = String(userRole ?? "").trim().toLowerCase() === "admin";
 
-  const effectiveNavItems = useMemo(() => {
-    const base = navItems ?? DEFAULT_NAV;
-    if (!isAdmin) return base;
+  const effectiveNavItems = useMemo<NavItem[]>(() => {
+    const base = Array.isArray(navItems) ? navItems : DEFAULT_NAV;
+    const alreadyHasAdmin = base.some((item) => item.href === "/admin" || item.href.startsWith("/admin/"));
 
-    const hasAdmin = base.some((item) => item.href === "/admin" || item.href.startsWith("/admin/"));
-    if (hasAdmin) return base;
+    if (!isAdmin || alreadyHasAdmin) return base;
 
-    return [...base, { label: "Admin Console", href: "/admin", icon: "admin" }];
-  }, [isAdmin, navItems]);
+    return [
+      ...base,
+      {
+        label: "Admin Console",
+        href: "/admin",
+        icon: "admin",
+      },
+    ];
+  }, [navItems, isAdmin]);
 
   async function onLogout() {
     if (logoutLoading) return;

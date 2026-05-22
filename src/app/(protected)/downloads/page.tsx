@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PortalShell } from "@/components/portal/PortalShell";
 import {
   Chip,
   DetailTile,
@@ -96,8 +95,8 @@ export default function DownloadsPage() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  // ✅ Session context provides state/user/error/refresh
-  const { state, user, error, refresh } = useSession();
+  // ✅ Session context provides state/error/refresh
+  const { state, error, refresh } = useSession();
 
   const nextUrl = useMemo(() => {
     const next = sp.get("next");
@@ -260,41 +259,8 @@ export default function DownloadsPage() {
     window.setTimeout(() => setCopyMsg(null), 1200);
   }
 
-  // ✅ Refresh button should refresh BOTH session + entitlement
-  const onRefreshAll = useCallback(async () => {
-    await refresh();
-    if (state === "ready") {
-      await fetchEntitlement();
-    }
-  }, [refresh, fetchEntitlement, state]);
-
   return (
-    <PortalShell
-      badge="Downloads"
-      title="Desktop installers"
-      subtitle="Download the latest eKasiBooks Desktop installer for Windows."
-      backHref="/dashboard"
-      backLabel="Back to overview"
-      userEmail={user?.email ?? null}
-      userRole={state === "ready" ? (user?.role ?? null) : null}
-      planName={planName}
-      headerRight={
-        state === "ready" ? (
-          <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
-            Refresh
-          </PortalButton>
-        ) : null
-      }
-      footerRight={
-        <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-slate-500 sm:inline">Desktop: Windows</span>
-          <Chip>
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Downloads
-          </Chip>
-        </div>
-      }
-    >
+    <>
       {state === "loading" ? (
         <DownloadsSkeleton />
       ) : state === "error" ? (
@@ -553,7 +519,7 @@ export default function DownloadsPage() {
           </div>
         </div>
       )}
-    </PortalShell>
+    </>
   );
 }
 

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PortalShell } from "@/components/portal/PortalShell";
 import {
   PremiumCard,
   Chip,
@@ -315,47 +314,7 @@ export default function DashboardPage() {
       : "No renewal date available";
 
   return (
-    <PortalShell
-      badge="Secure portal"
-      title="Account overview"
-      subtitle={subtitle}
-      backHref="/"
-      backLabel="Home"
-      userEmail={state === "ready" ? (user?.email ?? null) : null}
-      userName={state === "ready" ? (name ? name : null) : null}
-      planName={planUpper}
-      headerRight={
-        state === "ready" ? (
-          <div className="flex items-center gap-2">
-            <PortalButton
-              onClick={() => {
-                refresh();
-                setEntRefreshKey((n) => n + 1);
-              }}
-              variant="secondary"
-              type="button"
-            >
-              Refresh
-            </PortalButton>
-
-            <PortalButton onClick={() => router.push(cta.href)} variant="primary" title={cta.subtitle} type="button">
-              {cta.label}
-            </PortalButton>
-          </div>
-        ) : null
-      }
-      footerRight={
-        <div className="flex items-center gap-2">
-          <Chip>
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Portal
-          </Chip>
-          <span className="inline-flex items-center rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-            v1
-          </span>
-        </div>
-      }
-    >
+    <>
       {state === "loading" ? (
         <DashboardSkeleton />
       ) : state === "unauth" ? (
@@ -379,45 +338,39 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-5">
           <Stagger delayMs={0}>
-            <div className="overflow-hidden bg-slate-950 shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+            <PremiumCard className="overflow-hidden p-0 portal-card-premium">
               <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]">
-                <div className="relative overflow-hidden bg-[#07111f] p-5 text-white sm:p-7">
+                <div className="relative overflow-hidden p-5 sm:p-6">
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-0 opacity-80"
                     style={{
                       background:
-                        "radial-gradient(circle at 0% 0%, rgba(20,184,166,0.34), transparent 38%), radial-gradient(circle at 86% 18%, rgba(59,130,246,0.22), transparent 42%), linear-gradient(135deg, rgba(15,23,42,0.92), rgba(15,23,42,0.54))",
+                        "radial-gradient(circle at 0% 0%, rgba(20,184,166,0.16), transparent 36%), radial-gradient(circle at 88% 18%, rgba(15,23,42,0.08), transparent 38%)",
                     }}
                   />
 
                   <div className="relative">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/45 bg-emerald-400/16 px-3 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.10)]">
-                        <span className={cx("h-2 w-2 rounded-full ring-2 ring-emerald-100/25", status.dot)} />
+                      <Chip tone={status.tone}>
+                        <span className={cx("h-2 w-2 rounded-full", status.dot)} />
                         {status.label}
-                      </span>
-                      <span className="inline-flex items-center rounded-full border border-white/22 bg-white/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-slate-50 shadow-[0_0_0_1px_rgba(255,255,255,0.04)]">
-                        {planUpper} plan
-                      </span>
-                      {countdown && status.countdownLabel ? (
-                        <span className="inline-flex items-center rounded-full border border-cyan-100/24 bg-cyan-100/12 px-3 py-1 text-[11px] font-black uppercase tracking-[0.06em] text-cyan-50 shadow-[0_0_0_1px_rgba(103,232,249,0.04)]">
-                          {renewalLabel}
-                        </span>
-                      ) : null}
+                      </Chip>
+                      <Chip>{planUpper} plan</Chip>
+                      {countdown && status.countdownLabel ? <Chip>{renewalLabel}</Chip> : null}
                     </div>
 
                     <div className="mt-4 max-w-3xl">
-                      <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-cyan-200">
+                      <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-[color:var(--primary)]">
                         Account command centre
                       </p>
-                      <h2 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-[1.85rem]">
+                      <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">
                         Welcome back{name ? `, ${name}` : ""}.
                       </h2>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">{status.summary}</p>
+                      <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-600">{status.summary}</p>
                     </div>
 
-                    <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+                    <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
                       <PortalButton onClick={() => router.push("/downloads")} variant="primary" type="button">
                         Download desktop app
                       </PortalButton>
@@ -426,7 +379,7 @@ export default function DashboardPage() {
                       </PortalButton>
                     </div>
 
-                    <div className="mt-5 grid grid-cols-1 gap-2.5 md:grid-cols-3">
+                    <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-3">
                       <HeroFact label="Access" value={status.hint} />
                       <HeroFact label="Companies" value={`${companyLimit} allowed`} />
                       <HeroFact label="Desktop work" value="Accounting happens in the desktop app" />
@@ -434,7 +387,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-white/10 bg-[#111827] p-5 text-white xl:border-l xl:border-t-0 xl:border-white/10">
+                <div className="border-t border-slate-200/80 bg-[#1F3147] p-5 text-white xl:border-l xl:border-t-0">
                   <div className="flex h-full flex-col justify-between gap-4">
                     <div>
                       <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/80 ring-1 ring-white/10">
@@ -470,7 +423,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </PremiumCard>
           </Stagger>
 
           <Stagger delayMs={70}>
@@ -590,7 +543,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-    </PortalShell>
+    </>
   );
 }
 
@@ -608,7 +561,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <PremiumCard className="portal-card-premium border border-slate-200/80 shadow-[0_18px_55px_rgba(15,23,42,0.08)]">
+    <PremiumCard className="portal-card-premium">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-base font-black tracking-tight text-slate-950">{title}</h3>
@@ -623,16 +576,16 @@ function SectionCard({
 
 function HeroFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 backdrop-blur">
-      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-200/90">{label}</div>
-      <div className="mt-1 text-[13px] font-semibold leading-5 text-white">{value}</div>
+    <div className="rounded-2xl bg-white/70 p-2.5 ring-1 ring-slate-200/80 backdrop-blur">
+      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className="mt-1 text-[13px] font-semibold leading-5 text-slate-900">{value}</div>
     </div>
   );
 }
 
 function MetricCard({ label, value, helper, icon }: { label: string; value: string; helper?: string; icon: string }) {
   return (
-    <div className="group rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-[2px] hover:shadow-[var(--shadow-md)]">
+    <div className="group rounded-3xl bg-slate-50/80 p-4 ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-[2px] hover:bg-white hover:shadow-[var(--shadow-md)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</div>
@@ -649,7 +602,7 @@ function MetricCard({ label, value, helper, icon }: { label: string; value: stri
 
 function AccessItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
+    <div className="rounded-3xl bg-slate-50/80 p-4 ring-1 ring-slate-200/70">
       <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</div>
       <div className="mt-2 text-base font-black text-slate-950">{value}</div>
     </div>

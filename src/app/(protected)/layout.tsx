@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { getSessionCookieName, verifySession } from "@/lib/auth";
 import { SessionProvider } from "@/components/portal/session";
+import { PortalFrame } from "@/components/portal/PortalFrame";
 
 export const dynamic = "force-dynamic";
 
@@ -27,5 +28,9 @@ export default async function ProtectedLayout({
     redirect("/login");
   }
 
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <SessionProvider>
+      <PortalFrame>{children}</PortalFrame>
+    </SessionProvider>
+  );
 }
