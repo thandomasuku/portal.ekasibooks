@@ -31,13 +31,28 @@ const PAGE_META: Record<string, PageMeta> = {
   },
   "/downloads": {
     badge: "Downloads",
-    title: "Downloads",
+    title: "Desktop installers",
     subtitle: "Download the latest eKasiBooks desktop installer and review release information.",
   },
   "/settings": {
     badge: "Settings",
     title: "Settings",
     subtitle: "Manage your profile, account details, and portal preferences.",
+  },
+  "/admin": {
+    badge: "Admin",
+    title: "Operations console",
+    subtitle: "Manage portal users, subscriptions, entitlement visibility and desktop activity.",
+  },
+  "/admin/users": {
+    badge: "Admin",
+    title: "Users",
+    subtitle: "Review portal users, subscriptions, entitlement status and desktop activity.",
+  },
+  "/admin/users/detail": {
+    badge: "Admin",
+    title: "User profile",
+    subtitle: "Review profile, entitlement, subscription, sessions and company activity.",
   },
 };
 
@@ -50,6 +65,9 @@ function normalizePlanName(value: unknown) {
 function getPageMeta(pathname: string | null): PageMeta {
   const path = pathname || "/dashboard";
 
+  if (path.startsWith("/admin/users/")) return PAGE_META["/admin/users/detail"];
+  if (path.startsWith("/admin/users")) return PAGE_META["/admin/users"];
+  if (path.startsWith("/admin")) return PAGE_META["/admin"];
   if (path.startsWith("/billing")) return PAGE_META["/billing"];
   if (path.startsWith("/downloads")) return PAGE_META["/downloads"];
   if (path.startsWith("/settings")) return PAGE_META["/settings"];

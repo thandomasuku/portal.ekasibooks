@@ -918,152 +918,101 @@ export default function BillingPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* BILLING COMMAND CENTRE */}
-          <div className="overflow-hidden rounded-[1.75rem] bg-white shadow-[0_18px_55px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/80">
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="relative overflow-hidden p-5 sm:p-6">
-                <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-teal-100/70 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-24 left-10 h-56 w-56 rounded-full bg-slate-100 blur-3xl" />
+          {/* BILLING STATUS PANEL */}
+          <div className="overflow-hidden rounded-2xl bg-white shadow-[0_12px_34px_rgba(15,23,42,0.07)] ring-1 ring-slate-200/80">
+            <div className="relative overflow-hidden p-4">
+              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-teal-100/60 blur-3xl" />
 
-                <div className="relative">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Chip
-                      tone={
-                        heroTone === "success"
-                          ? "success"
-                          : heroTone === "brand"
-                          ? "brand"
-                          : "neutral"
-                      }
-                    >
-                      <span className={cx("h-2 w-2 rounded-full", heroDot)} />
-                      {heroStatusLabel}
-                    </Chip>
-                    <Chip tone="neutral">{planLabel} plan</Chip>
-                    {renewsAt ? <Chip tone="neutral">Renews {fmtDate(renewsAt)}</Chip> : null}
-                  </div>
+              <div className="relative">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Chip
+                    tone={
+                      heroTone === "success"
+                        ? "success"
+                        : heroTone === "brand"
+                        ? "brand"
+                        : "neutral"
+                    }
+                  >
+                    <span className={cx("h-1.5 w-1.5 rounded-full", heroDot)} />
+                    {heroStatusLabel}
+                  </Chip>
+                  <Chip tone="neutral">{planLabel} plan</Chip>
+                  {renewsAt ? <Chip tone="neutral">Renews {fmtDate(renewsAt)}</Chip> : null}
+                  <Chip tone="neutral">Secure Paystack</Chip>
+                </div>
 
-                  <div className="mt-5 max-w-3xl">
-                    <p className="text-[11px] font-black uppercase tracking-[0.32em] text-teal-600">
-                      Billing command centre
+                <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-teal-700">
+                      Billing status
                     </p>
-                    <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                    <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
                       {effectiveStatus === "read_only"
                         ? "Payment attention needed."
-                        : "Your subscription is in good standing."}
+                        : "Subscription in good standing."}
                     </h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">
                       {effectiveStatus === "read_only"
                         ? "Your desktop app will stay in read-only mode until billing is resolved."
-                        : "Manage your plan, payment method and entitlement status from one secure place."}
+                        : "Manage your plan, payment method and desktop entitlement from one secure place."}
                     </p>
                   </div>
 
-                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                  <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
                     <PortalButton
                       onClick={onManagePlan}
                       isLoading={manageLoading}
                       title="Manage subscription on Paystack"
                       type="button"
+                      className="justify-center sm:justify-start"
                     >
                       <span className={BTN_ICON_PRIMARY}>⚙</span>
-                      {manageLoading ? "Opening..." : "Manage plan"}
+                      <span>{manageLoading ? "Opening..." : "Manage plan"}</span>
                     </PortalButton>
-                    <PortalButton onClick={onRefreshAll} variant="secondary" type="button">
+                    <PortalButton
+                      onClick={onRefreshAll}
+                      variant="secondary"
+                      type="button"
+                      className="justify-center sm:justify-start"
+                    >
                       <span className={BTN_ICON_SECONDARY}>↻</span>
-                      Refresh status
+                      <span>Refresh status</span>
                     </PortalButton>
                   </div>
+                </div>
 
-                  <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm">
-                      <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">
-                        Plan
-                      </p>
-                      <p className="mt-2 text-xl font-black text-slate-950">{planLabel}</p>
-                      <p className="mt-1 text-sm text-slate-500">{companyLimit} compan{companyLimit === 1 ? "y" : "ies"} allowed</p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm">
-                      <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">
-                        Price
-                      </p>
-                      <p className="mt-2 text-xl font-black text-slate-950">{kpiPrice}</p>
-                      <p className="mt-1 text-sm text-slate-500">Current billing value</p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-sm">
-                      <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-400">
-                        Access
-                      </p>
-                      <p className="mt-2 text-xl font-black text-slate-950">
-                        {featureReadOnly ? "Read-only" : "Full access"}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500">Desktop entitlement</p>
-                    </div>
+                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-4">
+                  <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-white via-white to-teal-50/60 px-3 py-2 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Plan</p>
+                    <p className="mt-1 text-base font-black text-slate-950">{planLabel}</p>
+                    <p className="text-xs text-slate-500">{companyLimit} compan{companyLimit === 1 ? "y" : "ies"}</p>
+                  </div>
+                  <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-white via-white to-teal-50/60 px-3 py-2 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Price</p>
+                    <p className="mt-1 text-base font-black text-slate-950">{kpiPrice}</p>
+                    <p className="text-xs text-slate-500">Current value</p>
+                  </div>
+                  <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-white via-white to-teal-50/60 px-3 py-2 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Access</p>
+                    <p className="mt-1 text-base font-black text-slate-950">
+                      {featureReadOnly ? "Read-only" : "Full access"}
+                    </p>
+                    <p className="text-xs text-slate-500">Desktop entitlement</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 px-3 py-2 shadow-sm">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status</p>
+                    <p className="mt-1 text-base font-black text-slate-950">{heroStatusLabel}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {withinGrace
+                        ? `Grace active${graceCountdown != null ? ` • ${graceCountdown} day${graceCountdown === 1 ? "" : "s"} left` : ""}`
+                        : effectiveStatus === "read_only"
+                        ? "Resolve billing"
+                        : "No action required"}
+                    </p>
                   </div>
                 </div>
               </div>
-
-              <aside className="bg-[#1F3147] p-5 text-white sm:p-6">
-                <div className="inline-flex rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-white/75">
-                  Secure Paystack billing
-                </div>
-                <h3 className="mt-5 text-xl font-black tracking-tight">
-                  {effectiveStatus === "read_only" ? "Restore access quickly." : "Payment method protected."}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-slate-200/85">
-                  Paystack handles checkout and card security. eKasiBooks stores only the subscription status your desktop app needs.
-                </p>
-
-                <div className="mt-5 space-y-3">
-                  <button
-                    type="button"
-                    onClick={onManagePlan}
-                    className="group flex w-full items-center justify-between rounded-2xl bg-white/10 p-3 text-left ring-1 ring-white/10 transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-teal-300"
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-400/20 text-lg">
-                        ⚙
-                      </span>
-                      <span>
-                        <span className="block font-black">Manage subscription</span>
-                        <span className="block text-sm text-slate-300">Payment method, receipts and cancellation</span>
-                      </span>
-                    </span>
-                    <span className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-white">→</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={onRefreshAll}
-                    className="group flex w-full items-center justify-between rounded-2xl bg-white/10 p-3 text-left ring-1 ring-white/10 transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-teal-300"
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-lg">
-                        ↻
-                      </span>
-                      <span>
-                        <span className="block font-black">Refresh entitlement</span>
-                        <span className="block text-sm text-slate-300">Pull the latest billing status</span>
-                      </span>
-                    </span>
-                    <span className="text-slate-400 transition group-hover:translate-x-1 group-hover:text-white">→</span>
-                  </button>
-                </div>
-
-                <div className="mt-6 rounded-2xl bg-white/10 p-3 ring-1 ring-white/10">
-                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    Current status
-                  </p>
-                  <p className="mt-2 text-lg font-black">{heroStatusLabel}</p>
-                  <p className="mt-1 text-sm text-slate-300">
-                    {withinGrace
-                      ? `Grace period active${graceCountdown != null ? ` • ${graceCountdown} day${graceCountdown === 1 ? "" : "s"} left` : ""}`
-                      : effectiveStatus === "read_only"
-                      ? "Resolve billing to unlock full access."
-                      : "No billing action required."}
-                  </p>
-                </div>
-              </aside>
             </div>
           </div>
 

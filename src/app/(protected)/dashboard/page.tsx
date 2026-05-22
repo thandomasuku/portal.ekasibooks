@@ -339,87 +339,54 @@ export default function DashboardPage() {
         <div className="space-y-5">
           <Stagger delayMs={0}>
             <PremiumCard className="overflow-hidden p-0 portal-card-premium">
-              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]">
-                <div className="relative overflow-hidden p-5 sm:p-6">
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 opacity-80"
-                    style={{
-                      background:
-                        "radial-gradient(circle at 0% 0%, rgba(20,184,166,0.16), transparent 36%), radial-gradient(circle at 88% 18%, rgba(15,23,42,0.08), transparent 38%)",
-                    }}
-                  />
+              <div className="relative overflow-hidden p-4">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 opacity-80"
+                  style={{
+                    background:
+                      "radial-gradient(circle at 0% 0%, rgba(20,184,166,0.14), transparent 32%), radial-gradient(circle at 92% 12%, rgba(15,23,42,0.06), transparent 34%)",
+                  }}
+                />
 
-                  <div className="relative">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Chip tone={status.tone}>
-                        <span className={cx("h-2 w-2 rounded-full", status.dot)} />
-                        {status.label}
-                      </Chip>
-                      <Chip>{planUpper} plan</Chip>
-                      {countdown && status.countdownLabel ? <Chip>{renewalLabel}</Chip> : null}
-                    </div>
+                <div className="relative">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Chip tone={status.tone}>
+                      <span className={cx("h-1.5 w-1.5 rounded-full", status.dot)} />
+                      {status.label}
+                    </Chip>
+                    <Chip>{planUpper} plan</Chip>
+                    {countdown && status.countdownLabel ? <Chip>{renewalLabel}</Chip> : null}
+                  </div>
 
-                    <div className="mt-4 max-w-3xl">
-                      <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-[color:var(--primary)]">
-                        Account command centre
+                  <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-[color:var(--primary)]">
+                        Account status
                       </p>
-                      <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">
+                      <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
                         Welcome back{name ? `, ${name}` : ""}.
                       </h2>
-                      <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-600">{status.summary}</p>
+                      <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">{status.summary}</p>
                     </div>
 
-                    <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
+                    <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
                       <PortalButton onClick={() => router.push("/downloads")} variant="primary" type="button">
                         Download desktop app
                       </PortalButton>
                       <PortalButton onClick={() => router.push(cta.href)} variant="secondary" title={cta.subtitle} type="button">
                         {cta.label}
                       </PortalButton>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-3">
-                      <HeroFact label="Access" value={status.hint} />
-                      <HeroFact label="Companies" value={`${companyLimit} allowed`} />
-                      <HeroFact label="Desktop work" value="Accounting happens in the desktop app" />
+                      <PortalButton onClick={() => router.push("/settings")} variant="secondary" type="button">
+                        Profile & security
+                      </PortalButton>
                     </div>
                   </div>
-                </div>
 
-                <div className="border-t border-slate-200/80 bg-[#1F3147] p-5 text-white xl:border-l xl:border-t-0">
-                  <div className="flex h-full flex-col justify-between gap-4">
-                    <div>
-                      <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/80 ring-1 ring-white/10">
-                        Next best action
-                      </div>
-                      <h3 className="mt-3 text-lg font-black tracking-tight">
-                        {planUpper === "FREE" ? "Choose the right plan when you’re ready." : "Keep your desktop app up to date."}
-                      </h3>
-                      <p className="mt-2 text-sm leading-5 text-white/70">
-                        {planUpper === "FREE"
-                          ? "Compare Starter, Growth and Pro before enabling cloud sync and higher account limits."
-                          : "Download the latest installer when you need updates, fixes or a fresh setup."}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <ActionRow
-                        title="Download desktop"
-                        subtitle="Installer and updates"
-                        icon="⇩"
-                        tone="inverted"
-                        onClick={() => router.push("/downloads")}
-                      />
-                      <ActionRow title={cta.label} subtitle={cta.subtitle} icon="⟠" tone="inverted" onClick={() => router.push(cta.href)} />
-                      <ActionRow
-                        title="Profile & security"
-                        subtitle="Password, OTP and settings"
-                        icon="⚙"
-                        tone="inverted"
-                        onClick={() => router.push("/settings")}
-                      />
-                    </div>
+                  <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-3">
+                    <HeroFact label="Access" value={status.hint} />
+                    <HeroFact label="Companies" value={`${companyLimit} allowed`} />
+                    <HeroFact label="Desktop work" value="Accounting happens in the desktop app" />
                   </div>
                 </div>
               </div>

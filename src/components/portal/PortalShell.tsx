@@ -4,7 +4,6 @@ import Image from "next/image";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { PortalFooter } from "../PortalFooter";
 import { PortalButton, cx } from "./ui";
 
 export type NavItem = {
@@ -50,12 +49,6 @@ type PortalShellProps = {
   mobileTopOffsetPx?: number;
   brandLogoSrc?: string;
 };
-
-function resolveMarketingHref(marketingBase: string, href: string) {
-  if (/^https?:\/\//i.test(href)) return href;
-  if (href.startsWith("/")) return `${marketingBase}${href}`;
-  return href;
-}
 
 function deriveDisplayName(email?: string | null) {
   if (!email) return null;
@@ -233,9 +226,9 @@ export function PortalShell({
     { label: "Terms", href: "/terms" },
     { label: "Privacy", href: "/privacy" },
   ],
-  footerRight,
+  footerRight: _footerRight,
   brandName = "eKasiBooks",
-  compactFooter,
+  compactFooter: _compactFooter,
   headerRight,
   userEmail,
   userName,
@@ -259,13 +252,6 @@ export function PortalShell({
     setSidebarOpen(false);
   }, [currentPath, sp]);
 
-  const year = new Date().getFullYear();
-
-  const marketingBase = (process.env.NEXT_PUBLIC_MARKETING_URL ?? "https://ekasibooks.co.za").replace(/\/+$/, "");
-  const resolvedFooterLinks = (footerLinks ?? []).map((l) => ({
-    ...l,
-    href: resolveMarketingHref(marketingBase, l.href),
-  }));
 
   const loginHref = useMemo(() => {
     const next = currentPath && currentPath.startsWith("/") ? currentPath : "/dashboard";
@@ -319,7 +305,7 @@ export function PortalShell({
   const SIDEBAR_DIV = "rgba(255,255,255,0.08)";
 
   return (
-    <div className={cx("h-screen w-full overflow-hidden", compact && "portal-compact")}>
+    <div className={cx("min-h-screen w-full bg-[#eef4f8]", compact && "portal-compact")}>
       {/* Mobile top bar */}
       <div className="fixed left-0 top-0 z-30 w-full border-b border-slate-200/70 bg-white/70 backdrop-blur lg:hidden">
         <div className="flex w-full items-center justify-between px-3 py-2">
@@ -341,10 +327,10 @@ export function PortalShell({
       </div>
 
       {/* 2-column shell */}
-      <div className="grid h-full w-full grid-cols-1 lg:grid-cols-[240px_1fr]">
+      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[240px_1fr]">
         {/* Desktop sidebar */}
         <aside
-          className="hidden h-full text-white lg:block"
+          className="sticky top-0 hidden h-screen text-white lg:block"
           aria-label="Portal navigation"
           style={{
             background: SIDEBAR_BG,
@@ -543,11 +529,11 @@ export function PortalShell({
           </div>
         ) : null}
 
-        {/* Right column scroll area */}
-<main
+        {/* Right column: AidFlow-style normal browser scroll */}
+        <main
           className={cx(
-            "h-full overflow-y-auto overscroll-contain",
-            "px-3 pb-4 pt-[var(--portal-mobile-top)] lg:px-10 lg:py-8"
+            "min-h-screen min-w-0",
+            "pb-6 pt-[var(--portal-mobile-top)] lg:pt-0"
           )}
           style={
             {
@@ -555,16 +541,17 @@ export function PortalShell({
             } as CSSProperties
           }
         >
-          <div className="mx-auto flex min-h-full max-w-[1600px] flex-col">
-            <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+          {/* Shared sticky page title/header. It starts at top:0 so it does not slide into place. */}
+          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-[#f8fbfd]/92 px-3 py-2 shadow-[0_10px_28px_rgba(15,23,42,0.04)] backdrop-blur-xl lg:px-10">
+            <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
-                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--primary)" }} />
+                <div className="inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--primary)" }} />
                   {badge}
                 </div>
 
-                <h1 className="mt-2 text-xl font-semibold text-slate-900 sm:mt-3 sm:text-2xl">{title}</h1>
-                {subtitle ? <p className="mt-1 text-sm text-slate-600 sm:text-base">{subtitle}</p> : null}
+                <h1 className="mt-1 text-lg font-semibold text-slate-900 sm:text-xl">{title}</h1>
+                {subtitle ? <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">{subtitle}</p> : null}
               </div>
 
               <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -576,16 +563,10 @@ export function PortalShell({
                 ) : null}
               </div>
             </div>
+          </header>
 
-            <div className="flex-1">{children}</div>
-
-            <PortalFooter
-              brandName={brandName}
-              year={year}
-              links={resolvedFooterLinks}
-              right={footerRight}
-              compact={compactFooter}
-            />
+          <div className="mx-auto w-full max-w-[1600px] px-3 pt-4 lg:px-10">
+            {children}
           </div>
         </main>
       </div>

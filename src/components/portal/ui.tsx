@@ -36,9 +36,9 @@ export function PremiumCard({
   return (
     <div
       className={cx(
-        "portal-card-sheen relative rounded-2xl ring-1",
+        "portal-card-sheen relative rounded-xl ring-1",
         "transition-all duration-300 will-change-transform",
-        "hover:-translate-y-[2px]",
+        "hover:-translate-y-[1px]",
         className
       )}
       style={{
@@ -56,7 +56,7 @@ export function PremiumCard({
       }}
     >
       {/* FX layer (clipped safely) */}
-      <div className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 rounded-xl overflow-hidden">
         {/* Sheen */}
         <div
           className="absolute -inset-10 opacity-0 transition-opacity duration-300"
@@ -67,17 +67,17 @@ export function PremiumCard({
         />
         {/* Ambient blobs */}
         <div
-          className="absolute -top-24 -right-24 h-56 w-56 rounded-full blur-3xl"
+          className="absolute -top-16 -right-16 h-44 w-44 rounded-full blur-3xl"
           style={{ background: "color-mix(in srgb, var(--primary) 14%, transparent)" }}
         />
         <div
-          className="absolute -bottom-24 -left-24 h-56 w-56 rounded-full blur-3xl"
+          className="absolute -bottom-20 -left-20 h-44 w-44 rounded-full blur-3xl"
           style={{ background: "rgba(15,23,42,0.05)" }}
         />
 
         {/* Inner highlights */}
         <div
-          className="absolute inset-0 rounded-2xl"
+          className="absolute inset-0 rounded-xl"
           style={{
             boxShadow: "var(--inner-highlight), inset 0 0 0 1px rgba(15,23,42,0.02)",
           }}
@@ -85,7 +85,7 @@ export function PremiumCard({
       </div>
 
       {/* Content layer (NOT clipped) */}
-      <div className="relative p-4">{children}</div>
+      <div className="relative p-3.5">{children}</div>
 
       {/* Hover triggers for sheen */}
       <style jsx global>{`
@@ -114,9 +114,9 @@ export function KpiCard({
   return (
     <div
       className={cx(
-        "relative rounded-2xl p-4 ring-1",
+        "relative rounded-xl p-3.5 ring-1",
         "transition-all duration-300 will-change-transform",
-        "hover:-translate-y-[2px]"
+        "hover:-translate-y-[1px]"
       )}
       style={{
         background: "var(--card)",
@@ -133,13 +133,13 @@ export function KpiCard({
       }}
     >
       {/* FX (clipped) */}
-      <div className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 rounded-xl overflow-hidden">
         <div
-          className="absolute -top-20 -right-20 h-40 w-40 rounded-full blur-3xl"
+          className="absolute -top-16 -right-16 h-32 w-32 rounded-full blur-3xl"
           style={{ background: "color-mix(in srgb, var(--primary) 10%, transparent)" }}
         />
         <div
-          className="absolute inset-0 rounded-2xl"
+          className="absolute inset-0 rounded-xl"
           style={{
             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55), inset 0 0 0 1px rgba(15,23,42,0.02)",
           }}
@@ -156,7 +156,7 @@ export function KpiCard({
 
         {icon ? (
           <div
-            className="grid h-9 w-9 place-items-center rounded-xl ring-1 text-sm transition-transform duration-300"
+            className="grid h-8 w-8 place-items-center rounded-lg ring-1 text-xs transition-transform duration-300"
             style={{
               background: "color-mix(in srgb, var(--surface-2) 70%, white)",
               borderColor: "var(--border-soft)",
@@ -179,7 +179,7 @@ export function DetailTile({ label, value }: { label: string; value: string }) {
   return (
     <div
       className={cx(
-        "relative rounded-xl px-3 py-2.5 ring-1",
+        "relative rounded-lg px-3 py-2 ring-1",
         "transition-all duration-300 will-change-transform",
         "hover:-translate-y-[1px]"
       )}
@@ -195,8 +195,8 @@ export function DetailTile({ label, value }: { label: string; value: string }) {
         (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-soft)";
       }}
     >
-      <div className="text-[11px] font-medium text-[color:var(--muted)]">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-[color:var(--foreground)] break-all">{value}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[color:var(--muted)]">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold text-[color:var(--foreground)] break-all">{value}</div>
     </div>
   );
 }
@@ -208,7 +208,7 @@ export function MiniRow({ label, value }: { label: string; value: string }) {
   return (
     <div
       className={cx(
-        "flex items-start justify-between gap-3 rounded-xl px-3 py-2.5 ring-1",
+        "flex items-start justify-between gap-3 rounded-lg px-3 py-2 ring-1",
         "transition-all duration-300",
         "hover:-translate-y-[1px]"
       )}
@@ -224,7 +224,7 @@ export function MiniRow({ label, value }: { label: string; value: string }) {
         (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-soft)";
       }}
     >
-      <div className="text-sm text-[color:var(--muted)]">{label}</div>
+      <div className="text-xs font-medium text-[color:var(--muted)]">{label}</div>
       <div className="text-sm font-semibold text-[color:var(--foreground)] break-all">{value}</div>
     </div>
   );
@@ -262,7 +262,7 @@ export function Chip({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1",
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1",
         "transition-transform duration-300",
         "hover:-translate-y-[1px]"
       )}
@@ -290,11 +290,11 @@ export function PortalButton({
   isLoading?: boolean;
 }) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+    "inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
   const sizes = {
-    sm: "px-3 py-2 text-xs",
-    md: "px-4 py-2.5 text-sm",
+    sm: "px-2.5 py-1.5 text-xs",
+    md: "px-3.5 py-2 text-sm",
   };
 
   const variants = {
@@ -315,9 +315,9 @@ export function PortalButton({
       {...props}
     >
       {isLoading ? (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+        <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
       ) : null}
-      <span>{children}</span>
+      {children}
     </button>
   );
 }
@@ -341,7 +341,7 @@ export function PortalInput({
       {label ? <span className="mb-1.5 block text-sm font-semibold text-[color:var(--foreground)]">{label}</span> : null}
       <input
         className={cx(
-          "w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-[color:var(--foreground)] shadow-sm outline-none transition",
+          "w-full rounded-lg border bg-white px-3 py-2 text-sm text-[color:var(--foreground)] shadow-sm outline-none transition",
           "placeholder:text-slate-400 focus:border-[color:var(--primary)] focus:ring-4 focus:ring-[color:var(--primary)]/15",
           error ? "border-rose-300" : "border-[color:var(--border-soft)]",
           className
@@ -393,7 +393,7 @@ export function PortalAlert({
   };
 
   return (
-    <div className={cx("rounded-2xl border p-4 text-sm", className)} style={tones[tone]}>
+    <div className={cx("rounded-xl border p-3 text-sm", className)} style={tones[tone]}>
       {title ? <div className="mb-1 font-semibold">{title}</div> : null}
       <div className="leading-relaxed">{children}</div>
     </div>
@@ -417,15 +417,15 @@ export function PortalSectionHeader({
   className?: string;
 }) {
   return (
-    <div className={cx("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}>
+    <div className={cx("flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between", className)}>
       <div className="min-w-0">
         {eyebrow ? (
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">
             {eyebrow}
           </div>
         ) : null}
-        <h2 className="text-lg font-semibold tracking-tight text-[color:var(--foreground)]">{title}</h2>
-        {description ? <p className="mt-1 max-w-2xl text-sm leading-relaxed text-[color:var(--muted)]">{description}</p> : null}
+        <h2 className="text-base font-semibold tracking-tight text-[color:var(--foreground)]">{title}</h2>
+        {description ? <p className="mt-0.5 max-w-2xl text-sm leading-relaxed text-[color:var(--muted)]">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -450,16 +450,16 @@ export function PortalEmptyState({
 }) {
   return (
     <div
-      className={cx("rounded-2xl border border-dashed p-6 text-center", className)}
+      className={cx("rounded-xl border border-dashed p-4 text-center", className)}
       style={{
         background: "color-mix(in srgb, var(--surface) 65%, white)",
         borderColor: "var(--border-soft)",
       }}
     >
-      {icon ? <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-white shadow-sm">{icon}</div> : null}
+      {icon ? <div className="mx-auto mb-2 grid h-9 w-9 place-items-center rounded-xl bg-white shadow-sm">{icon}</div> : null}
       <div className="text-sm font-semibold text-[color:var(--foreground)]">{title}</div>
       {description ? <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-[color:var(--muted)]">{description}</p> : null}
-      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+      {action ? <div className="mt-3 flex justify-center">{action}</div> : null}
     </div>
   );
 }
@@ -470,7 +470,7 @@ export function PortalEmptyState({
 export function PortalSkeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={cx("animate-pulse rounded-xl", className)}
+      className={cx("animate-pulse rounded-lg", className)}
       style={{
         background: "linear-gradient(90deg, rgba(15,23,42,0.06), rgba(15,23,42,0.10), rgba(15,23,42,0.06))",
       }}
