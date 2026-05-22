@@ -490,9 +490,11 @@ function BillingOnboardingView({
             ) : null}
           </div>
 
-          <PortalButton onClick={onUpgrade} isLoading={upgradeLoading} type="button">
-            <span className={BTN_ICON_PRIMARY}>⟠</span>
-            {upgradeLoading ? "Redirecting..." : `Continue with ${selected.title}`}
+          <PortalButton onClick={onUpgrade} isLoading={upgradeLoading} type="button" className="justify-center">
+            <span className="inline-flex items-center justify-center gap-2">
+              <span className={BTN_ICON_PRIMARY}>⟠</span>
+              <span>{upgradeLoading ? "Redirecting..." : `Continue with ${selected.title}`}</span>
+            </span>
           </PortalButton>
         </div>
       </PremiumCard>
