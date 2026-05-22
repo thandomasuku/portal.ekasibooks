@@ -14,6 +14,7 @@ export type SessionUser = {
   fullName: string | null;
   companyName: string | null;
   phone: string | null;
+  role: string;
 };
 
 type SessionResponse = {

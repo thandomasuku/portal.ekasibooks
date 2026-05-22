@@ -276,6 +276,7 @@ export default function DownloadsPage() {
       backHref="/dashboard"
       backLabel="Back to overview"
       userEmail={user?.email ?? null}
+      userRole={state === "ready" ? (user?.role ?? null) : null}
       planName={planName}
       headerRight={
         state === "ready" ? (

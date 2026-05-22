@@ -875,6 +875,7 @@ export default function BillingPage() {
       backLabel="Back to overview"
       userEmail={(user as any)?.email ?? null}
       userName={derivedName}
+      userRole={state === "ready" ? ((user as any)?.role ?? null) : null}
       planName={planLabel}
       headerRight={
         state === "ready" ? (

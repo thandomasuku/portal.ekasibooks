@@ -15,6 +15,7 @@ type SessionPayload = {
     fullName: string | null;
     companyName: string | null;
     phone: string | null;
+    role: string;
   };
 };
 
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest) {
         fullName: true,
         companyName: true,
         phone: true,
+        role: true,
       },
     });
 
@@ -84,6 +86,7 @@ export async function GET(req: NextRequest) {
         fullName: user.fullName ?? null,
         companyName: user.companyName ?? null,
         phone: user.phone ?? null,
+        role: user.role ?? "user",
       },
     };
 

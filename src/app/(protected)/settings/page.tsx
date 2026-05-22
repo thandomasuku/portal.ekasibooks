@@ -374,6 +374,7 @@ export default function SettingsPage() {
       backLabel="Back to overview"
       userEmail={sessionUser?.email ?? null}
       userName={userName}
+      userRole={(sessionUser as any)?.role ?? null}
       planName={planName}
       headerRight={
         state === "ready" ? (

@@ -44,6 +44,7 @@ type PortalShellProps = {
   userEmail?: string | null;
   userName?: string | null;
   planName?: string | null;
+  userRole?: string | null;
 
   compact?: boolean;
   mobileTopOffsetPx?: number;
@@ -108,7 +109,7 @@ async function bestEffortLogout() {
 
 /* ---------------- Icons ---------------- */
 
-type IconName = "home" | "billing" | "downloads" | "settings" | "logout";
+type IconName = "home" | "billing" | "downloads" | "settings" | "admin" | "logout";
 
 function Icon({ name, className }: { name: IconName; className?: string }) {
   const base = "stroke-current fill-none stroke-[2] vector-effect-non-scaling-stroke";
@@ -145,6 +146,13 @@ function Icon({ name, className }: { name: IconName; className?: string }) {
           <path d="M19.4 15a7.8 7.8 0 0 0 .1-1l2-1.2-2-3.4-2.3.6a7.7 7.7 0 0 0-.8-.7l.3-2.3H9.3l.3 2.3c-.3.2-.6.5-.8.7l-2.3-.6-2 3.4 2 1.2a7.8 7.8 0 0 0 .1 1L4.6 16.2l2 3.4 2.3-.6c.2.3.5.6.8.8l-.3 2.2h5.4l-.3-2.2c.3-.2.6-.5.8-.8l2.3.6 2-3.4L19.4 15Z" />
         </svg>
       );
+    case "admin":
+      return (
+        <svg viewBox="0 0 24 24" className={cx(base, className)}>
+          <path d="M12 3 4 6.5v5.8c0 4.4 3.1 7.6 8 8.7 4.9-1.1 8-4.3 8-8.7V6.5L12 3Z" />
+          <path d="M9.2 12.2 11.1 14l3.8-4" />
+        </svg>
+      );
     case "logout":
       return (
         <svg viewBox="0 0 24 24" className={cx(base, className)}>
@@ -164,6 +172,7 @@ function inferIcon(item: NavItem): IconName {
   if (href.startsWith("/dashboard") || label.includes("overview") || label.includes("dashboard")) return "home";
   if (href.startsWith("/billing") || label.includes("billing") || label.includes("subscription")) return "billing";
   if (href.startsWith("/downloads") || label.includes("download")) return "downloads";
+  if (href.startsWith("/admin") || label.includes("admin")) return "admin";
   return "settings";
 }
 
@@ -231,6 +240,7 @@ export function PortalShell({
   userEmail,
   userName,
   planName,
+  userRole,
   compact = true,
   mobileTopOffsetPx = 60,
   brandLogoSrc = "/ekasibooks-logo.png",
@@ -266,6 +276,17 @@ export function PortalShell({
   const resolvedName = userName ?? deriveDisplayName(resolvedEmail) ?? "User";
   const initials = useMemo(() => getInitials(resolvedName || resolvedEmail || "User"), [resolvedName, resolvedEmail]);
   const plan = String(planName ?? "FREE").toUpperCase();
+  const isAdmin = String(userRole ?? "").trim().toLowerCase() === "admin";
+
+  const effectiveNavItems = useMemo(() => {
+    const base = navItems ?? DEFAULT_NAV;
+    if (!isAdmin) return base;
+
+    const hasAdmin = base.some((item) => item.href === "/admin" || item.href.startsWith("/admin/"));
+    if (hasAdmin) return base;
+
+    return [...base, { label: "Admin Console", href: "/admin", icon: "admin" }];
+  }, [isAdmin, navItems]);
 
   async function onLogout() {
     if (logoutLoading) return;
@@ -368,7 +389,7 @@ export function PortalShell({
               <div className="px-1 pb-2 text-[11px] font-semibold text-white/55">Navigation</div>
 
               <div className="space-y-1">
-                {navItems.map((item) => {
+                {effectiveNavItems.map((item) => {
                   const active =
                     (item.href === "/dashboard" && currentPath === "/dashboard") ||
                     (item.href !== "/dashboard" && currentPath.startsWith(item.href));
@@ -470,7 +491,7 @@ export function PortalShell({
                   <div className="px-1 pb-2 text-[11px] font-semibold text-white/55">Navigation</div>
 
                   <div className="space-y-1">
-                    {navItems.map((item) => {
+                    {effectiveNavItems.map((item) => {
                       const active =
                         (item.href === "/dashboard" && currentPath === "/dashboard") ||
                         (item.href !== "/dashboard" && currentPath.startsWith(item.href));

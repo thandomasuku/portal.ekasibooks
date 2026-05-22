@@ -16,6 +16,7 @@ const PROTECTED_PREFIXES = [
   "/downloads", // 🔥 THIS WAS THE BUG
   "/account",
   "/support",
+  "/admin",
 ];
 
 const PUBLIC_PATHS = new Set<string>([
