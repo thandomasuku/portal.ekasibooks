@@ -326,7 +326,7 @@ export async function POST(req: NextRequest) {
       bankBranchCode: toNullableString(body?.bankBranchCode, 50),
       bankAccountType: toNullableString(body?.bankAccountType, 100),
 
-      logoUrl: toNullableString(body?.logoUrl, 1000),
+      logoUrl: toNullableString(body?.logoUrl, 2_000_000),
       accentColor: toNullableString(body?.accentColor, 50),
 
       raw: body?.raw ?? null,
