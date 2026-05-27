@@ -12,21 +12,31 @@ function jsonError(message: string, status = 400) {
 
 function getClientMeta(req: NextRequest) {
   const userAgent = req.headers.get("user-agent") || "";
-  const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
+
+  const xff = req.headers.get("x-forwarded-for") || "";
+  const ip =
+    (xff.split(",")[0] || "").trim() ||
+    (req.headers.get("x-real-ip") || "").trim() ||
+    "";
+
   return { userAgent, ip };
 }
 
-// ✅ 1 active session per account (revoke older before creating new)
+// ✅ Enforce max active sessions per account.
+// This should be called BEFORE creating the new session.
+// Example: max = 2 means revoke enough old sessions so the new login becomes the 2nd active session.
 async function enforceMaxSessions(userId: string, max = 1) {
+  const safeMax = Math.max(1, Math.floor(max));
+
   const sessions = await prisma.session.findMany({
     where: { userId, revokedAt: null },
     orderBy: [{ lastSeenAt: "asc" }, { createdAt: "asc" }],
     select: { id: true },
   });
 
-  if (sessions.length < max) return;
+  if (sessions.length < safeMax) return;
 
-  const toRevokeCount = sessions.length - (max - 1);
+  const toRevokeCount = sessions.length - (safeMax - 1);
   const toRevoke = sessions.slice(0, Math.max(0, toRevokeCount));
 
   if (toRevoke.length) {
@@ -35,6 +45,59 @@ async function enforceMaxSessions(userId: string, max = 1) {
       data: { revokedAt: new Date() },
     });
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function toPositiveInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed);
+    }
+  }
+
+  return null;
+}
+
+async function getMaxActiveSessions(userId: string) {
+  const entitlement = await prisma.entitlement.findUnique({
+    where: { userId },
+    select: {
+      tier: true,
+      status: true,
+      features: true,
+    },
+  });
+
+  const tier = String(entitlement?.tier || "starter").toLowerCase().trim();
+  const status = String(entitlement?.status || "active").toLowerCase().trim();
+
+  if (status === "blocked" || status === "none") {
+    return 1;
+  }
+
+  const features = isPlainObject(entitlement?.features)
+    ? entitlement.features
+    : {};
+
+  const featureLimit = toPositiveInteger(features.maxActiveSessions);
+
+  if (featureLimit) {
+    return featureLimit;
+  }
+
+  if (tier === "pro") return 4;
+  if (tier === "growth") return 2;
+
+  return 1;
 }
 
 export async function POST(req: NextRequest) {
@@ -109,17 +172,21 @@ export async function POST(req: NextRequest) {
       data: { usedAt: new Date() },
     });
 
-    // ✅ Enforce single active session then create a new session for this login
-    await enforceMaxSessions(user.id, 1);
+    // ✅ OTP login must respect the same plan-based session limit as normal login.
+    // Previously this was hardcoded to 1, which could revoke valid Growth/Pro sessions.
+    const maxActiveSessions = await getMaxActiveSessions(user.id);
+    await enforceMaxSessions(user.id, maxActiveSessions);
 
     const meta = getClientMeta(req);
+    const now = new Date();
+
     const session = await prisma.session.create({
       data: {
         userId: user.id,
         userAgent: meta.userAgent,
         ip: String(meta.ip || "").slice(0, 190),
-        createdAt: new Date(),
-        lastSeenAt: new Date(),
+        createdAt: now,
+        lastSeenAt: now,
         revokedAt: null,
       },
       select: { id: true },
@@ -139,7 +206,11 @@ export async function POST(req: NextRequest) {
       .catch(() => {});
 
     const res = NextResponse.json(
-      { success: true, user: { id: user.id, email: user.email } },
+      {
+        success: true,
+        user: { id: user.id, email: user.email },
+        maxActiveSessions,
+      },
       { status: 200 }
     );
 
