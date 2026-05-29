@@ -12,9 +12,13 @@ function fmtDate(value?: Date | string | null) {
   return d.toLocaleString("en-ZA");
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-80 overflow-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 text-xs leading-relaxed text-slate-100 shadow-inner">
+    <pre className="max-h-80 overflow-auto rounded-2xl border border-white/15 bg-[#061f29]/88 p-4 text-xs leading-relaxed text-white/82 shadow-inner ring-1 ring-white/10">
       {JSON.stringify(value ?? {}, null, 2)}
     </pre>
   );
@@ -22,9 +26,9 @@ function JsonBlock({ value }: { value: unknown }) {
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 shadow-sm">
-      <div className="text-xs font-black uppercase tracking-wide text-slate-600">{label}</div>
-      <div className="mt-1 break-words text-sm font-bold text-slate-950">{value || "—"}</div>
+    <div className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
+      <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">{label}</div>
+      <div className="mt-1 break-words text-sm font-bold text-white">{value || "—"}</div>
     </div>
   );
 }
@@ -40,11 +44,27 @@ function Panel({
 }) {
   return (
     <section
-      className={`rounded-3xl border border-slate-300 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.10)] ring-1 ring-white ${className}`}
+      className={cx(
+        "relative overflow-hidden rounded-3xl border border-white/15 bg-[linear-gradient(135deg,rgba(7,53,64,0.90),rgba(16,116,115,0.74))] p-5 text-white shadow-[0_22px_60px_rgba(7,53,64,0.18)] ring-1 ring-white/10",
+        className,
+      )}
     >
-      <h3 className="text-xl font-black tracking-tight text-slate-950">{title}</h3>
-      {children}
+      <div className="pointer-events-none absolute -left-24 -top-32 h-80 w-80 rounded-[5rem] bg-[#062f3a]/65 blur-sm" />
+      <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-[4rem] bg-white/10 blur-sm" />
+
+      <div className="relative">
+        <h3 className="text-xl font-black tracking-tight text-white">{title}</h3>
+        {children}
+      </div>
     </section>
+  );
+}
+
+function StatusPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-black text-white/78">
+      {children}
+    </span>
   );
 }
 
@@ -90,23 +110,38 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-3xl border border-slate-300 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.10)] ring-1 ring-white md:flex-row md:items-center md:justify-between">
-        <div>
-          <Link
-            className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-black text-[#0f766e] shadow-sm transition hover:-translate-y-[1px] hover:border-[#14b8a6] hover:bg-teal-50 hover:text-[#115e59]"
-            href="/admin/users"
-          >
-            ← Back to users
-          </Link>
-          <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950">{user.fullName || user.email}</h2>
-          <p className="mt-1 text-sm font-medium text-slate-700">{user.email}</p>
-        </div>
+      <section className="relative overflow-hidden rounded-3xl border border-white/15 bg-[linear-gradient(135deg,rgba(7,53,64,0.94),rgba(16,116,115,0.78))] p-5 text-white shadow-[0_24px_70px_rgba(7,53,64,0.22)] ring-1 ring-white/10">
+        <div className="pointer-events-none absolute -left-24 -top-32 h-80 w-80 rounded-[5rem] bg-[#062f3a]/70 blur-sm" />
+        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-[5rem] bg-white/10 blur-sm" />
 
-        <div className="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm">
-          <div className="text-xs font-black uppercase tracking-wide text-slate-600">User ID</div>
-          <div className="mt-1 max-w-[280px] truncate font-bold text-slate-950">{user.id}</div>
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                className="inline-flex items-center rounded-2xl border border-white/15 bg-white px-4 py-2 text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-white/92"
+                href="/admin/users"
+              >
+                ← Back to users
+              </Link>
+
+              <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/35 bg-teal-300/15 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-teal-50 shadow-sm backdrop-blur">
+                <span className="h-2 w-2 rounded-full bg-[#14b8a6] shadow-[0_0_0_4px_rgba(20,184,166,0.16)]" />
+                User profile
+              </div>
+            </div>
+
+            <h2 className="mt-4 break-words text-2xl font-black tracking-tight text-white md:text-3xl">
+              {user.fullName || user.email}
+            </h2>
+            <p className="mt-1 break-words text-sm font-semibold text-white/65">{user.email}</p>
+          </div>
+
+          <div className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">User ID</div>
+            <div className="mt-1 max-w-[280px] truncate font-bold text-white">{user.id}</div>
+          </div>
         </div>
-      </div>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
         <Panel title="Profile" className="lg:col-span-2">
@@ -167,15 +202,18 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <Panel title="Recent sessions">
           <div className="mt-4 grid gap-3">
             {user.sessions.length === 0 ? (
-              <p className="text-sm font-semibold text-slate-700">No sessions found.</p>
+              <p className="text-sm font-semibold text-white/70">No sessions found.</p>
             ) : (
               user.sessions.map((session) => (
-                <div key={session.id} className="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 shadow-sm">
+                <div
+                  key={session.id}
+                  className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-black text-slate-950">{session.revokedAt ? "Revoked" : "Active"}</span>
-                    <span className="text-xs font-semibold text-slate-600">{fmtDate(session.lastSeenAt)}</span>
+                    <span className="text-sm font-black text-white">{session.revokedAt ? "Revoked" : "Active"}</span>
+                    <span className="text-xs font-semibold text-white/55">{fmtDate(session.lastSeenAt)}</span>
                   </div>
-                  <div className="mt-1 truncate text-xs font-medium text-slate-600">{session.userAgent || "Unknown device"}</div>
+                  <div className="mt-1 truncate text-xs font-semibold text-white/50">{session.userAgent || "Unknown device"}</div>
                 </div>
               ))
             )}
@@ -186,17 +224,18 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       <Panel title="Companies">
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {user.companies.length === 0 ? (
-            <p className="text-sm font-semibold text-slate-700">No companies found.</p>
+            <p className="text-sm font-semibold text-white/70">No companies found.</p>
           ) : (
             user.companies.map((company) => (
-              <div key={company.id} className="rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 shadow-sm">
+              <div
+                key={company.id}
+                className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10"
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-black text-slate-950">{company.name}</span>
-                  <span className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-black text-slate-800">
-                    {company.isDefault ? "Default" : company.isActive ? "Active" : "Inactive"}
-                  </span>
+                  <span className="font-black text-white">{company.name}</span>
+                  <StatusPill>{company.isDefault ? "Default" : company.isActive ? "Active" : "Inactive"}</StatusPill>
                 </div>
-                <div className="mt-1 text-xs font-medium text-slate-600">Updated {fmtDate(company.updatedAt)}</div>
+                <div className="mt-1 text-xs font-semibold text-white/50">Updated {fmtDate(company.updatedAt)}</div>
               </div>
             ))
           )}

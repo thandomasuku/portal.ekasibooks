@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   PremiumCard,
-  KpiCard,
-  DetailTile,
-  Chip,
   PortalAlert,
   PortalButton,
   PortalEmptyState,
@@ -55,6 +52,8 @@ async function trackAnalytics(eventName: string, params?: Record<string, any>) {
 const BTN_ICON_PRIMARY = "grid h-7 w-7 place-items-center rounded-lg bg-white/15";
 const BTN_ICON_SECONDARY =
   "grid h-7 w-7 place-items-center rounded-lg bg-slate-900/5 ring-1 ring-slate-200";
+const BILLING_PILL_BUTTON =
+  "inline-flex items-center justify-center rounded-2xl border border-teal-200/35 bg-teal-50/90 px-4 py-2 text-sm font-black text-teal-900 shadow-sm ring-1 ring-white/20 transition hover:-translate-y-[1px] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/60 disabled:cursor-not-allowed disabled:opacity-60";
 
 /* ---------------- Name helpers ---------------- */
 
@@ -269,9 +268,145 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <PortalButton onClick={onCopy} variant="secondary" type="button">
+    <button onClick={onCopy} className={BILLING_PILL_BUTTON} type="button">
       {copied ? "Copied ✓" : "Copy snapshot"}
-    </PortalButton>
+    </button>
+  );
+}
+
+
+function BillingChip({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "brand" | "success";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-200/45 bg-emerald-400/16 text-emerald-50 ring-emerald-100/18"
+      : tone === "brand"
+      ? "border-amber-200/45 bg-amber-300/16 text-amber-50 ring-amber-100/18"
+      : "border-white/24 bg-white/12 text-teal-50 ring-white/12";
+
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold leading-none shadow-sm ring-1 backdrop-blur",
+        toneClass,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Stagger({
+  children,
+  delayMs = 0,
+  className,
+}: {
+  children: React.ReactNode;
+  delayMs?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cx("ek-enter", className)}
+      style={{ animationDelay: `${Math.max(0, delayMs)}ms` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <PremiumCard tone="glass" className="relative overflow-hidden p-5 text-white sm:p-6">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-16 -top-20 h-36 w-56 rotate-12 rounded-[2.5rem] bg-white/10"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-200/50 to-transparent"
+      />
+
+      <div className="relative mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-base font-black tracking-tight text-white">
+            {title}
+          </h3>
+          {subtitle ? (
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-white/76">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+        {action ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {action}
+          </div>
+        ) : null}
+      </div>
+      <div className="relative">{children}</div>
+    </PremiumCard>
+  );
+}
+
+function BillingMetricCard({
+  label,
+  value,
+  helper,
+  icon,
+}: {
+  label: string;
+  value: string;
+  helper?: string;
+  icon: string;
+}) {
+  return (
+    <div className="group rounded-3xl border border-white/16 bg-slate-950/18 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur transition duration-300 hover:-translate-y-[2px] hover:bg-white/16 hover:shadow-[0_20px_55px_rgba(0,0,0,0.16)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-50/86">
+            {label}
+          </div>
+          <div className="mt-2 truncate text-base font-black text-white">
+            {value}
+          </div>
+        </div>
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/12 text-sm text-teal-50 shadow-sm ring-1 ring-white/15 transition group-hover:bg-white/18">
+          {icon}
+        </div>
+      </div>
+      {helper ? (
+        <div className="mt-2 truncate text-xs font-medium text-white/76">
+          {helper}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function BillingAccessItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-3xl border border-white/16 bg-slate-950/18 p-4 shadow-[0_12px_34px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur">
+      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-teal-50/86">
+        {label}
+      </div>
+      <div className="mt-2 text-base font-black text-white">{value}</div>
+    </div>
   );
 }
 
@@ -334,50 +469,50 @@ function BillingOnboardingView({
   const annualSave = selected.monthly * 12 - selected.annual;
 
   return (
-    <div className="space-y-6">
-      <PremiumCard className="portal-card-premium">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-4">
+      <PremiumCard tone="dark" className="portal-card-premium">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <Chip tone="neutral">
+            <BillingChip>
               <span className="h-2 w-2 rounded-full bg-slate-400" />
               No active subscription
-            </Chip>
+            </BillingChip>
 
-            <h2 className="mt-3 text-xl font-semibold text-slate-900 sm:text-2xl">
+            <h2 className="mt-2 text-xl font-semibold text-white sm:text-2xl">
               Choose your plan
             </h2>
 
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
+            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-200/85">
               Pick the plan that fits your business today. You can upgrade later as your
               needs grow.
             </p>
 
             {cameFromPricing ? (
               <div className="mt-3">
-                <Chip tone="brand">
+                <BillingChip tone="brand">
                   <span className="h-2 w-2 rounded-full bg-sky-500" />
                   {PRICE_TABLE[requestedPlan].title} preselected from pricing page
-                </Chip>
+                </BillingChip>
               </div>
             ) : null}
           </div>
 
           {userEmail ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-slate-200 ring-1 ring-white/10">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                 Signed in as
               </div>
-              <div className="mt-1 font-medium text-slate-900">{userEmail}</div>
+              <div className="mt-1 font-medium text-white">{userEmail}</div>
             </div>
           ) : null}
         </div>
       </PremiumCard>
 
-      <PremiumCard className="portal-card-premium">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <PremiumCard tone="glass" className="portal-card-premium">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-slate-900">Billing cycle</h3>
-            <p className="mt-1 text-sm text-slate-600">
+            <h3 className="text-lg font-semibold text-white">Billing cycle</h3>
+            <p className="mt-1 text-sm text-slate-200/85">
               Annual saves more if you already know this is your long-term setup.
             </p>
           </div>
@@ -386,7 +521,7 @@ function BillingOnboardingView({
         </div>
       </PremiumCard>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         {(["starter", "growth", "pro"] as PaidTier[]).map((tier) => {
           const plan = PRICE_TABLE[tier];
           const active = selectedTier === tier;
@@ -402,23 +537,23 @@ function BillingOnboardingView({
               onClick={() => setSelectedTier(tier)}
               aria-pressed={active}
               className={cx(
-                "relative rounded-3xl border bg-white p-5 text-left shadow-sm transition",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]",
+                "relative rounded-2xl border p-4 text-left text-white shadow-[0_12px_34px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur transition",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/60",
                 active
-                  ? "border-[color:var(--primary)] shadow-[0_0_0_4px_rgba(17,179,163,0.10)]"
-                  : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+                  ? "border-teal-200/45 bg-[#0b5f63]/78 shadow-[0_0_0_4px_rgba(94,234,212,0.12)]"
+                  : "border-white/15 bg-[#073540]/70 hover:border-white/24 hover:bg-[#0a4550]/76"
               )}
             >
               {plan.badge ? (
-                <div className="absolute right-12 top-4 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
+                <div className="absolute right-12 top-4 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white ring-1 ring-white/10">
                   {plan.badge}
                 </div>
               ) : null}
 
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-lg font-semibold text-slate-900">{plan.title}</div>
-                  <div className="mt-1 text-sm text-slate-600">
+                  <div className="text-lg font-black text-white">{plan.title}</div>
+                  <div className="mt-1 text-sm font-semibold text-white/66">
                     {tier === "starter"
                       ? "For freelancers and solo businesses"
                       : tier === "growth"
@@ -431,36 +566,36 @@ function BillingOnboardingView({
                   className={cx(
                     "mt-1 h-5 w-5 rounded-full border-2 transition",
                     active
-                      ? "border-[color:var(--primary)] bg-[var(--primary)]"
-                      : "border-slate-300 bg-white"
+                      ? "border-teal-200 bg-teal-300"
+                      : "border-white/30 bg-white/10"
                   )}
                 />
               </div>
 
-              <div className="mt-5">
-                <div className="text-2xl font-semibold tracking-tight text-slate-900">
+              <div className="mt-4">
+                <div className="text-xl font-black tracking-tight text-white">
                   {price}
                 </div>
-                <div className="mt-1 text-sm text-slate-500">
+                <div className="mt-1 text-sm font-semibold text-white/62">
                   {plan.companies} compan{plan.companies === 1 ? "y" : "ies"}
                 </div>
               </div>
 
-              <div className="mt-5 space-y-2">
-                <div className="flex items-start gap-2 text-sm text-slate-700">
+              <div className="mt-4 space-y-1.5">
+                <div className="flex items-start gap-2 text-sm font-semibold text-white/72">
                   <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
                   <span>Desktop app access</span>
                 </div>
-                <div className="flex items-start gap-2 text-sm text-slate-700">
+                <div className="flex items-start gap-2 text-sm font-semibold text-white/72">
                   <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
                   <span>Unlimited documents</span>
                 </div>
-                <div className="flex items-start gap-2 text-sm text-slate-700">
+                <div className="flex items-start gap-2 text-sm font-semibold text-white/72">
                   <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
                   <span>{plan.companies} compan{plan.companies === 1 ? "y" : "ies"}</span>
                 </div>
                 {tier !== "starter" ? (
-                  <div className="flex items-start gap-2 text-sm text-slate-700">
+                  <div className="flex items-start gap-2 text-sm font-semibold text-white/72">
                     <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />
                     <span>Priority support</span>
                   </div>
@@ -471,21 +606,21 @@ function BillingOnboardingView({
         })}
       </div>
 
-      <PremiumCard className="portal-card-premium">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <PremiumCard tone="dark" className="portal-card-premium">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-900">
+            <div className="text-sm font-semibold text-white">
               Selected plan: {selected.title}
             </div>
-            <div className="mt-1 text-sm text-slate-600">
+            <div className="mt-1 text-sm text-slate-200/85">
               {priceLabel} • {selected.companies} compan{selected.companies === 1 ? "y" : "ies"}
             </div>
-            <div className="mt-2 text-xs text-slate-500">
+            <div className="mt-2 text-xs text-slate-300">
               Secure checkout. Cancel anytime. Access updates immediately after payment.
             </div>
             {cycle === "annual" ? (
-              <div className="mt-2 text-xs text-slate-600">
-                Annual saving: <span className="font-bold text-slate-900">R{annualSave}</span>
+              <div className="mt-2 text-xs text-slate-300">
+                Annual saving: <span className="font-bold text-white">R{annualSave}</span>
               </div>
             ) : null}
           </div>
@@ -890,7 +1025,7 @@ export default function BillingPage() {
           onSecondary={() => router.push(`/login?next=${encodeURIComponent(currentBillingUrl)}`)}
         />
       ) : isFreeOnboarding ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {entError ? (
             <PortalAlert tone="danger">{entError}</PortalAlert>
           ) : null}
@@ -917,104 +1052,116 @@ export default function BillingPage() {
           />
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* BILLING STATUS PANEL */}
-          <div className="overflow-hidden rounded-2xl bg-white shadow-[0_12px_34px_rgba(15,23,42,0.07)] ring-1 ring-slate-200/80">
-            <div className="relative overflow-hidden p-4">
-              <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-teal-100/60 blur-3xl" />
+          <Stagger delayMs={0}>
+            <PremiumCard tone="dark" className="overflow-hidden p-0 text-white">
+              <div className="relative overflow-hidden p-5 sm:p-6">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 opacity-95"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(8,47,73,0.72), rgba(20,88,97,0.44) 46%, rgba(20,184,166,0.12)), radial-gradient(circle at 0% 0%, rgba(94,234,212,0.18), transparent 34%), radial-gradient(circle at 96% 8%, rgba(255,255,255,0.16), transparent 34%)",
+                  }}
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-20 -top-28 h-56 w-80 rotate-12 rounded-[3rem] bg-white/10"
+                />
 
-              <div className="relative">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Chip
-                    tone={
-                      heroTone === "success"
-                        ? "success"
-                        : heroTone === "brand"
-                        ? "brand"
-                        : "neutral"
-                    }
-                  >
-                    <span className={cx("h-1.5 w-1.5 rounded-full", heroDot)} />
-                    {heroStatusLabel}
-                  </Chip>
-                  <Chip tone="neutral">{planLabel} plan</Chip>
-                  {renewsAt ? <Chip tone="neutral">Renews {fmtDate(renewsAt)}</Chip> : null}
-                  <Chip tone="neutral">Secure Paystack</Chip>
-                </div>
-
-                <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-teal-700">
-                      Billing status
-                    </p>
-                    <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
-                      {effectiveStatus === "read_only"
-                        ? "Payment attention needed."
-                        : "Subscription in good standing."}
-                    </h2>
-                    <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">
-                      {effectiveStatus === "read_only"
-                        ? "Your desktop app will stay in read-only mode until billing is resolved."
-                        : "Manage your plan, payment method and desktop entitlement from one secure place."}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
-                    <PortalButton
-                      onClick={onManagePlan}
-                      isLoading={manageLoading}
-                      title="Manage subscription on Paystack"
-                      type="button"
-                      className="justify-center sm:justify-start"
+                <div className="relative">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <BillingChip
+                      tone={
+                        heroTone === "success"
+                          ? "success"
+                          : heroTone === "brand"
+                          ? "brand"
+                          : "neutral"
+                      }
                     >
-                      <span className={BTN_ICON_PRIMARY}>⚙</span>
-                      <span>{manageLoading ? "Opening..." : "Manage plan"}</span>
-                    </PortalButton>
-                    <PortalButton
-                      onClick={onRefreshAll}
-                      variant="secondary"
-                      type="button"
-                      className="justify-center sm:justify-start"
-                    >
-                      <span className={BTN_ICON_SECONDARY}>↻</span>
-                      <span>Refresh status</span>
-                    </PortalButton>
+                      <span className={cx("h-1.5 w-1.5 rounded-full", heroDot)} />
+                      {heroStatusLabel}
+                    </BillingChip>
+                    <BillingChip>{planLabel} plan</BillingChip>
+                    {renewsAt ? <BillingChip>Renews {fmtDate(renewsAt)}</BillingChip> : null}
+                    <BillingChip>Secure Paystack</BillingChip>
                   </div>
-                </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-4">
-                  <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-white via-white to-teal-50/60 px-3 py-2 shadow-sm">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Plan</p>
-                    <p className="mt-1 text-base font-black text-slate-950">{planLabel}</p>
-                    <p className="text-xs text-slate-500">{companyLimit} compan{companyLimit === 1 ? "y" : "ies"}</p>
+                  <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-teal-200">
+                        Billing status
+                      </p>
+                      <h2 className="mt-1 text-xl font-black tracking-tight text-white sm:text-2xl">
+                        {effectiveStatus === "read_only"
+                          ? "Payment attention needed."
+                          : "Subscription in good standing."}
+                      </h2>
+                      <p className="mt-1 max-w-2xl text-sm leading-5 text-white/76">
+                        {effectiveStatus === "read_only"
+                          ? "Your desktop app will stay in read-only mode until billing is resolved."
+                          : "Manage your plan, payment method and desktop entitlement from one secure place."}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
+                      <button
+                        onClick={onManagePlan}
+                        disabled={manageLoading}
+                        title="Manage subscription on Paystack"
+                        type="button"
+                        className={BILLING_PILL_BUTTON}
+                      >
+                        {manageLoading ? "Opening..." : "Manage plan"}
+                      </button>
+                      <button
+                        onClick={onRefreshAll}
+                        type="button"
+                        className={BILLING_PILL_BUTTON}
+                      >
+                        Refresh status
+                      </button>
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-white via-white to-teal-50/60 px-3 py-2 shadow-sm">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Price</p>
-                    <p className="mt-1 text-base font-black text-slate-950">{kpiPrice}</p>
-                    <p className="text-xs text-slate-500">Current value</p>
-                  </div>
-                  <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-white via-white to-teal-50/60 px-3 py-2 shadow-sm">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Access</p>
-                    <p className="mt-1 text-base font-black text-slate-950">
-                      {featureReadOnly ? "Read-only" : "Full access"}
-                    </p>
-                    <p className="text-xs text-slate-500">Desktop entitlement</p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 px-3 py-2 shadow-sm">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Status</p>
-                    <p className="mt-1 text-base font-black text-slate-950">{heroStatusLabel}</p>
-                    <p className="truncate text-xs text-slate-500">
-                      {withinGrace
-                        ? `Grace active${graceCountdown != null ? ` • ${graceCountdown} day${graceCountdown === 1 ? "" : "s"} left` : ""}`
-                        : effectiveStatus === "read_only"
-                        ? "Resolve billing"
-                        : "No action required"}
-                    </p>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <BillingMetricCard
+                      label="Plan"
+                      value={planLabel}
+                      helper={`${companyLimit} compan${companyLimit === 1 ? "y" : "ies"}`}
+                      icon="★"
+                    />
+                    <BillingMetricCard
+                      label="Price"
+                      value={kpiPrice}
+                      helper="Current value"
+                      icon="R"
+                    />
+                    <BillingMetricCard
+                      label="Access"
+                      value={featureReadOnly ? "Read-only" : "Full access"}
+                      helper="Desktop entitlement"
+                      icon="✓"
+                    />
+                    <BillingMetricCard
+                      label="Status"
+                      value={heroStatusLabel}
+                      helper={
+                        withinGrace
+                          ? `Grace active${graceCountdown != null ? ` • ${graceCountdown} day${graceCountdown === 1 ? "" : "s"} left` : ""}`
+                          : effectiveStatus === "read_only"
+                          ? "Resolve billing"
+                          : "No action required"
+                      }
+                      icon="⟠"
+                    />
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </PremiumCard>
+          </Stagger>
 
           {/* GRACE STRIP */}
           {withinGrace ? (
@@ -1052,100 +1199,116 @@ export default function BillingPage() {
           ) : null}
 
           {/* ACCOUNT STRIP */}
-          <PremiumCard className="portal-card-premium">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h3 className="text-lg font-black text-slate-950">Subscription summary</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  The effective billing state your portal and desktop app will apply.
-                </p>
+          <Stagger delayMs={70}>
+            <SectionCard
+              title="Subscription summary"
+              subtitle="The effective billing state your portal and desktop app will apply."
+              action={
+                <BillingChip
+                  tone={
+                    heroTone === "success"
+                      ? "success"
+                      : heroTone === "brand"
+                      ? "brand"
+                      : "neutral"
+                  }
+                >
+                  <span className={cx("h-2 w-2 rounded-full", heroDot)} />
+                  {heroStatusLabel}
+                </BillingChip>
+              }
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <BillingMetricCard
+                  label="Plan"
+                  value={planLabel}
+                  helper={`${companyLimit} companies allowed`}
+                  icon="★"
+                />
+                <BillingMetricCard
+                  label="Renews"
+                  value={fmtDate(renewsAt)}
+                  helper="Current period end"
+                  icon="⏱"
+                />
+                <BillingMetricCard
+                  label="Companies"
+                  value={String(companyLimit)}
+                  helper="Account allowance"
+                  icon="▣"
+                />
+                <BillingMetricCard
+                  label="Read-only"
+                  value={featureReadOnly ? "Yes" : "No"}
+                  helper="Desktop mode"
+                  icon="✓"
+                />
               </div>
-              <Chip
-                tone={
-                  heroTone === "success"
-                    ? "success"
-                    : heroTone === "brand"
-                    ? "brand"
-                    : "neutral"
-                }
-              >
-                <span className={cx("h-2 w-2 rounded-full", heroDot)} />
-                {heroStatusLabel}
-              </Chip>
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <KpiCard label="Plan" value={planLabel} icon="★" />
-              <KpiCard label="Renews" value={fmtDate(renewsAt)} icon="⏱" />
-              <KpiCard label="Companies" value={String(companyLimit)} icon="▣" />
-              <KpiCard label="Read-only" value={featureReadOnly ? "Yes" : "No"} icon="✓" />
-            </div>
-          </PremiumCard>
+            </SectionCard>
+          </Stagger>
 
           {/* MAIN GRID */}
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <div className="space-y-6">
-              <PremiumCard className="portal-card-premium">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-950">Current plan details</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Subscription status, renewal and payment verification tools.
-                    </p>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
+            <div className="space-y-4">
+              <Stagger delayMs={120}>
+                <SectionCard
+                  title="Current plan details"
+                  subtitle="Subscription status, renewal and payment verification tools."
+                  action={
+                    <button
+                      onClick={onManagePlan}
+                      disabled={manageLoading}
+                      type="button"
+                      className={BILLING_PILL_BUTTON}
+                    >
+                      {manageLoading ? "Opening..." : "Manage plan"}
+                    </button>
+                  }
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <BillingAccessItem label="Plan" value={planLabel} />
+                    <BillingAccessItem label="Status" value={heroStatusLabel} />
+                    <BillingAccessItem label="Price" value={priceLabelForPaid} />
+                    <BillingAccessItem label="Current period ends" value={fmtDate(renewsAt)} />
+                    <BillingAccessItem label="Grace until" value={fmtDate(graceUntil)} />
+                    <BillingAccessItem label="Companies allowed" value={String(companyLimit)} />
                   </div>
-                  <PortalButton onClick={onManagePlan} isLoading={manageLoading} type="button">
-                    {manageLoading ? "Opening..." : "Manage plan"}
-                  </PortalButton>
-                </div>
 
-                <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <DetailTile label="Plan" value={planLabel} />
-                  <DetailTile label="Status" value={heroStatusLabel} />
-                  <DetailTile label="Price" value={priceLabelForPaid} />
-                  <DetailTile label="Current period ends" value={fmtDate(renewsAt)} />
-                  <DetailTile label="Grace until" value={fmtDate(graceUntil)} />
-                  <DetailTile label="Companies allowed" value={String(companyLimit)} />
-                </div>
-
-                <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-black text-slate-950">Manual payment verification</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        If your plan did not update after checkout, paste the Paystack reference.
-                      </p>
+                  <div className="mt-5 rounded-3xl border border-white/18 bg-slate-950/24 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-black text-white">Manual payment verification</p>
+                        <p className="mt-1 text-xs leading-5 text-white/72">
+                          If your plan did not update after checkout, paste the Paystack reference.
+                        </p>
+                      </div>
+                      <BillingChip>Fallback</BillingChip>
                     </div>
-                    <Chip tone="neutral">Fallback</Chip>
+
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                      <PortalInput
+                        value={manualRef}
+                        onChange={(e) => setManualRef(e.target.value)}
+                        placeholder="e.g. 9t5k9m9d0x / trxref"
+                        className="h-11 bg-white/95"
+                      />
+                      <PortalButton onClick={onManualVerify} isLoading={verifyLoading} variant="secondary" type="button">
+                        {verifyLoading ? "Verifying…" : "Verify"}
+                      </PortalButton>
+                    </div>
+
+                    {manualErr ? <PortalAlert tone="danger" className="mt-3">{manualErr}</PortalAlert> : null}
                   </div>
+                </SectionCard>
+              </Stagger>
 
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <PortalInput
-                      value={manualRef}
-                      onChange={(e) => setManualRef(e.target.value)}
-                      placeholder="e.g. 9t5k9m9d0x / trxref"
-                      className="h-11"
-                    />
-                    <PortalButton onClick={onManualVerify} isLoading={verifyLoading} variant="secondary" type="button">
-                      {verifyLoading ? "Verifying…" : "Verify"}
-                    </PortalButton>
-                  </div>
-
-                  {manualErr ? <PortalAlert tone="danger" className="mt-3">{manualErr}</PortalAlert> : null}
-                </div>
-              </PremiumCard>
-
-              <PremiumCard className="portal-card-premium">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-950">Compare plans</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      The main difference today is company allowance and access level.
-                    </p>
-                  </div>
-                  <Chip tone="neutral">Pricing</Chip>
-                </div>
-
-                <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <Stagger delayMs={170}>
+                <SectionCard
+                  title="Compare plans"
+                  subtitle="The main difference today is company allowance and access level."
+                  action={<BillingChip>Pricing</BillingChip>}
+                >
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                   <PlanCard
                     title="STARTER"
                     price={
@@ -1192,20 +1355,17 @@ export default function BillingPage() {
                       { ok: true, label: "Priority support" },
                     ]}
                   />
-                </div>
-              </PremiumCard>
-
-              <PremiumCard className="portal-card-premium">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-950">Questions customers may ask</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Short answers for payment and subscription concerns.
-                    </p>
                   </div>
-                  <Chip tone="neutral">FAQ</Chip>
-                </div>
-                <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                </SectionCard>
+              </Stagger>
+
+              <Stagger delayMs={220}>
+                <SectionCard
+                  title="Questions customers may ask"
+                  subtitle="Short answers for payment and subscription concerns."
+                  action={<BillingChip>FAQ</BillingChip>}
+                >
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                   <Faq
                     q="Do you store my card details?"
                     a="No. Paystack stores and secures payment methods. eKasiBooks only stores your subscription status."
@@ -1218,50 +1378,50 @@ export default function BillingPage() {
                     q="Can I cancel?"
                     a="Yes. Click “Manage plan” — you can cancel anytime from the secure Paystack portal."
                   />
-                </div>
-              </PremiumCard>
+                  </div>
+                </SectionCard>
+              </Stagger>
             </div>
 
-            <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-              <PremiumCard tone="soft" className="portal-card-premium">
+            <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+              <PremiumCard tone="dark" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-950">Payment method</h3>
-                    <p className="mt-1 text-sm text-slate-600">Handled securely by Paystack.</p>
+                    <h3 className="text-lg font-black text-white">Payment method</h3>
+                    <p className="mt-1 text-sm text-slate-200/85">Handled securely by Paystack.</p>
                   </div>
-                  <Chip tone="success">
+                  <BillingChip tone="success">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     Secure
-                  </Chip>
+                  </BillingChip>
                 </div>
 
-                <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-4">
-                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">
+                <div className="mt-4 rounded-2xl border border-white/10 bg-white/10 p-4 ring-1 ring-white/10">
+                  <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-300">
                     Card security
                   </p>
-                  <p className="mt-2 text-base font-black text-slate-950">Stored on Paystack</p>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="mt-2 text-base font-black text-white">Stored on Paystack</p>
+                  <p className="mt-1 text-sm text-slate-200/85">
                     We do not store card details in the portal.
                   </p>
                 </div>
 
-                <PortalButton
+                <button
                   onClick={onManagePlan}
-                  isLoading={manageLoading}
-                  variant="secondary"
-                  className="mt-5 w-full"
+                  disabled={manageLoading}
+                  className={`${BILLING_PILL_BUTTON} mt-4 w-full`}
                   title="Manage subscription on Paystack"
                   type="button"
                 >
                   {manageLoading ? "Opening..." : "Manage payment method"}
-                </PortalButton>
+                </button>
               </PremiumCard>
 
-              <PremiumCard tone="soft" className="portal-card-premium">
+              <PremiumCard tone="glass" className="portal-card-premium">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-slate-950">Entitlement snapshot</h3>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <h3 className="text-lg font-black text-white">Entitlement snapshot</h3>
+                    <p className="mt-1 text-sm text-slate-200/85">
                       Technical view used when debugging desktop access.
                     </p>
                   </div>
@@ -1271,18 +1431,18 @@ export default function BillingPage() {
                 <button
                   type="button"
                   onClick={() => setShowSnapshot((v) => !v)}
-                  className="mt-5 flex w-full items-center justify-between rounded-3xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-black text-slate-800 transition hover:border-teal-200 hover:bg-teal-50/60 focus:outline-none focus:ring-2 focus:ring-teal-300"
+                  className="mt-4 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-4 py-2.5 text-left text-sm font-black text-white transition hover:border-white/20 hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-teal-300"
                 >
                   <span>{showSnapshot ? "Hide technical snapshot" : "Show technical snapshot"}</span>
                   <span>{showSnapshot ? "↑" : "↓"}</span>
                 </button>
 
                 {showSnapshot ? (
-                  <pre className="mt-4 max-h-[260px] overflow-auto rounded-2xl bg-slate-950 p-4 text-[12px] text-slate-100 ring-1 ring-slate-800">
+                  <pre className="mt-3 max-h-[240px] overflow-auto rounded-2xl bg-slate-950/90 p-3 text-[12px] text-slate-100 ring-1 ring-white/10">
                     {safeJson(entitlementSnapshot)}
                   </pre>
                 ) : (
-                  <p className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                  <p className="mt-3 rounded-2xl border border-white/10 bg-white/10 p-3 text-sm text-slate-200">
                     Hidden by default so billing stays focused. Open this only when debugging sync or entitlement issues.
                   </p>
                 )}
@@ -1303,12 +1463,12 @@ function Feature({ ok, label }: { ok: boolean; label: string }) {
       <span
         className={cx(
           "inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold",
-          ok ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
+          ok ? "bg-emerald-400/18 text-emerald-50 ring-1 ring-emerald-100/18" : "bg-white/10 text-white/40"
         )}
       >
         {ok ? "✓" : "—"}
       </span>
-      <span className={ok ? "" : "text-slate-400"}>{label}</span>
+      <span className={ok ? "" : "text-white/40"}>{label}</span>
     </li>
   );
 }
@@ -1325,11 +1485,11 @@ function PlanCard({
   active?: boolean;
 }) {
   return (
-    <div className="relative overflow-visible rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="relative overflow-visible rounded-2xl border border-white/16 bg-slate-950/18 p-3.5 shadow-[0_12px_34px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-900">{title}</div>
-          <div className="mt-1 text-xs text-slate-500">{price}</div>
+          <div className="text-sm font-black text-white">{title}</div>
+          <div className="mt-1 text-xs font-semibold text-white/72">{price}</div>
         </div>
         {active ? (
           <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
@@ -1338,7 +1498,7 @@ function PlanCard({
         ) : null}
       </div>
 
-      <ul className="mt-4 space-y-2 text-sm text-slate-700">
+      <ul className="mt-3 space-y-1.5 text-sm text-white/76">
         {items.map((it) => (
           <Feature key={it.label} ok={it.ok} label={it.label} />
         ))}
@@ -1349,9 +1509,9 @@ function PlanCard({
 
 function Faq({ q, a }: { q: string; a: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="text-sm font-semibold text-slate-900">{q}</div>
-      <div className="mt-1 text-sm text-slate-600">{a}</div>
+    <div className="rounded-2xl border border-white/16 bg-slate-950/18 p-3.5 shadow-[0_12px_34px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur">
+      <div className="text-sm font-black text-white">{q}</div>
+      <div className="mt-1 text-sm leading-6 text-white/72">{a}</div>
     </div>
   );
 }
@@ -1360,11 +1520,11 @@ function Faq({ q, a }: { q: string; a: string }) {
 
 function BillingSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-white p-4 shadow-[0_18px_60px_rgba(15,23,42,0.08)] ring-1 ring-slate-200">
         <PortalSkeleton className="h-5 w-52" />
         <PortalSkeleton className="mt-3 h-4 w-80" />
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <PortalSkeleton className="h-16 rounded-3xl" />
           <PortalSkeleton className="h-16 rounded-3xl" />
           <PortalSkeleton className="h-16 rounded-3xl" />

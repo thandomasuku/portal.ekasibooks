@@ -373,10 +373,10 @@ export default function LoginClient() {
                   <p className="inline-flex rounded-full bg-white/12 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-50 ring-1 ring-white/15">
                     Business access workspace
                   </p>
-                  <h1 className="mt-5 text-4xl font-black leading-[0.98] tracking-[-0.045em] text-white sm:text-5xl lg:text-[4.4rem]">
+                  <h1 className="mt-4 max-w-[520px] text-3xl font-black leading-[1.08] tracking-[-0.03em] text-white sm:text-[2.55rem] lg:text-[2.95rem]">
                     Manage your business access.
                   </h1>
-                  <p className="mt-6 max-w-xl text-base font-medium leading-8 text-white/76 sm:text-lg">
+                  <p className="mt-4 max-w-[500px] text-sm font-medium leading-6 text-white/76 sm:text-[0.98rem]">
                     Sign in to manage subscriptions, downloads, cloud sync and account security from one controlled portal.
                   </p>
                 </div>

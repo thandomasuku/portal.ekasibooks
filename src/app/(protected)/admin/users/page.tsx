@@ -11,15 +11,23 @@ function fmtDate(value?: Date | string | null) {
   return d.toLocaleString("en-ZA");
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
 function badge(text: string, tone: "good" | "warn" | "muted" = "muted") {
   const classes =
     tone === "good"
-      ? "border-emerald-300 bg-emerald-100 text-emerald-900"
+      ? "border-teal-200/30 bg-teal-300/15 text-teal-50"
       : tone === "warn"
-        ? "border-amber-300 bg-amber-100 text-amber-900"
-        : "border-slate-300 bg-slate-100 text-slate-800";
+        ? "border-amber-200/35 bg-amber-300/15 text-amber-50"
+        : "border-white/15 bg-white/10 text-white/78";
 
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${classes}`}>{text}</span>;
+  return (
+    <span className={cx("inline-flex rounded-full border px-2.5 py-1 text-xs font-black", classes)}>
+      {text}
+    </span>
+  );
 }
 
 export default async function AdminUsersPage({
@@ -62,87 +70,104 @@ export default async function AdminUsersPage({
   });
 
   return (
-    <section className="rounded-3xl border border-slate-300 bg-white p-5 shadow-[0_18px_42px_rgba(15,23,42,0.10)] ring-1 ring-white sm:p-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#0f766e]">Admin</p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">Users</h2>
-          <p className="mt-1 text-sm font-medium text-slate-700">
-            Read-only overview of portal users, subscriptions and desktop activity.
-          </p>
+    <section className="relative overflow-hidden rounded-3xl border border-white/15 bg-[linear-gradient(135deg,rgba(7,53,64,0.94),rgba(16,116,115,0.78))] p-5 text-white shadow-[0_24px_70px_rgba(7,53,64,0.22)] ring-1 ring-white/10 sm:p-6">
+      <div className="pointer-events-none absolute -left-24 -top-32 h-80 w-80 rounded-[5rem] bg-[#062f3a]/70 blur-sm" />
+      <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-[5rem] bg-white/10 blur-sm" />
+
+      <div className="relative">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-200/35 bg-teal-300/15 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-teal-50 shadow-sm backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-[#14b8a6] shadow-[0_0_0_4px_rgba(20,184,166,0.16)]" />
+              Admin
+            </div>
+
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-white">Users</h2>
+            <p className="mt-1 text-sm font-semibold leading-6 text-white/72">
+              Read-only overview of portal users, subscriptions and desktop activity.
+            </p>
+          </div>
+
+          <form className="flex w-full gap-2 md:w-auto" action="/admin/users">
+            <input
+              className="min-w-0 flex-1 rounded-2xl border border-white/15 bg-white/95 px-4 py-2.5 text-sm font-bold text-slate-950 shadow-sm outline-none placeholder:text-slate-500 focus:border-teal-200 focus:bg-white focus:ring-4 focus:ring-teal-200/20 md:w-80"
+              name="q"
+              placeholder="Search email, name or company"
+              defaultValue={q}
+            />
+            <button
+              className="rounded-2xl bg-[#0b1220] px-5 py-2.5 text-sm font-black text-white shadow-[0_14px_30px_rgba(11,18,32,0.28)] transition hover:-translate-y-[1px] hover:bg-[#111827]"
+              type="submit"
+            >
+              Search
+            </button>
+          </form>
         </div>
 
-        <form className="flex w-full gap-2 md:w-auto" action="/admin/users">
-          <input
-            className="min-w-0 flex-1 rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm outline-none placeholder:text-slate-500 focus:border-[#14b8a6] focus:bg-white focus:ring-2 focus:ring-teal-100 md:w-80"
-            name="q"
-            placeholder="Search email, name or company"
-            defaultValue={q}
-          />
-          <button
-            className="rounded-full bg-[#1F3147] px-5 py-2 text-sm font-black text-white shadow-[0_12px_24px_rgba(31,49,71,0.18)] transition hover:-translate-y-[1px] hover:bg-[#2b405c]"
-            type="submit"
-          >
-            Search
-          </button>
-        </form>
-      </div>
-
-      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-300 shadow-sm">
-        <table className="w-full min-w-[1100px] text-left text-sm">
-          <thead className="border-b border-slate-300 bg-slate-100 text-xs uppercase tracking-wide text-slate-700">
-            <tr>
-              <th className="px-4 py-3 font-black">User</th>
-              <th className="px-4 py-3 font-black">Role</th>
-              <th className="px-4 py-3 font-black">Verified</th>
-              <th className="px-4 py-3 font-black">Entitlement</th>
-              <th className="px-4 py-3 font-black">Subscription</th>
-              <th className="px-4 py-3 font-black">Desktop</th>
-              <th className="px-4 py-3 font-black">Last login</th>
-              <th className="px-4 py-3 font-black">Companies</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-300 bg-white">
-            {users.length === 0 ? (
-              <tr>
-                <td className="px-4 py-8 text-center text-sm font-semibold text-slate-700" colSpan={8}>
-                  No users found.
-                </td>
-              </tr>
-            ) : (
-              users.map((user) => (
-                <tr key={user.id} className="transition hover:bg-teal-50/70">
-                  <td className="px-4 py-3">
-                    <Link className="font-black text-[#0f766e] hover:text-[#115e59]" href={`/admin/users/${user.id}`}>
-                      {user.fullName || user.email}
-                    </Link>
-                    <div className="text-xs font-medium text-slate-600">{user.email}</div>
-                    {user.companyName ? <div className="text-xs font-medium text-slate-500">{user.companyName}</div> : null}
-                  </td>
-                  <td className="px-4 py-3">{badge(user.role || "user", user.role === "admin" ? "good" : "muted")}</td>
-                  <td className="px-4 py-3">{user.emailVerifiedAt ? badge("verified", "good") : badge("unverified", "warn")}</td>
-                  <td className="px-4 py-3">
-                    <div className="font-black uppercase text-slate-900">{user.entitlement?.tier ?? "free"}</div>
-                    <div className="text-xs font-medium text-slate-600">{user.entitlement?.status ?? "active"}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-bold text-slate-800">{user.subscription?.status ?? "—"}</div>
-                    <div className="text-xs font-medium text-slate-600">{fmtDate(user.subscription?.currentPeriodEnd)}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-bold text-slate-800">{user.lastDesktopVersion ?? "—"}</div>
-                    <div className="text-xs font-medium text-slate-600">
-                      {[user.lastDesktopPlatform, user.lastDesktopArch].filter(Boolean).join(" ") || "—"}
-                    </div>
-                    <div className="text-xs font-medium text-slate-600">{fmtDate(user.lastDesktopSeenAt)}</div>
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">{fmtDate(user.lastLoginAt)}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">{user._count.companies}</td>
+        <div className="mt-5 overflow-hidden rounded-2xl border border-white/15 bg-[#073540]/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-left text-sm">
+              <thead className="border-b border-white/10 bg-white/10 text-xs uppercase tracking-[0.16em] text-white/68">
+                <tr>
+                  <th className="px-4 py-3 font-black">User</th>
+                  <th className="px-4 py-3 font-black">Role</th>
+                  <th className="px-4 py-3 font-black">Verified</th>
+                  <th className="px-4 py-3 font-black">Entitlement</th>
+                  <th className="px-4 py-3 font-black">Subscription</th>
+                  <th className="px-4 py-3 font-black">Desktop</th>
+                  <th className="px-4 py-3 font-black">Last login</th>
+                  <th className="px-4 py-3 font-black">Companies</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {users.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-sm font-bold text-white/70" colSpan={8}>
+                      No users found.
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((user) => (
+                    <tr key={user.id} className="transition hover:bg-white/8">
+                      <td className="px-4 py-3">
+                        <Link className="font-black text-white hover:text-teal-100" href={`/admin/users/${user.id}`}>
+                          {user.fullName || user.email}
+                        </Link>
+                        <div className="mt-0.5 text-xs font-semibold text-white/55">{user.email}</div>
+                        {user.companyName ? (
+                          <div className="mt-0.5 text-xs font-semibold text-white/45">{user.companyName}</div>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">{badge(user.role || "user", user.role === "admin" ? "good" : "muted")}</td>
+                      <td className="px-4 py-3">
+                        {user.emailVerifiedAt ? badge("verified", "good") : badge("unverified", "warn")}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-black uppercase text-white">{user.entitlement?.tier ?? "free"}</div>
+                        <div className="text-xs font-semibold text-white/55">{user.entitlement?.status ?? "active"}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-white/78">{user.subscription?.status ?? "—"}</div>
+                        <div className="text-xs font-semibold text-white/50">
+                          {fmtDate(user.subscription?.currentPeriodEnd)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-white/78">{user.lastDesktopVersion ?? "—"}</div>
+                        <div className="text-xs font-semibold text-white/50">
+                          {[user.lastDesktopPlatform, user.lastDesktopArch].filter(Boolean).join(" ") || "—"}
+                        </div>
+                        <div className="text-xs font-semibold text-white/50">{fmtDate(user.lastDesktopSeenAt)}</div>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-white/78">{fmtDate(user.lastLoginAt)}</td>
+                      <td className="px-4 py-3 font-bold text-white/78">{user._count.companies}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
   );

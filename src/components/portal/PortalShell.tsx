@@ -301,11 +301,37 @@ export function PortalShell({
   }
 
   // Shared sidebar look
-  const SIDEBAR_BG = "#1f3147"; // eKasiBooks navy
-  const SIDEBAR_DIV = "rgba(255,255,255,0.08)";
+  const SIDEBAR_BG =
+    "linear-gradient(180deg, #071f2b 0%, #0b3340 48%, #102c45 100%)"; // eKasiBooks premium navy/teal
+  const SIDEBAR_DIV = "rgba(255,255,255,0.10)";
 
   return (
-    <div className={cx("min-h-screen w-full bg-[#eef4f8]", compact && "portal-compact")}>
+    <div
+      className={cx("relative h-screen w-full overflow-hidden bg-[#eaf3f5]", compact && "portal-compact")}
+      style={{
+        background:
+          "radial-gradient(circle at 88% 5%, rgba(20,184,166,0.16), transparent 28%), radial-gradient(circle at 30% 100%, rgba(15,118,110,0.10), transparent 32%), linear-gradient(135deg, #eef7f8 0%, #f8fbfd 46%, #edf6f7 100%)",
+      }}
+    >
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -left-28 -top-36 h-[520px] w-[520px] rounded-[80px]"
+          style={{
+            transform: "rotate(-35deg)",
+            background: "linear-gradient(135deg, rgba(6,49,61,0.96), rgba(7,81,91,0.92))",
+            boxShadow: "0 36px 90px rgba(6,49,61,0.18)",
+          }}
+        />
+        <div
+          className="absolute -right-40 top-10 h-[420px] w-[420px] rounded-full blur-3xl"
+          style={{ background: "rgba(20,184,166,0.16)" }}
+        />
+        <div
+          className="absolute bottom-[-180px] left-[34%] h-[420px] w-[620px] rounded-full blur-3xl"
+          style={{ background: "rgba(15,118,110,0.08)" }}
+        />
+      </div>
+
       {/* Mobile top bar */}
       <div className="fixed left-0 top-0 z-30 w-full border-b border-slate-200/70 bg-white/70 backdrop-blur lg:hidden">
         <div className="flex w-full items-center justify-between px-3 py-2">
@@ -327,14 +353,15 @@ export function PortalShell({
       </div>
 
       {/* 2-column shell */}
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[240px_1fr]">
+      <div className="relative z-10 grid h-screen w-full grid-cols-1 lg:grid-cols-[240px_1fr]">
         {/* Desktop sidebar */}
         <aside
-          className="sticky top-0 hidden h-screen text-white lg:block"
+          className="sticky top-0 z-20 hidden h-screen text-white lg:block"
           aria-label="Portal navigation"
           style={{
             background: SIDEBAR_BG,
             borderRight: `1px solid ${SIDEBAR_DIV}`,
+            boxShadow: "24px 0 80px rgba(6,49,61,0.14)",
           }}
         >
           <div className="flex h-full flex-col">
@@ -357,18 +384,10 @@ export function PortalShell({
             </div>
 
             {/* Identity */}
-            <div className="px-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-[12px] font-semibold">
-                  {initials}
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] font-semibold text-white/90">{resolvedName}</div>
-                  <div className="truncate text-[12px] text-white/60">{resolvedEmail}</div>
-                </div>
-              </div>
+            <div className="px-4 pb-4 text-center">
+              <div className="truncate text-[13px] font-semibold text-white/80">{resolvedEmail}</div>
 
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-semibold text-white/80">
+              <div className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-semibold text-white/80">
                 <span className="h-2 w-2 rounded-full" style={{ background: "var(--primary)" }} />
                 {plan}
               </div>
@@ -459,18 +478,10 @@ export function PortalShell({
                 <div className="mt-4 h-px" style={{ background: SIDEBAR_DIV }} />
 
                 {/* Identity */}
-                <div className="mt-4">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-[12px] font-semibold">
-                      {initials}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-semibold text-white/90">{resolvedName}</div>
-                      <div className="truncate text-[12px] text-white/60">{resolvedEmail}</div>
-                    </div>
-                  </div>
+                <div className="mt-4 text-center">
+                  <div className="truncate text-[13px] font-semibold text-white/80">{resolvedEmail}</div>
 
-                  <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-semibold text-white/80">
+                  <div className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-semibold text-white/80">
                     <span className="h-2 w-2 rounded-full" style={{ background: "var(--primary)" }} />
                     {plan}
                   </div>
@@ -532,8 +543,8 @@ export function PortalShell({
         {/* Right column: AidFlow-style normal browser scroll */}
         <main
           className={cx(
-            "min-h-screen min-w-0",
-            "pb-6 pt-[var(--portal-mobile-top)] lg:pt-0"
+            "flex h-screen min-w-0 flex-col overflow-hidden",
+            "pt-[var(--portal-mobile-top)] lg:pt-0"
           )}
           style={
             {
@@ -541,11 +552,11 @@ export function PortalShell({
             } as CSSProperties
           }
         >
-          {/* Shared sticky page title/header. It starts at top:0 so it does not slide into place. */}
-          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-[#f8fbfd]/92 px-3 py-2 shadow-[0_10px_28px_rgba(15,23,42,0.04)] backdrop-blur-xl lg:px-10">
+          {/* Shared page title/header. It remains fixed while the page content scrolls below it. */}
+          <header className="relative z-30 flex-none border-b border-white/70 bg-white/72 px-3 py-3 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-2xl lg:px-10">
             <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-900 shadow-sm ring-1 ring-teal-900/10">
                   <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--primary)" }} />
                   {badge}
                 </div>
@@ -565,8 +576,12 @@ export function PortalShell({
             </div>
           </header>
 
-          <div className="mx-auto w-full max-w-[1600px] px-3 pt-4 lg:px-10">
-            {children}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
+            <div className="mx-auto w-full max-w-[1600px] px-3 pt-5 lg:px-10">
+              <div className="relative">
+                {children}
+              </div>
+            </div>
           </div>
         </main>
       </div>

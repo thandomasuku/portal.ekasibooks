@@ -55,7 +55,7 @@
   --glow: 0 0 0 6px color-mix(in srgb, var(--primary) 16%, transparent);
 
   /* ✅ Sidebar tokens (FLAT, modern) */
-  --sidebar-bg-1: #0b1220; /* flat background */
+  --sidebar-bg-1: #071f2a; /* flat background */
   --sidebar-text: rgba(255, 255, 255, 0.72);
   --sidebar-text-strong: rgba(255, 255, 255, 0.92);
   --sidebar-divider: rgba(255, 255, 255, 0.10);
@@ -77,11 +77,11 @@
 
   /* ✅ Portal compact tokens */
   --portal-card-radius: 16px;
-  --portal-card-pad: 18px;
-  --portal-kpi-height: 64px;
+  --portal-card-pad: 16px;
+  --portal-kpi-height: 58px;
   --portal-body: 14px;
   --portal-small: 12px;
-  --portal-h1: 22px;
+  --portal-h1: 21px;
 }
 
 /* Tailwind theme mapping */
@@ -398,22 +398,45 @@ a:hover {
 }
 
 .portal-compact .p-8 {
-  padding: 24px !important;
+  padding: 20px !important;
 }
 
 .portal-compact .p-6 {
   padding: var(--portal-card-pad) !important;
 }
 
+
+.portal-compact .p-5 {
+  padding: 16px !important;
+}
+
+.portal-compact .px-6 {
+  padding-left: 18px !important;
+  padding-right: 18px !important;
+}
+
+.portal-compact .py-6 {
+  padding-top: 18px !important;
+  padding-bottom: 18px !important;
+}
+
+.portal-compact .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 16px !important;
+}
+
+.portal-compact .gap-5 {
+  gap: 16px !important;
+}
+
 /* Buttons / rows */
 .portal-compact .py-3 {
-  padding-top: 11px !important;
-  padding-bottom: 11px !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
 }
 
 .portal-compact .py-2\.5 {
-  padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
 }
 
 .portal-compact .h-20 {
@@ -421,15 +444,15 @@ a:hover {
 }
 
 .portal-compact .space-y-6 > :not([hidden]) ~ :not([hidden]) {
-  margin-top: 22px !important;
+  margin-top: 18px !important;
 }
 
 .portal-compact .gap-6 {
-  gap: 22px !important;
+  gap: 18px !important;
 }
 
 .portal-compact .gap-4 {
-  gap: 16px !important;
+  gap: 14px !important;
 }
 
 .portal-compact :focus-visible {

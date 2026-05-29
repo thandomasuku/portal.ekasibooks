@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   PremiumCard,
-  Chip,
   PortalButton,
   PortalEmptyState,
   PortalSkeleton,
@@ -93,7 +92,9 @@ function parseDateMs(iso?: string | null) {
 }
 
 function normalizeStatus(raw?: string | null) {
-  return String(raw ?? "").trim().toLowerCase();
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function statusFromEntitlement(ent: any) {
@@ -113,7 +114,8 @@ function statusFromEntitlement(ent: any) {
       tone: "neutral" as const,
       dot: "bg-slate-400",
       hint: "Limited access. Trial limits apply in the desktop app.",
-      summary: "You are currently on the FREE plan. Upgrade when you are ready for cloud sync and higher limits.",
+      summary:
+        "You are currently on the FREE plan. Upgrade when you are ready for cloud sync and higher limits.",
       countdownTargetMs: Number.NaN,
       countdownLabel: null as string | null,
       isBillingProblem: false,
@@ -126,7 +128,8 @@ function statusFromEntitlement(ent: any) {
       tone: "neutral" as const,
       dot: "bg-amber-500",
       hint: "Your subscription is not active or is blocked. Desktop will be read-only.",
-      summary: "Your portal can still be viewed, but desktop access may be restricted until billing is resolved.",
+      summary:
+        "Your portal can still be viewed, but desktop access may be restricted until billing is resolved.",
       countdownTargetMs: Number.NaN,
       countdownLabel: null as string | null,
       isBillingProblem: true,
@@ -139,35 +142,47 @@ function statusFromEntitlement(ent: any) {
       tone: "brand" as const,
       dot: "bg-amber-500",
       hint: "You’re in grace. Access remains enabled until grace ends.",
-      summary: "Your account is still usable during the grace period. Please confirm billing before grace ends.",
+      summary:
+        "Your account is still usable during the grace period. Please confirm billing before grace ends.",
       countdownTargetMs: graceUntilMs,
       countdownLabel: "Grace ends in",
       isBillingProblem: true,
     };
   }
 
-  const isActiveish = statusRaw === "active" || statusRaw === "trialing" || statusRaw === "trial";
+  const isActiveish =
+    statusRaw === "active" || statusRaw === "trialing" || statusRaw === "trial";
   if (isActiveish) {
     return {
       label: "ACTIVE",
       tone: "success" as const,
       dot: "bg-emerald-500",
       hint: "Subscription active. Full access enabled.",
-      summary: "Your portal, desktop entitlement and cloud-enabled features are in good standing.",
-      countdownTargetMs: Number.isFinite(periodEndMs) ? periodEndMs : Number.NaN,
+      summary:
+        "Your portal, desktop entitlement and cloud-enabled features are in good standing.",
+      countdownTargetMs: Number.isFinite(periodEndMs)
+        ? periodEndMs
+        : Number.NaN,
       countdownLabel: Number.isFinite(periodEndMs) ? "Renews in" : null,
       isBillingProblem: false,
     };
   }
 
-  const isProblem = ["past_due", "canceled", "cancelled", "blocked", "unpaid"].includes(statusRaw);
+  const isProblem = [
+    "past_due",
+    "canceled",
+    "cancelled",
+    "blocked",
+    "unpaid",
+  ].includes(statusRaw);
 
   return {
     label: (statusRaw || "UNKNOWN").toUpperCase(),
     tone: "neutral" as const,
     dot: isProblem ? "bg-amber-500" : "bg-slate-400",
     hint: "Status reported by billing system.",
-    summary: "This account status comes from the billing system. Refresh if you recently made a payment.",
+    summary:
+      "This account status comes from the billing system. Refresh if you recently made a payment.",
     countdownTargetMs: Number.NaN,
     countdownLabel: null as string | null,
     isBillingProblem: isProblem,
@@ -191,14 +206,16 @@ function usePortalEntitlement(enabled: boolean, refreshKey: number) {
     fetch("/api/entitlement", { cache: "no-store", credentials: "include" })
       .then(async (r) => {
         const data = await r.json().catch(() => null);
-        if (!r.ok) throw new Error(data?.error || data?.message || `HTTP ${r.status}`);
+        if (!r.ok)
+          throw new Error(data?.error || data?.message || `HTTP ${r.status}`);
         return data as Entitlement;
       })
       .then((data) => {
         if (!cancelled) setEntitlement(data);
       })
       .catch((e: any) => {
-        if (!cancelled) setError(String(e?.message || "Failed to load entitlement"));
+        if (!cancelled)
+          setError(String(e?.message || "Failed to load entitlement"));
       });
 
     return () => {
@@ -213,11 +230,28 @@ function usePortalEntitlement(enabled: boolean, refreshKey: number) {
    Billing CTA rules
    ========================= */
 
-function billingCta(planUpper: string, status: ReturnType<typeof statusFromEntitlement>) {
+function billingCta(
+  planUpper: string,
+  status: ReturnType<typeof statusFromEntitlement>,
+) {
   const isFree = planUpper === "FREE";
-  if (isFree) return { label: "View plans", subtitle: "See Starter, Growth and Pro", href: "/billing" };
-  if (status.isBillingProblem) return { label: "Fix billing", subtitle: "Resolve payment to restore access", href: "/billing" };
-  return { label: "Manage plan", subtitle: "Payments, receipts & subscription", href: "/billing" };
+  if (isFree)
+    return {
+      label: "View plans",
+      subtitle: "See Starter, Growth and Pro",
+      href: "/billing",
+    };
+  if (status.isBillingProblem)
+    return {
+      label: "Fix billing",
+      subtitle: "Resolve payment to restore access",
+      href: "/billing",
+    };
+  return {
+    label: "Manage plan",
+    subtitle: "Payments, receipts & subscription",
+    href: "/billing",
+  };
 }
 
 function Stagger({
@@ -230,13 +264,22 @@ function Stagger({
   className?: string;
 }) {
   return (
-    <div className={cx("ek-enter", className)} style={{ animationDelay: `${Math.max(0, delayMs)}ms` }}>
+    <div
+      className={cx("ek-enter", className)}
+      style={{ animationDelay: `${Math.max(0, delayMs)}ms` }}
+    >
       {children}
     </div>
   );
 }
 
-function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+function CopyButton({
+  text,
+  label = "Copy",
+}: {
+  text: string;
+  label?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function onCopy() {
@@ -256,6 +299,33 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
   );
 }
 
+
+function DashboardChip({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "brand" | "success";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-200/45 bg-emerald-400/16 text-emerald-50 ring-emerald-100/18"
+      : tone === "brand"
+        ? "border-amber-200/45 bg-amber-300/16 text-amber-50 ring-amber-100/18"
+        : "border-white/24 bg-white/12 text-teal-50 ring-white/12";
+
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold leading-none shadow-sm ring-1 backdrop-blur",
+        toneClass,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -269,7 +339,10 @@ export default function DashboardPage() {
 
   const [entRefreshKey, setEntRefreshKey] = useState(0);
   const [showSnapshot, setShowSnapshot] = useState(false);
-  const { entitlement, entitlementError } = usePortalEntitlement(state === "ready", entRefreshKey);
+  const { entitlement, entitlementError } = usePortalEntitlement(
+    state === "ready",
+    entRefreshKey,
+  );
 
   const subtitle =
     state === "ready"
@@ -277,15 +350,20 @@ export default function DashboardPage() {
         ? `Session ok, but entitlement failed: ${entitlementError}`
         : "Manage access, billing, downloads and account security."
       : state === "unauth"
-      ? "Your session has expired."
-      : state === "error"
-      ? "We couldn’t confirm your session."
-      : "Preparing your workspace...";
+        ? "Your session has expired."
+        : state === "error"
+          ? "We couldn’t confirm your session."
+          : "Preparing your workspace...";
 
   const planUpper = normalizePlan(entitlement?.plan);
-  const name = user?.email ? capitalizeWords(displayNameFromEmail(user.email) ?? "") : null;
+  const name = user?.email
+    ? capitalizeWords(displayNameFromEmail(user.email) ?? "")
+    : null;
 
-  const status = useMemo(() => statusFromEntitlement(entitlement), [entitlement]);
+  const status = useMemo(
+    () => statusFromEntitlement(entitlement),
+    [entitlement],
+  );
   const cta = useMemo(() => billingCta(planUpper, status), [planUpper, status]);
 
   const countdown = useMemo(() => {
@@ -310,8 +388,8 @@ export default function DashboardPage() {
     countdown && status.countdownLabel
       ? `${status.countdownLabel} ${countdown}`
       : entitlement?.currentPeriodEnd
-      ? `Renews ${fmtDate(entitlement.currentPeriodEnd)}`
-      : "No renewal date available";
+        ? `Renews ${fmtDate(entitlement.currentPeriodEnd)}`
+        : "No renewal date available";
 
   return (
     <>
@@ -322,7 +400,9 @@ export default function DashboardPage() {
           title="Please log in to continue"
           body="Your session isn’t active. Log in again to access your portal."
           primaryLabel="Go to login"
-          onPrimary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
+          onPrimary={() =>
+            router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+          }
           secondaryLabel="Back to home"
           onSecondary={() => router.push("/")}
         />
@@ -333,51 +413,76 @@ export default function DashboardPage() {
           primaryLabel="Retry"
           onPrimary={() => refresh()}
           secondaryLabel="Go to login"
-          onSecondary={() => router.push(`/login?next=${encodeURIComponent(nextUrl)}`)}
+          onSecondary={() =>
+            router.push(`/login?next=${encodeURIComponent(nextUrl)}`)
+          }
         />
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           <Stagger delayMs={0}>
-            <PremiumCard className="overflow-hidden p-0 portal-card-premium">
-              <div className="relative overflow-hidden p-4">
+            <PremiumCard tone="dark" className="overflow-hidden p-0 text-white">
+              <div className="relative overflow-hidden p-5 sm:p-6">
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 opacity-80"
+                  className="pointer-events-none absolute inset-0 opacity-95"
                   style={{
                     background:
-                      "radial-gradient(circle at 0% 0%, rgba(20,184,166,0.14), transparent 32%), radial-gradient(circle at 92% 12%, rgba(15,23,42,0.06), transparent 34%)",
+                      "linear-gradient(135deg, rgba(8,47,73,0.72), rgba(20,88,97,0.44) 46%, rgba(20,184,166,0.12)), radial-gradient(circle at 0% 0%, rgba(94,234,212,0.18), transparent 34%), radial-gradient(circle at 96% 8%, rgba(255,255,255,0.16), transparent 34%)",
                   }}
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-20 -top-28 h-56 w-80 rotate-12 rounded-[3rem] bg-white/10"
                 />
 
                 <div className="relative">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <Chip tone={status.tone}>
-                      <span className={cx("h-1.5 w-1.5 rounded-full", status.dot)} />
+                    <DashboardChip tone={status.tone}>
+                      <span
+                        className={cx("h-1.5 w-1.5 rounded-full", status.dot)}
+                      />
                       {status.label}
-                    </Chip>
-                    <Chip>{planUpper} plan</Chip>
-                    {countdown && status.countdownLabel ? <Chip>{renewalLabel}</Chip> : null}
+                    </DashboardChip>
+                    <DashboardChip>{planUpper} plan</DashboardChip>
+                    {countdown && status.countdownLabel ? (
+                      <DashboardChip>{renewalLabel}</DashboardChip>
+                    ) : null}
                   </div>
 
                   <div className="mt-3 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                     <div>
-                      <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-[color:var(--primary)]">
+                      <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-teal-200">
                         Account status
                       </p>
-                      <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+                      <h2 className="mt-1 text-xl font-black tracking-tight text-white sm:text-2xl">
                         Welcome back{name ? `, ${name}` : ""}.
                       </h2>
-                      <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">{status.summary}</p>
+                      <p className="mt-1 max-w-2xl text-sm leading-5 text-white/76">
+                        {status.summary}
+                      </p>
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
-                      <PortalButton onClick={() => router.push("/downloads")} variant="primary" type="button">
-                        Download desktop app
-                      </PortalButton>
-                      <PortalButton onClick={() => router.push(cta.href)} variant="secondary" title={cta.subtitle} type="button">
+                      <PortalButton
+  onClick={() => router.push("/downloads")}
+  variant="secondary"
+  type="button"
+>
+  Download desktop app
+</PortalButton>
+                      <PortalButton
+                        onClick={() => router.push(cta.href)}
+                        variant="secondary"
+                        title={cta.subtitle}
+                        type="button"
+                      >
                         {cta.label}
                       </PortalButton>
-                      <PortalButton onClick={() => router.push("/settings")} variant="secondary" type="button">
+                      <PortalButton
+                        onClick={() => router.push("/settings")}
+                        variant="secondary"
+                        type="button"
+                      >
                         Profile & security
                       </PortalButton>
                     </div>
@@ -385,8 +490,14 @@ export default function DashboardPage() {
 
                   <div className="mt-4 grid grid-cols-1 gap-2.5 md:grid-cols-3">
                     <HeroFact label="Access" value={status.hint} />
-                    <HeroFact label="Companies" value={`${companyLimit} allowed`} />
-                    <HeroFact label="Desktop work" value="Accounting happens in the desktop app" />
+                    <HeroFact
+                      label="Companies"
+                      value={`${companyLimit} allowed`}
+                    />
+                    <HeroFact
+                      label="Desktop work"
+                      value="Accounting happens in the desktop app"
+                    />
                   </div>
                 </div>
               </div>
@@ -394,12 +505,35 @@ export default function DashboardPage() {
           </Stagger>
 
           <Stagger delayMs={70}>
-            <SectionCard title="Account details" subtitle="A quick summary of this portal user and account state.">
+            <SectionCard
+              title="Account details"
+              subtitle="A quick summary of this portal user and account state."
+            >
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Plan" value={planUpper} helper={`${companyLimit} companies allowed`} icon="★" />
-                <MetricCard label="Email" value={String(user?.email ?? "—")} helper="Portal sign-in address" icon="✉" />
-                <MetricCard label="Created" value={fmtDate((user as any)?.createdAt)} helper="Account creation date" icon="⏱" />
-                <MetricCard label="Last login" value={fmtDate((user as any)?.lastLoginAt)} helper="Most recent portal access" icon="✓" />
+                <MetricCard
+                  label="Plan"
+                  value={planUpper}
+                  helper={`${companyLimit} companies allowed`}
+                  icon="★"
+                />
+                <MetricCard
+                  label="Email"
+                  value={String(user?.email ?? "—")}
+                  helper="Portal sign-in address"
+                  icon="✉"
+                />
+                <MetricCard
+                  label="Created"
+                  value={fmtDate((user as any)?.createdAt)}
+                  helper="Account creation date"
+                  icon="⏱"
+                />
+                <MetricCard
+                  label="Last login"
+                  value={fmtDate((user as any)?.lastLoginAt)}
+                  helper="Most recent portal access"
+                  icon="✓"
+                />
               </div>
             </SectionCard>
           </Stagger>
@@ -411,55 +545,89 @@ export default function DashboardPage() {
                 subtitle="The entitlement your desktop app will apply."
                 action={
                   <div className="flex items-center gap-2">
-                    <Chip tone={status.tone}>
-                      <span className={cx("h-2 w-2 rounded-full", status.dot)} />
+                    <DashboardChip tone={status.tone}>
+                      <span
+                        className={cx("h-2 w-2 rounded-full", status.dot)}
+                      />
                       {status.label}
-                    </Chip>
-                    <CopyButton text={safeJson(entitlementSnapshot)} label="Copy snapshot" />
+                    </DashboardChip>
+                    <CopyButton
+                      text={safeJson(entitlementSnapshot)}
+                      label="Copy snapshot"
+                    />
                   </div>
                 }
               >
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <AccessItem label="Plan" value={planUpper} />
-                  <AccessItem label="Portal status" value={String(entitlement?.status ?? "—")} />
-                  <AccessItem label="Read-only" value={entitlement?.features?.readOnly ? "Yes" : "No"} />
+                  <AccessItem
+                    label="Portal status"
+                    value={String(entitlement?.status ?? "—")}
+                  />
+                  <AccessItem
+                    label="Read-only"
+                    value={entitlement?.features?.readOnly ? "Yes" : "No"}
+                  />
                   <AccessItem label="Companies" value={companyLimit} />
-                  <AccessItem label="Current period ends" value={fmtDate(entitlement?.currentPeriodEnd)} />
-                  <AccessItem label="Grace until" value={fmtDate(entitlement?.graceUntil)} />
+                  <AccessItem
+                    label="Current period ends"
+                    value={fmtDate(entitlement?.currentPeriodEnd)}
+                  />
+                  <AccessItem
+                    label="Grace until"
+                    value={fmtDate(entitlement?.graceUntil)}
+                  />
                 </div>
 
-                <div className="mt-5 rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200/80">
+                <div className="mt-5 rounded-3xl border border-white/18 bg-slate-950/24 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <h4 className="text-sm font-black text-slate-900">
-                        {planUpper === "FREE" ? "Free plan limits" : "Document limits"}
+                      <h4 className="text-sm font-black text-white">
+                        {planUpper === "FREE"
+                          ? "Free plan limits"
+                          : "Document limits"}
                       </h4>
-                      <p className="mt-1 text-xs leading-5 text-slate-600">
+                      <p className="mt-1 text-xs leading-5 text-white/72">
                         {planUpper === "FREE"
                           ? "These limits are enforced in the desktop app until the account is upgraded."
                           : "These values come from the current entitlement and are shown for clarity."}
                       </p>
                     </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">
+                    <span className="rounded-full bg-white/14 px-3 py-1 text-xs font-bold text-white shadow-sm ring-1 ring-white/18">
                       Desktop enforced
                     </span>
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <LimitPill label="Invoices" value={String(entitlement?.features?.limits?.invoice ?? 5)} />
-                    <LimitPill label="Quotes" value={String(entitlement?.features?.limits?.quote ?? 5)} />
-                    <LimitPill label="Purchase orders" value={String(entitlement?.features?.limits?.purchase_order ?? 5)} />
+                    <LimitPill
+                      label="Invoices"
+                      value={String(
+                        entitlement?.features?.limits?.invoice ?? 5,
+                      )}
+                    />
+                    <LimitPill
+                      label="Quotes"
+                      value={String(entitlement?.features?.limits?.quote ?? 5)}
+                    />
+                    <LimitPill
+                      label="Purchase orders"
+                      value={String(
+                        entitlement?.features?.limits?.purchase_order ?? 5,
+                      )}
+                    />
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-3xl border border-slate-200 bg-white">
+                <div className="mt-5 overflow-hidden rounded-3xl border border-white/16 bg-white/10 shadow-[0_12px_36px_rgba(0,0,0,0.12)] ring-1 ring-white/10">
                   <button
                     type="button"
                     onClick={() => setShowSnapshot((v) => !v)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-slate-900 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/60"
                   >
                     <span>Technical entitlement snapshot</span>
-                    <span className="text-xs text-slate-500">{showSnapshot ? "Hide" : "Show"}</span>
+                    <span className="text-xs text-white/72">
+                      {showSnapshot ? "Hide" : "Show"}
+                    </span>
                   </button>
 
                   {showSnapshot ? (
@@ -467,8 +635,9 @@ export default function DashboardPage() {
                       {safeJson(entitlementSnapshot)}
                     </pre>
                   ) : (
-                    <div className="border-t border-slate-200 px-4 py-3 text-xs leading-5 text-slate-500">
-                      Hidden by default so the dashboard stays focused. Use this when debugging entitlement sync.
+                    <div className="border-t border-white/10 px-4 py-3 text-xs leading-5 text-white/72">
+                      Hidden by default so the dashboard stays focused. Use this
+                      when debugging entitlement sync.
                     </div>
                   )}
                 </div>
@@ -476,7 +645,10 @@ export default function DashboardPage() {
             </Stagger>
 
             <Stagger delayMs={170}>
-              <SectionCard title="Quick actions" subtitle="The common portal tasks, grouped in one place.">
+              <SectionCard
+                title="Quick actions"
+                subtitle="The common portal tasks, grouped in one place."
+              >
                 <div className="space-y-2">
                   <ActionRow
                     title="Download eKasiBooks Desktop"
@@ -485,7 +657,13 @@ export default function DashboardPage() {
                     tone="brand"
                     onClick={() => router.push("/downloads")}
                   />
-                  <ActionRow title={cta.label} subtitle={cta.subtitle} icon="⟠" tone="dark" onClick={() => router.push(cta.href)} />
+                  <ActionRow
+                    title={cta.label}
+                    subtitle={cta.subtitle}
+                    icon="⟠"
+                    tone="dark"
+                    onClick={() => router.push(cta.href)}
+                  />
                   <ActionRow
                     title="Profile & security"
                     subtitle="Password, OTP and account details"
@@ -495,13 +673,21 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                <div className="mt-5 rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                  <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Status note</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-700">{status.hint}</p>
+                <div className="mt-5 rounded-3xl border border-white/15 bg-[#073540]/46 p-4 shadow-[0_12px_36px_rgba(0,0,0,0.10)] ring-1 ring-white/10 backdrop-blur">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-teal-50/86">
+                    Status note
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/76">
+                    {status.hint}
+                  </p>
                   {countdown && status.countdownLabel ? (
-                    <div className="mt-3 rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-                      <div className="text-xs font-semibold text-slate-500">{status.countdownLabel}</div>
-                      <div className="mt-1 text-base font-black text-slate-950">{countdown}</div>
+                    <div className="mt-3 rounded-2xl border border-white/14 bg-white/8 p-3 shadow-sm ring-1 ring-white/10">
+                      <div className="text-xs font-semibold text-white/76">
+                        {status.countdownLabel}
+                      </div>
+                      <div className="mt-1 text-base font-black text-white">
+                        {countdown}
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -528,59 +714,104 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <PremiumCard className="portal-card-premium">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <PremiumCard tone="glass" className="relative overflow-hidden p-5 text-white sm:p-6">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-16 -top-20 h-36 w-56 rotate-12 rounded-[2.5rem] bg-white/10"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-200/50 to-transparent"
+      />
+
+      <div className="relative mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-base font-black tracking-tight text-slate-950">{title}</h3>
-          {subtitle ? <p className="mt-1 text-sm leading-6 text-slate-600">{subtitle}</p> : null}
+          <h3 className="text-base font-black tracking-tight text-white">
+            {title}
+          </h3>
+          {subtitle ? (
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-white/76">
+              {subtitle}
+            </p>
+          ) : null}
         </div>
-        {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+        {action ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {action}
+          </div>
+        ) : null}
       </div>
-      {children}
+      <div className="relative">{children}</div>
     </PremiumCard>
   );
 }
 
 function HeroFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white/70 p-2.5 ring-1 ring-slate-200/80 backdrop-blur">
-      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</div>
-      <div className="mt-1 text-[13px] font-semibold leading-5 text-slate-900">{value}</div>
+    <div className="rounded-2xl border border-white/18 bg-slate-950/18 p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)] ring-1 ring-white/10 backdrop-blur">
+      <div className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-50/86">
+        {label}
+      </div>
+      <div className="mt-1 text-[13px] font-semibold leading-5 text-white">
+        {value}
+      </div>
     </div>
   );
 }
 
-function MetricCard({ label, value, helper, icon }: { label: string; value: string; helper?: string; icon: string }) {
+function MetricCard({
+  label,
+  value,
+  helper,
+  icon,
+}: {
+  label: string;
+  value: string;
+  helper?: string;
+  icon: string;
+}) {
   return (
-    <div className="group rounded-3xl bg-slate-50/80 p-4 ring-1 ring-slate-200/80 transition duration-300 hover:-translate-y-[2px] hover:bg-white hover:shadow-[var(--shadow-md)]">
+    <div className="group rounded-3xl border border-white/16 bg-slate-950/18 p-4 shadow-[0_14px_40px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur transition duration-300 hover:-translate-y-[2px] hover:bg-white/16 hover:shadow-[0_20px_55px_rgba(0,0,0,0.16)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">{label}</div>
-          <div className="mt-2 truncate text-base font-black text-slate-950">{value}</div>
+          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-teal-50/86">
+            {label}
+          </div>
+          <div className="mt-2 truncate text-base font-black text-white">
+            {value}
+          </div>
         </div>
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-sm text-slate-600 shadow-sm ring-1 ring-slate-200 transition group-hover:text-[color:var(--primary)]">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/12 text-sm text-teal-50 shadow-sm ring-1 ring-white/15 transition group-hover:bg-white/18">
           {icon}
         </div>
       </div>
-      {helper ? <div className="mt-2 truncate text-xs font-medium text-slate-500">{helper}</div> : null}
+      {helper ? (
+        <div className="mt-2 truncate text-xs font-medium text-white/76">
+          {helper}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function AccessItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl bg-slate-50/80 p-4 ring-1 ring-slate-200/70">
-      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">{label}</div>
-      <div className="mt-2 text-base font-black text-slate-950">{value}</div>
+    <div className="rounded-3xl border border-white/16 bg-slate-950/18 p-4 shadow-[0_12px_34px_rgba(0,0,0,0.12)] ring-1 ring-white/10 backdrop-blur">
+      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-teal-50/86">
+        {label}
+      </div>
+      <div className="mt-2 text-base font-black text-white">{value}</div>
     </div>
   );
 }
 
 function LimitPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
-      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</div>
-      <div className="mt-1 text-base font-black text-slate-950">{value}</div>
+    <div className="rounded-2xl border border-white/16 bg-slate-950/18 p-3 shadow-sm ring-1 ring-white/10">
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-50/86">
+        {label}
+      </div>
+      <div className="mt-1 text-base font-black text-white">{value}</div>
     </div>
   );
 }
@@ -600,42 +831,60 @@ function ActionRow({
 }) {
   const toneClass =
     tone === "brand"
-      ? "text-white"
+      ? "bg-[#0b5f63]/78 text-white ring-teal-200/28 hover:bg-[#0d6f72]/82"
       : tone === "dark"
-      ? "bg-slate-950 text-white hover:bg-slate-900"
-      : tone === "inverted"
-      ? "bg-white/10 text-white hover:bg-white/15 ring-white/15"
-      : "bg-white text-slate-900 hover:bg-slate-50 ring-slate-200";
+        ? "bg-[#073540]/72 text-white ring-white/15 hover:bg-[#0a4550]/76"
+        : tone === "inverted"
+          ? "bg-[#073540]/62 text-white ring-white/15 hover:bg-[#0a4550]/70"
+          : "bg-[#073540]/58 text-white ring-white/15 hover:bg-[#0a4550]/70";
 
   const iconChip =
-    tone === "light"
-      ? "bg-slate-900/5 text-slate-700 ring-slate-200"
-      : tone === "inverted"
-      ? "bg-white/10 text-white ring-white/15"
-      : "bg-white/15 text-white ring-white/20";
+    tone === "brand"
+      ? "bg-teal-300/14 text-teal-50 ring-teal-100/22"
+      : "bg-white/10 text-white ring-white/15";
 
-  const subClass = tone === "light" ? "text-slate-600" : "text-white/78";
-  const arrowClass = tone === "light" ? "text-slate-400" : "text-white/70";
+  const subClass = "text-white/68";
+  const arrowClass = "text-white/62";
 
   return (
     <button
       onClick={onClick}
       className={cx(
-        "group relative w-full overflow-hidden rounded-2xl px-3.5 py-2.5 text-left shadow-sm ring-1 transition-all duration-300 will-change-transform",
+        "group relative w-full overflow-hidden rounded-2xl px-3.5 py-2.5 text-left shadow-[0_12px_34px_rgba(15,23,42,0.08)] ring-1 transition-all duration-300 will-change-transform",
         "hover:-translate-y-[2px] hover:shadow-[var(--shadow-md)] active:translate-y-0",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]",
-        toneClass
+        toneClass,
       )}
-      style={tone === "brand" ? { background: "var(--primary)" } : undefined}
       type="button"
     >
       <div className="relative z-10 flex items-center gap-3">
-        <div className={cx("grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm ring-1", iconChip)}>{icon}</div>
+        <div
+          className={cx(
+            "grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm ring-1",
+            iconChip,
+          )}
+        >
+          {icon}
+        </div>
         <div className="min-w-0">
           <div className="truncate text-[13px] font-black">{title}</div>
-          <div className={cx("mt-0.5 truncate text-[11px] font-semibold", subClass)}>{subtitle}</div>
+          <div
+            className={cx(
+              "mt-0.5 truncate text-[11px] font-semibold",
+              subClass,
+            )}
+          >
+            {subtitle}
+          </div>
         </div>
-        <div className={cx("ml-auto text-lg transition group-hover:translate-x-1", arrowClass)}>→</div>
+        <div
+          className={cx(
+            "ml-auto text-lg transition group-hover:translate-x-1",
+            arrowClass,
+          )}
+        >
+          →
+        </div>
       </div>
 
       <div

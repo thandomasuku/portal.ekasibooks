@@ -22,16 +22,37 @@ export function PremiumCard({
 }: {
   children: React.ReactNode;
   className?: string;
-  tone?: "default" | "brand" | "soft";
+  tone?: "default" | "brand" | "soft" | "glass" | "dark";
 }) {
-  const borderColor = tone === "default" ? "var(--border-soft)" : "var(--border)";
+  const isDarkTone = tone === "dark" || tone === "glass";
+
+  const borderColor =
+    tone === "dark"
+      ? "rgba(255,255,255,0.18)"
+      : tone === "glass"
+      ? "rgba(255,255,255,0.24)"
+      : tone === "default"
+      ? "var(--border-soft)"
+      : "var(--border)";
 
   const background =
-    tone === "brand"
+    tone === "dark"
+      ? "linear-gradient(135deg, rgba(7,50,59,0.98), rgba(21,96,102,0.96) 56%, rgba(33,132,128,0.90))"
+      : tone === "glass"
+      ? "linear-gradient(135deg, rgba(10,74,84,0.78), rgba(34,119,121,0.66))"
+      : tone === "brand"
       ? "linear-gradient(135deg, var(--card), var(--card), color-mix(in srgb, var(--primary) 7%, white))"
       : tone === "soft"
       ? "linear-gradient(180deg, var(--card), color-mix(in srgb, var(--surface) 55%, white))"
       : "var(--card)";
+
+  const idleShadow = isDarkTone
+    ? "0 24px 80px rgba(2, 12, 20, 0.24), inset 0 1px 0 rgba(255,255,255,0.14)"
+    : "var(--shadow-sm)";
+
+  const hoverShadow = isDarkTone
+    ? "0 30px 95px rgba(2, 12, 20, 0.32), inset 0 1px 0 rgba(255,255,255,0.18)"
+    : "var(--shadow-lg)";
 
   return (
     <div
@@ -44,14 +65,16 @@ export function PremiumCard({
       style={{
         borderColor,
         background,
-        boxShadow: "var(--shadow-sm)",
+        boxShadow: idleShadow,
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--shadow-lg)";
-        (e.currentTarget as HTMLDivElement).style.borderColor = "var(--border-hover)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = hoverShadow;
+        (e.currentTarget as HTMLDivElement).style.borderColor = isDarkTone
+          ? "rgba(255,255,255,0.28)"
+          : "var(--border-hover)";
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--shadow-sm)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = idleShadow;
         (e.currentTarget as HTMLDivElement).style.borderColor = borderColor;
       }}
     >
@@ -62,30 +85,38 @@ export function PremiumCard({
           className="absolute -inset-10 opacity-0 transition-opacity duration-300"
           style={{
             transform: "rotate(10deg) translateX(-30%)",
-            background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent)",
+            background: isDarkTone
+              ? "linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent)"
+              : "linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent)",
           }}
         />
         {/* Ambient blobs */}
         <div
           className="absolute -top-16 -right-16 h-44 w-44 rounded-full blur-3xl"
-          style={{ background: "color-mix(in srgb, var(--primary) 14%, transparent)" }}
+          style={{
+            background: isDarkTone
+              ? "rgba(125, 234, 222, 0.22)"
+              : "color-mix(in srgb, var(--primary) 14%, transparent)",
+          }}
         />
         <div
           className="absolute -bottom-20 -left-20 h-44 w-44 rounded-full blur-3xl"
-          style={{ background: "rgba(15,23,42,0.05)" }}
+          style={{ background: isDarkTone ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.05)" }}
         />
 
         {/* Inner highlights */}
         <div
           className="absolute inset-0 rounded-xl"
           style={{
-            boxShadow: "var(--inner-highlight), inset 0 0 0 1px rgba(15,23,42,0.02)",
+            boxShadow: isDarkTone
+              ? "inset 0 1px 0 rgba(255,255,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.04)"
+              : "var(--inner-highlight), inset 0 0 0 1px rgba(15,23,42,0.02)",
           }}
         />
       </div>
 
       {/* Content layer (NOT clipped) */}
-      <div className="relative p-3.5">{children}</div>
+      <div className="relative p-3">{children}</div>
 
       {/* Hover triggers for sheen */}
       <style jsx global>{`
@@ -114,7 +145,7 @@ export function KpiCard({
   return (
     <div
       className={cx(
-        "relative rounded-xl p-3.5 ring-1",
+        "relative rounded-xl p-3 ring-1",
         "transition-all duration-300 will-change-transform",
         "hover:-translate-y-[1px]"
       )}
@@ -150,7 +181,7 @@ export function KpiCard({
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted)]">{label}</div>
-          <div className="mt-1.5 text-sm font-semibold text-[color:var(--foreground)] break-all">{value}</div>
+          <div className="mt-1 text-sm font-semibold text-[color:var(--foreground)] break-all">{value}</div>
           {hint ? <div className="mt-1 text-xs text-[color:var(--muted)]">{hint}</div> : null}
         </div>
 
@@ -294,7 +325,7 @@ export function PortalButton({
 
   const sizes = {
     sm: "px-2.5 py-1.5 text-xs",
-    md: "px-3.5 py-2 text-sm",
+    md: "px-3 py-1.5 text-sm",
   };
 
   const variants = {
@@ -417,7 +448,7 @@ export function PortalSectionHeader({
   className?: string;
 }) {
   return (
-    <div className={cx("flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between", className)}>
+    <div className={cx("flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between", className)}>
       <div className="min-w-0">
         {eyebrow ? (
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--muted)]">
@@ -425,7 +456,7 @@ export function PortalSectionHeader({
           </div>
         ) : null}
         <h2 className="text-base font-semibold tracking-tight text-[color:var(--foreground)]">{title}</h2>
-        {description ? <p className="mt-0.5 max-w-2xl text-sm leading-relaxed text-[color:var(--muted)]">{description}</p> : null}
+        {description ? <p className="mt-0.5 max-w-2xl text-sm leading-snug text-[color:var(--muted)]">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

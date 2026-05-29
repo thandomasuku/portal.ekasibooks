@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import type { ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   PremiumCard,
-  DetailTile,
-  Chip,
   PortalButton,
   PortalInput,
   PortalAlert,
   PortalEmptyState,
   PortalSkeleton,
+  cx,
 } from "@/components/portal/ui";
 import { useSession } from "@/components/portal/session";
 
@@ -55,6 +55,12 @@ function cleanStr(v: any, max: number) {
   const s = String(v ?? "").trim();
   return s ? s.slice(0, max) : "";
 }
+
+const SETTINGS_PILL_BUTTON =
+  "inline-flex items-center justify-center rounded-2xl border border-teal-200/35 bg-teal-50/90 px-4 py-2 text-sm font-black text-teal-900 shadow-sm ring-1 ring-white/20 transition hover:-translate-y-[1px] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/60 disabled:cursor-not-allowed disabled:opacity-60";
+
+const SETTINGS_DARK_BUTTON =
+  "inline-flex items-center justify-center rounded-2xl border border-white/15 bg-[#0b1220] px-4 py-2 text-sm font-black text-white shadow-[0_14px_30px_rgba(11,18,32,0.28)] transition hover:-translate-y-[1px] hover:bg-[#111827] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/60 disabled:cursor-not-allowed disabled:opacity-60";
 
 
 function messageTone(
@@ -393,45 +399,60 @@ export default function SettingsPage() {
             </PortalAlert>
           ) : null}
 
-          {/* Compact settings header */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-            <PremiumCard className="portal-card-premium">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          {/* Settings overview */}
+          <section className="relative overflow-hidden rounded-[24px] border border-white/15 bg-[#0b3f49] p-5 text-white shadow-[0_24px_80px_rgba(15,23,42,0.18)] sm:p-6">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 opacity-95"
+              style={{
+                background:
+                  "radial-gradient(circle at 18% 0%, rgba(255,255,255,0.16), transparent 28%), radial-gradient(circle at 90% 15%, rgba(20,184,166,0.26), transparent 34%), linear-gradient(135deg, rgba(5,39,50,0.95), rgba(22,103,108,0.90))",
+              }}
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-16 -top-20 h-72 w-72 rounded-full bg-[#062834]/75"
+            />
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-10 top-6 h-44 w-72 rotate-12 rounded-[42px] bg-white/10"
+            />
+
+            <div className="relative">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Chip>
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <SettingsChip>
+                      <span className="h-2 w-2 rounded-full bg-[#12d6b2]" />
                       Protected account
-                    </Chip>
-                    {readOnly ? (
-                      <Chip tone="neutral">Read-only</Chip>
-                    ) : (
-                      <Chip tone="success">Editable</Chip>
-                    )}
+                    </SettingsChip>
+                    <SettingsChip>{readOnly ? "Read-only" : "Editable"}</SettingsChip>
+                    <SettingsChip>{planName} plan</SettingsChip>
                   </div>
 
-                  <h2 className="mt-3 text-xl font-semibold tracking-tight text-slate-950">
-                    Settings
+                  <p className="mt-4 text-[11px] font-black uppercase tracking-[0.34em] text-[#9be7dc]">
+                    Account settings
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
+                    Profile & security
                   </h2>
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                    Manage your profile information and security preferences.
-                    Password updates are protected with OTP verification.
+                  <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-white/78">
+                    Manage your profile information and security preferences. Password updates are protected with OTP verification.
                   </p>
 
                   {readOnly ? (
                     <PortalAlert tone="warning" className="mt-4">
-                      Your account is currently read-only. Profile and security
-                      updates are disabled until access is restored.
+                      Your account is currently read-only. Profile and security updates are disabled until access is restored.
                     </PortalAlert>
                   ) : null}
                 </div>
 
-                <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
-                  <PortalButton
+                <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                  <button
                     disabled={!canEditProfile}
                     onClick={openEdit}
                     type="button"
-                    className="justify-center rounded-2xl"
+                    className={SETTINGS_PILL_BUTTON}
                     title={
                       !canEditProfile
                         ? "Your account is read-only or unavailable right now"
@@ -439,14 +460,13 @@ export default function SettingsPage() {
                     }
                   >
                     Edit profile
-                  </PortalButton>
+                  </button>
 
-                  <PortalButton
+                  <button
                     disabled={!canManageSecurity}
                     onClick={openPassword}
-                    variant="secondary"
                     type="button"
-                    className="justify-center rounded-2xl"
+                    className={SETTINGS_DARK_BUTTON}
                     title={
                       !canManageSecurity
                         ? "Your account is read-only or unavailable right now"
@@ -454,204 +474,228 @@ export default function SettingsPage() {
                     }
                   >
                     Change password
-                  </PortalButton>
-                </div>
-              </div>
-            </PremiumCard>
-
-            <PremiumCard className="portal-card-premium">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-950">
-                    Account status
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Quick reference for the signed-in account.
-                  </p>
-                </div>
-                <Chip tone="success">Verified</Chip>
-              </div>
-
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-slate-500">Email</span>
-                  <span className="truncate text-right font-medium text-slate-900">
-                    {String(userEmail)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-slate-500">Plan</span>
-                  <span className="font-medium text-slate-900">{planName}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-slate-500">Last login</span>
-                  <span className="text-right font-medium text-slate-900">
-                    {fmtDate(sessionUser?.lastLoginAt)}
-                  </span>
+                  </button>
                 </div>
               </div>
 
-              <PortalButton
-                onClick={() => router.push("/billing")}
-                variant="secondary"
-                type="button"
-                className="mt-4 w-full justify-center rounded-2xl"
-              >
-                View billing & access
-              </PortalButton>
-            </PremiumCard>
-          </div>
-
-          {/* Main grid */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            {/* Profile */}
-            <PremiumCard className="portal-card-premium">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">
-                    Profile details
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Your basic account information.
-                  </p>
-                </div>
-
-                <Chip tone="success">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Verified
-                </Chip>
-              </div>
-
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <DetailTile label="Email" value={String(userEmail)} />
-                <DetailTile label="Plan" value={planName} />
-                <DetailTile label="Account ID" value={String(userId)} />
-                <DetailTile
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <SettingsMetricCard
+                  label="Email"
+                  value={String(userEmail)}
+                  caption="Signed-in account"
+                  icon="✉"
+                />
+                <SettingsMetricCard
+                  label="Plan"
+                  value={planName}
+                  caption={readOnly ? "Read-only access" : "Active access"}
+                  icon="★"
+                />
+                <SettingsMetricCard
                   label="Last login"
                   value={fmtDate(sessionUser?.lastLoginAt)}
+                  caption="Latest session"
+                  icon="◷"
                 />
-
-                <DetailTile
-                  label="Full name"
-                  value={String(sessionUser?.fullName ?? "—")}
-                />
-                <DetailTile
-                  label="Company"
-                  value={String(sessionUser?.companyName ?? "—")}
-                />
-                <DetailTile
-                  label="Phone"
-                  value={String(sessionUser?.phone ?? "—")}
-                />
-                <DetailTile
-                  label="Created"
-                  value={fmtDate(sessionUser?.createdAt)}
+                <SettingsMetricCard
+                  label="Security"
+                  value="OTP protected"
+                  caption="Password step-up"
+                  icon="✓"
                 />
               </div>
+            </div>
+          </section>
 
-              <div className="mt-5 rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                <p className="text-sm text-slate-700">
-                  You can edit your profile details below. Email changes will be
-                  added later with verification.
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  If your account is read-only, profile updates are disabled.
-                </p>
-              </div>
-
-              <PortalButton
-                disabled={!canEditProfile}
-                onClick={openEdit}
-                variant="secondary"
-                className="mt-5 w-full rounded-2xl"
-                title={
-                  !canEditProfile
-                    ? "Your account is read-only or unavailable right now"
-                    : "Edit your profile"
-                }
-                type="button"
+          {/* Main grid */}
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="space-y-5">
+              {/* Profile */}
+              <SettingsSectionCard
+                eyebrow="Profile"
+                title="Profile details"
+                description="Your basic account information."
+                badge="Verified"
               >
-                Edit profile
-              </PortalButton>
-            </PremiumCard>
-
-            {/* Security */}
-            <PremiumCard className="portal-card-premium">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">
-                    Security
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Password, sessions, and access controls.
-                  </p>
-                </div>
-                <Chip tone="success">Secure</Chip>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                <div className="rounded-2xl bg-slate-50/80 p-4 ring-1 ring-slate-200">
-                  <p className="text-sm text-slate-800">
-                    <span className="font-semibold">
-                      Login methods enabled:
-                    </span>
-                  </p>
-                  <ul className="mt-2 space-y-1 text-xs text-slate-600">
-                    <li>• OTP sign-in (enabled)</li>
-                    <li>
-                      • Email + password (optional — once you set a password)
-                    </li>
-                  </ul>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Changing your password requires OTP verification to protect
-                    your account.
-                  </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <SettingsMetricCard
+                    variant="solid"
+                    label="Full name"
+                    value={String(sessionUser?.fullName ?? "—")}
+                    caption="Display name"
+                    icon="SI"
+                  />
+                  <SettingsMetricCard
+                    variant="solid"
+                    label="Company"
+                    value={String(sessionUser?.companyName ?? "—")}
+                    caption="Business profile"
+                    icon="▣"
+                  />
+                  <SettingsMetricCard
+                    variant="solid"
+                    label="Phone"
+                    value={String(sessionUser?.phone ?? "—")}
+                    caption="Contact number"
+                    icon="☎"
+                  />
+                  <SettingsMetricCard
+                    variant="solid"
+                    label="Created"
+                    value={fmtDate(sessionUser?.createdAt)}
+                    caption="Account opened"
+                    icon="◷"
+                  />
                 </div>
 
-                <ActionRow
-                  title="Password"
-                  subtitle="Set / change your password (requires OTP)"
-                  icon="🔒"
-                  tone="neutral"
+                <div className="mt-4 rounded-2xl border border-white/12 bg-white/10 p-4 text-sm font-medium leading-6 text-white/78 shadow-inner">
+                  You can edit your profile details below. Email changes will be added later with verification.
+                  <p className="mt-1 text-xs text-white/58">
+                    If your account is read-only, profile updates are disabled.
+                  </p>
+                </div>
+
+                <PortalButton
+                  disabled={!canEditProfile}
+                  onClick={openEdit}
+                  variant="secondary"
+                  className="mt-4 w-full rounded-2xl bg-white text-slate-900 hover:bg-white/95"
+                  title={
+                    !canEditProfile
+                      ? "Your account is read-only or unavailable right now"
+                      : "Edit your profile"
+                  }
+                  type="button"
+                >
+                  Edit profile
+                </PortalButton>
+              </SettingsSectionCard>
+
+              {/* Security */}
+              <SettingsSectionCard
+                eyebrow="Security"
+                title="Password & access"
+                description="Password, sessions, and access controls."
+                badge="Secure"
+              >
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-white/12 bg-white/10 p-4 shadow-inner">
+                    <p className="text-sm text-white/90">
+                      <span className="font-black">Login methods enabled:</span>
+                    </p>
+                    <ul className="mt-2 space-y-1 text-xs font-medium text-white/70">
+                      <li>• OTP sign-in (enabled)</li>
+                      <li>• Email + password (optional — once you set a password)</li>
+                    </ul>
+                    <p className="mt-2 text-xs text-white/55">
+                      Changing your password requires OTP verification to protect your account.
+                    </p>
+                  </div>
+
+                  <ActionRow
+                    title="Password"
+                    subtitle="Set / change your password (requires OTP)"
+                    icon="🔒"
+                    tone="neutral"
+                    disabled={!canManageSecurity}
+                    onClick={openPassword}
+                  />
+
+                  <ActionRow
+                    title="Active sessions"
+                    subtitle="View and manage logged-in devices (coming soon)"
+                    icon="💻"
+                    tone="neutral"
+                    disabled
+                    onClick={() => {}}
+                  />
+
+                  <div className="rounded-2xl border border-white/12 bg-white/10 p-4 shadow-inner">
+                    <p className="text-sm text-white/90">
+                      <span className="font-black">Sessions policy:</span> Max 2 active sessions allowed per account.
+                    </p>
+                    <p className="mt-1 text-xs text-white/55">
+                      When session management is enabled, you’ll be able to sign out other devices here.
+                    </p>
+                  </div>
+                </div>
+
+                <PortalButton
                   disabled={!canManageSecurity}
                   onClick={openPassword}
-                />
+                  className="mt-4 w-full rounded-2xl bg-[#12bfae] shadow-[0_12px_28px_rgba(18,191,174,0.22)] hover:bg-[#10ad9d]"
+                  title={
+                    !canManageSecurity
+                      ? "Your account is read-only or unavailable right now"
+                      : "Set / change password"
+                  }
+                  type="button"
+                >
+                  Set / change password
+                </PortalButton>
+              </SettingsSectionCard>
+            </div>
 
-                <ActionRow
-                  title="Active sessions"
-                  subtitle="View and manage logged-in devices (coming soon)"
-                  icon="💻"
-                  tone="neutral"
-                  disabled
-                  onClick={() => {}}
-                />
-
-                <div className="rounded-2xl bg-gradient-to-br from-[#0b2a3a]/5 via-[#0e3a4f]/5 to-[#215D63]/10 p-4 ring-1 ring-slate-200">
-                  <p className="text-sm text-slate-800">
-                    <span className="font-semibold">Sessions policy:</span> Max
-                    2 active sessions allowed per account.
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    When session management is enabled, you’ll be able to sign
-                    out other devices here.
-                  </p>
-                </div>
-              </div>
-
-              <PortalButton
-                disabled={!canManageSecurity}
-                onClick={openPassword}
-                className="mt-5 w-full rounded-2xl bg-slate-900 hover:bg-slate-800"
-                title={
-                  !canManageSecurity
-                    ? "Your account is read-only or unavailable right now"
-                    : "Set / change password"
-                }
-                type="button"
+            <div className="space-y-5">
+              <SettingsSectionCard
+                eyebrow="Status"
+                title="Account status"
+                description="Quick reference for the signed-in account."
+                badge="Verified"
+                compact
               >
-                Set / change password
-              </PortalButton>
-            </PremiumCard>
+                <div className="space-y-3">
+                  <SettingsStatusRow label="Email" value={String(userEmail)} />
+                  <SettingsStatusRow label="Plan" value={planName} />
+                  <SettingsStatusRow
+                    label="Last login"
+                    value={fmtDate(sessionUser?.lastLoginAt)}
+                  />
+                  <SettingsStatusRow label="Account ID" value={String(userId)} />
+                </div>
+
+                <PortalButton
+                  onClick={() => router.push("/billing")}
+                  variant="secondary"
+                  type="button"
+                  className="mt-4 w-full justify-center rounded-2xl bg-white text-slate-900 hover:bg-white/95"
+                >
+                  View billing & access
+                </PortalButton>
+              </SettingsSectionCard>
+
+              <SettingsSectionCard
+                eyebrow="Access"
+                title="Entitlement"
+                description="Current portal access and billing limits."
+                badge={readOnly ? "Read-only" : "Active"}
+                compact
+              >
+                <div className="grid grid-cols-1 gap-3">
+                  <SettingsMetricCard
+                    variant="solid"
+                    label="Companies"
+                    value={String(ent?.features?.limits?.companies ?? "—")}
+                    caption="Allowed companies"
+                    icon="▣"
+                  />
+                  <SettingsMetricCard
+                    variant="solid"
+                    label="Read-only"
+                    value={readOnly ? "Yes" : "No"}
+                    caption="Portal mode"
+                    icon="✓"
+                  />
+                  <SettingsMetricCard
+                    variant="solid"
+                    label="Renews"
+                    value={fmtDate(ent?.currentPeriodEnd)}
+                    caption="Current period end"
+                    icon="◷"
+                  />
+                </div>
+              </SettingsSectionCard>
+            </div>
           </div>
         </div>
       )}
@@ -891,6 +935,130 @@ export default function SettingsPage() {
 }
 
 /* ---------------- Local UI helpers ---------------- */
+
+
+function SettingsChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-white/18 bg-white/12 px-3 py-1 text-[11px] font-black text-white/88 shadow-inner backdrop-blur">
+      {children}
+    </span>
+  );
+}
+
+function SettingsMetricCard({
+  label,
+  value,
+  caption,
+  icon,
+  variant = "glass",
+}: {
+  label: string;
+  value: string;
+  caption: string;
+  icon: string;
+  variant?: "glass" | "solid";
+}) {
+  const surface =
+    variant === "solid"
+      ? "border-white/12 bg-[#0c4a54]/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+      : "border-white/14 bg-[#083d48]/58 shadow-[0_12px_38px_rgba(2,24,32,0.18)]";
+
+  return (
+    <div className={cx("relative min-w-0 overflow-hidden rounded-2xl border p-4", surface)}>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-5 -top-8 h-20 w-20 rounded-full bg-white/8"
+      />
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.28em] text-white/70">
+            {label}
+          </p>
+          <p className="mt-2 truncate text-lg font-black tracking-tight text-white">
+            {value}
+          </p>
+          <p className="mt-1 truncate text-xs font-bold text-white/58">{caption}</p>
+        </div>
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/12 text-sm font-black text-white/85 ring-1 ring-white/10">
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsSectionCard({
+  eyebrow,
+  title,
+  description,
+  badge,
+  children,
+  compact = false,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  badge: string;
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <section
+      className={cx(
+        "relative overflow-hidden rounded-[22px] border border-white/14 bg-[#0f5960]/82 text-white shadow-[0_20px_70px_rgba(15,23,42,0.16)]",
+        compact ? "p-4 sm:p-5" : "p-5 sm:p-6",
+      )}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-90"
+        style={{
+          background:
+            "radial-gradient(circle at 90% 0%, rgba(255,255,255,0.13), transparent 27%), linear-gradient(135deg, rgba(7,54,67,0.80), rgba(31,124,124,0.72))",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-10 -top-10 h-36 w-56 rotate-12 rounded-[38px] bg-white/8"
+      />
+
+      <div className="relative">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#9be7dc]">
+              {eyebrow}
+            </p>
+            <h2 className="mt-2 text-xl font-black tracking-tight text-white">
+              {title}
+            </h2>
+            <p className="mt-1 text-sm font-medium leading-6 text-white/70">
+              {description}
+            </p>
+          </div>
+          <SettingsChip>
+            <span className="h-2 w-2 rounded-full bg-[#12d6b2]" />
+            {badge}
+          </SettingsChip>
+        </div>
+
+        <div className={compact ? "mt-4" : "mt-5"}>{children}</div>
+      </div>
+    </section>
+  );
+}
+
+function SettingsStatusRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/12 bg-white/10 px-4 py-3">
+      <span className="text-xs font-black uppercase tracking-[0.22em] text-white/58">
+        {label}
+      </span>
+      <span className="min-w-0 truncate text-right text-sm font-black text-white">
+        {value}
+      </span>
+    </div>
+  );
+}
 
 function ActionRow({
   title,
