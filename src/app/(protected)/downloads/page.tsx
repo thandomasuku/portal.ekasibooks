@@ -529,37 +529,28 @@ export default function DownloadsPage() {
             </PremiumCard>
           </Stagger>
 
-          <Stagger delayMs={70}>
-            <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <DownloadMetricCard surface="solid" label="Current version" value={latest.version} helper="Desktop app" icon="v" />
-              <DownloadMetricCard surface="solid" label="Release date" value={latest.releaseDate ? fmtDate(latest.releaseDate) : "—"} helper="Published build" icon="⏱" />
-              <DownloadMetricCard surface="solid" label="File size" value={latest.size} helper="Download size" icon="⬇" />
-              <DownloadMetricCard surface="solid" label="Channel" value={latest.channel} helper="Recommended track" icon="★" />
-            </div>
-          </Stagger>
-
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             <div className="space-y-5 lg:col-span-2">
               <Stagger delayMs={120}>
                 <SectionCard
                   title="Latest installer"
-                  subtitle="Version details, compatibility and desktop access."
+                  subtitle="Access, compatibility and release channel."
                   action={<DownloadChip tone="success">Live</DownloadChip>}
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <DownloadInfoTile label="Version" value={latest.version} />
-                    <DownloadInfoTile label="Released" value={latest.releaseDate ? fmtDate(latest.releaseDate) : "—"} />
-                    <DownloadInfoTile label="Size" value={latest.size} />
+                    <DownloadInfoTile label="Access" value={isPaid ? "Active subscription" : "Free plan"} />
+                    <DownloadInfoTile label="Platform" value="Windows 10 / 11" />
+                    <DownloadInfoTile label="Channel" value={latest.channel} />
                   </div>
 
                   <div className="mt-4 rounded-3xl border border-white/14 bg-white/10 p-4 ring-1 ring-white/10">
                     <p className="text-sm font-semibold text-white">
-                      <span className="text-teal-50/88">Access:</span>{" "}
-                      {isPaid ? "You have an active subscription." : "You’re on the FREE plan."}
+                      <span className="text-teal-50/88">Installer access:</span>{" "}
+                      {isPaid ? "Your subscription can access the desktop installer." : "Choose a paid plan to unlock desktop access."}
                     </p>
                     <p className="mt-1 text-xs leading-6 text-white/68">
-                      This page always points users to the current Windows installer. Future version history can be added here
-                      without changing the main portal flow.
+                      The download button above always points to the latest Windows installer. Billing and entitlement stay in
+                      the portal while daily accounting work happens in the desktop app.
                     </p>
                   </div>
                 </SectionCard>
