@@ -82,6 +82,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       fullName: true,
       companyName: true,
       phone: true,
+      isActive: true,
+      deactivatedAt: true,
+      deactivatedReason: true,
       createdAt: true,
       updatedAt: true,
       lastLoginAt: true,
@@ -130,6 +133,17 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                 <span className="h-2 w-2 rounded-full bg-[#14b8a6] shadow-[0_0_0_4px_rgba(20,184,166,0.16)]" />
                 User profile
               </div>
+
+              <div
+                className={
+                  user.isActive
+                    ? "inline-flex items-center gap-2 rounded-full border border-teal-200/35 bg-teal-300/15 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-teal-50 shadow-sm backdrop-blur"
+                    : "inline-flex items-center gap-2 rounded-full border border-red-200/35 bg-red-300/15 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-red-50 shadow-sm backdrop-blur"
+                }
+              >
+                <span className={user.isActive ? "h-2 w-2 rounded-full bg-[#14b8a6]" : "h-2 w-2 rounded-full bg-red-300"} />
+                {user.isActive ? "Active" : "Deactivated"}
+              </div>
             </div>
 
             <h2 className="mt-4 break-words text-2xl font-black tracking-tight text-white md:text-3xl">
@@ -146,6 +160,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                 companyName: user.companyName,
                 phone: user.phone,
                 role: user.role,
+                isActive: user.isActive,
+                deactivatedAt: user.deactivatedAt,
+                deactivatedReason: user.deactivatedReason,
               }}
             />
 
@@ -161,6 +178,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <Panel title="Profile" className="lg:col-span-2">
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <InfoRow label="Role" value={user.role} />
+            <InfoRow label="Account status" value={user.isActive ? "Active" : "Deactivated"} />
+            <InfoRow label="Deactivated at" value={fmtDate(user.deactivatedAt)} />
+            <InfoRow label="Deactivation reason" value={user.deactivatedReason} />
             <InfoRow label="Company" value={user.companyName} />
             <InfoRow label="Phone" value={user.phone} />
             <InfoRow label="Email verified" value={fmtDate(user.emailVerifiedAt)} />
@@ -221,13 +241,15 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
               user.sessions.map((session) => (
                 <div
                   key={session.id}
-                  className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10"
+                  className="min-w-0 rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10"
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                     <span className="text-sm font-black text-white">{session.revokedAt ? "Revoked" : "Active"}</span>
-                    <span className="text-xs font-semibold text-white/55">{fmtDate(session.lastSeenAt)}</span>
+                    <span className="shrink-0 text-xs font-semibold text-white/55">{fmtDate(session.lastSeenAt)}</span>
                   </div>
-                  <div className="mt-1 truncate text-xs font-semibold text-white/50">{session.userAgent || "Unknown device"}</div>
+                  <div className="mt-1 break-words text-xs font-semibold leading-5 text-white/50">
+                    {session.userAgent || "Unknown device"}
+                  </div>
                 </div>
               ))
             )}
