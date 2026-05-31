@@ -11,6 +11,7 @@ export type AdminUser = {
   email: string;
   fullName: string | null;
   role: string;
+  isActive: boolean;
 };
 
 export async function getAdminUser(): Promise<AdminUser | null> {
@@ -29,10 +30,12 @@ export async function getAdminUser(): Promise<AdminUser | null> {
         email: true,
         fullName: true,
         role: true,
+        isActive: true,
       },
     });
 
     if (!user) return null;
+    if (!user.isActive) return null;
     if (String(user.role || "user").toLowerCase() !== "admin") return null;
 
     return user;

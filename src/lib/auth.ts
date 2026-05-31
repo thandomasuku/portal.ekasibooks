@@ -86,12 +86,23 @@ export async function verifySession(token: string) {
 
   const session = await prisma.session.findUnique({
     where: { id: decoded.sessionId },
-    select: { id: true, userId: true, revokedAt: true, lastSeenAt: true },
+    select: {
+      id: true,
+      userId: true,
+      revokedAt: true,
+      lastSeenAt: true,
+      user: {
+        select: {
+          isActive: true,
+        },
+      },
+    },
   });
 
   if (!session) throw new Error("Session not found");
   if (session.revokedAt) throw new Error("Session revoked");
   if (session.userId !== decoded.userId) throw new Error("Session mismatch");
+  if (!session.user?.isActive) throw new Error("Account deactivated");
 
   // touch lastSeenAt (best-effort) — throttled to avoid DB writes on every page view
   // Default: 15 minutes
