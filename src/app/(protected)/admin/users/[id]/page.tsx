@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/db";
 
+import AdminUserAccountEditor from "./AdminUserAccountEditor";
+
 export const dynamic = "force-dynamic";
 
 function fmtDate(value?: Date | string | null) {
@@ -136,9 +138,21 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             <p className="mt-1 break-words text-sm font-semibold text-white/65">{user.email}</p>
           </div>
 
-          <div className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">User ID</div>
-            <div className="mt-1 max-w-[280px] truncate font-bold text-white">{user.id}</div>
+          <div className="flex flex-col gap-3 sm:flex-row md:items-center">
+            <AdminUserAccountEditor
+              user={{
+                id: user.id,
+                fullName: user.fullName,
+                companyName: user.companyName,
+                phone: user.phone,
+                role: user.role,
+              }}
+            />
+
+            <div className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">User ID</div>
+              <div className="mt-1 max-w-[280px] truncate font-bold text-white">{user.id}</div>
+            </div>
           </div>
         </div>
       </section>
