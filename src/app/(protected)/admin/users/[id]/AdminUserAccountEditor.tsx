@@ -24,6 +24,11 @@ type AccountConfirmState = {
   reason: string;
 };
 
+type PasswordResetForm = {
+  newPassword: string;
+  confirmPassword: string;
+};
+
 const INPUT_CLASS =
   "w-full rounded-2xl border border-white/15 bg-white/95 px-4 py-2.5 text-sm font-bold text-slate-950 shadow-sm outline-none placeholder:text-slate-500 focus:border-teal-200 focus:bg-white focus:ring-4 focus:ring-teal-200/20";
 
@@ -68,6 +73,13 @@ export default function AdminUserAccountEditor({ user }: { user: EditableAdminUs
   const [accountActionLoading, setAccountActionLoading] = useState(false);
   const [accountActionState, setAccountActionState] = useState<SaveState>({ type: "idle", message: "" });
   const [confirmAction, setConfirmAction] = useState<AccountConfirmState | null>(null);
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
+  const [passwordResetForm, setPasswordResetForm] = useState<PasswordResetForm>({
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [passwordResetState, setPasswordResetState] = useState<SaveState>({ type: "idle", message: "" });
 
   useEffect(() => {
     if (!open) {
@@ -171,6 +183,76 @@ export default function AdminUserAccountEditor({ user }: { user: EditableAdminUs
     }
   }
 
+  function openPasswordReset() {
+    setPasswordResetForm({ newPassword: "", confirmPassword: "" });
+    setPasswordResetState({ type: "idle", message: "" });
+    setPasswordResetOpen(true);
+  }
+
+  async function resetPassword() {
+    setPasswordResetState({ type: "idle", message: "" });
+
+    const newPassword = passwordResetForm.newPassword;
+    const confirmPassword = passwordResetForm.confirmPassword;
+
+    if (!newPassword || newPassword.length < 8) {
+      setPasswordResetState({
+        type: "error",
+        message: "Temporary password must be at least 8 characters.",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordResetState({
+        type: "error",
+        message: "Passwords do not match.",
+      });
+      return;
+    }
+
+    setPasswordResetLoading(true);
+
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resetPassword",
+          newPassword,
+        }),
+      });
+
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+
+      if (!res.ok) {
+        setPasswordResetState({
+          type: "error",
+          message: payload?.error || "Could not reset this user password.",
+        });
+        return;
+      }
+
+      setPasswordResetState({
+        type: "success",
+        message: "Password reset. Active sessions were revoked.",
+      });
+
+      refreshPage();
+
+      window.setTimeout(() => {
+        setPasswordResetOpen(false);
+      }, 900);
+    } catch {
+      setPasswordResetState({
+        type: "error",
+        message: "Network error. Please try again.",
+      });
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
       <button
@@ -199,6 +281,15 @@ export default function AdminUserAccountEditor({ user }: { user: EditableAdminUs
             : "Reactivate"}
       </button>
 
+      <button
+        type="button"
+        onClick={openPasswordReset}
+        disabled={passwordResetLoading}
+        className={SOFT_ACTION_BUTTON}
+      >
+        {passwordResetLoading ? "Resetting..." : "Reset password"}
+      </button>
+
       {accountActionState.type !== "idle" ? (
         <span
           className={
@@ -209,6 +300,113 @@ export default function AdminUserAccountEditor({ user }: { user: EditableAdminUs
         >
           {accountActionState.message}
         </span>
+      ) : null}
+
+      {passwordResetOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-white/15 bg-[linear-gradient(135deg,rgba(7,53,64,0.96),rgba(16,116,115,0.86))] text-white shadow-[0_24px_90px_rgba(0,0,0,0.35)] ring-1 ring-white/10">
+            <div className="border-b border-white/10 px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/35 bg-amber-300/15 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-50">
+                    Password reset
+                  </div>
+
+                  <h3 className="mt-3 text-xl font-black tracking-tight text-white">Reset user password</h3>
+
+                  <p className="mt-1 text-sm font-semibold leading-6 text-white/65">
+                    Set a temporary password for this user. Their active sessions will be revoked.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPasswordResetOpen(false)}
+                  className="grid h-9 w-9 place-items-center rounded-2xl border border-white/12 bg-white/8 text-base font-black text-white/60 transition hover:bg-white/14 hover:text-white/85"
+                  aria-label="Close password reset"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              {passwordResetState.type !== "idle" ? (
+                <div
+                  className={
+                    passwordResetState.type === "success"
+                      ? "rounded-2xl border border-teal-200/25 bg-teal-300/15 px-4 py-3 text-sm font-bold text-teal-50"
+                      : "rounded-2xl border border-red-200/25 bg-red-300/15 px-4 py-3 text-sm font-bold text-red-50"
+                  }
+                >
+                  {passwordResetState.message}
+                </div>
+              ) : null}
+
+              <div className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 ring-1 ring-white/10">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">User</div>
+                <div className="mt-1 break-words text-sm font-bold text-white">
+                  {user.fullName || user.companyName || user.id}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-2">
+                  <span className={LABEL_CLASS}>Temporary password</span>
+                  <input
+                    value={passwordResetForm.newPassword}
+                    onChange={(e) =>
+                      setPasswordResetForm((prev) => ({ ...prev, newPassword: e.target.value }))
+                    }
+                    className={INPUT_CLASS}
+                    minLength={8}
+                    type="password"
+                    placeholder="Minimum 8 characters"
+                    autoComplete="new-password"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className={LABEL_CLASS}>Confirm password</span>
+                  <input
+                    value={passwordResetForm.confirmPassword}
+                    onChange={(e) =>
+                      setPasswordResetForm((prev) => ({ ...prev, confirmPassword: e.target.value }))
+                    }
+                    className={INPUT_CLASS}
+                    minLength={8}
+                    type="password"
+                    placeholder="Repeat password"
+                    autoComplete="new-password"
+                  />
+                </label>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/7 px-4 py-3 text-xs font-semibold leading-5 text-white/58 ring-1 ring-white/8">
+                Share the temporary password securely. The user should change it after signing in.
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-white/10 px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPasswordResetOpen(false)}
+                className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white px-4 py-2 text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-white/92"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={passwordResetLoading || passwordResetState.type === "success"}
+                onClick={resetPassword}
+                className={SOFT_ACTION_BUTTON}
+              >
+                {passwordResetLoading ? "Resetting..." : "Reset password"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {confirmAction ? (

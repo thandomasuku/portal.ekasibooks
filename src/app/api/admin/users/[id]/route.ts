@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 
 import { getAdminUser } from "@/lib/admin";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,7 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 const ROLE_VALUES = new Set(["user", "admin"]);
-const ACCOUNT_ACTIONS = new Set(["updateAccount", "deactivate", "reactivate"]);
+const ACCOUNT_ACTIONS = new Set(["updateAccount", "deactivate", "reactivate", "resetPassword"]);
 
 function cleanNullable(value: unknown, max: number) {
   const text = String(value ?? "").trim();
@@ -138,6 +139,57 @@ export async function PATCH(
         updatedAt: true,
       },
     });
+
+    return NextResponse.json({ user: updated });
+  }
+
+  if (action === "resetPassword") {
+    if (id === admin.id) {
+      return NextResponse.json(
+        { error: "Use Profile & security to change your own password." },
+        { status: 400 },
+      );
+    }
+
+    const newPassword = String(input.newPassword ?? "");
+
+    if (!newPassword || newPassword.length < 8) {
+      return NextResponse.json(
+        { error: "Temporary password must be at least 8 characters." },
+        { status: 400 },
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const now = new Date();
+
+    const [updated] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: { passwordHash },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          fullName: true,
+          companyName: true,
+          phone: true,
+          isActive: true,
+          deactivatedAt: true,
+          deactivatedReason: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.session.updateMany({
+        where: {
+          userId: id,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+        },
+      }),
+    ]);
 
     return NextResponse.json({ user: updated });
   }
