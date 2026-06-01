@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 
 import AdminUserAccountEditor from "./AdminUserAccountEditor";
+import AdminSessionActions from "./AdminSessionActions";
 
 export const dynamic = "force-dynamic";
 
@@ -234,6 +235,18 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         </Panel>
 
         <Panel title="Recent sessions">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-white/65">
+              Active sessions count against the user’s entitlement limit. Revoking a session forces that device to log in again.
+            </p>
+
+            <AdminSessionActions
+              userId={user.id}
+              mode="revokeOthers"
+              disabled={user.sessions.every((session) => session.revokedAt)}
+            />
+          </div>
+
           <div className="mt-4 grid gap-3">
             {user.sessions.length === 0 ? (
               <p className="text-sm font-semibold text-white/70">No sessions found.</p>
@@ -243,12 +256,35 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                   key={session.id}
                   className="min-w-0 rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10"
                 >
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                    <span className="text-sm font-black text-white">{session.revokedAt ? "Revoked" : "Active"}</span>
-                    <span className="shrink-0 text-xs font-semibold text-white/55">{fmtDate(session.lastSeenAt)}</span>
-                  </div>
-                  <div className="mt-1 break-words text-xs font-semibold leading-5 text-white/50">
-                    {session.userAgent || "Unknown device"}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={cx(
+                            "rounded-full border px-2.5 py-1 text-xs font-black",
+                            session.revokedAt
+                              ? "border-red-200/25 bg-red-300/10 text-red-50"
+                              : "border-teal-200/35 bg-teal-300/15 text-teal-50",
+                          )}
+                        >
+                          {session.revokedAt ? "Revoked" : "Active"}
+                        </span>
+                        <span className="text-xs font-semibold text-white/55">Last seen {fmtDate(session.lastSeenAt)}</span>
+                      </div>
+
+                      <div className="mt-2 break-words text-xs font-semibold leading-5 text-white/50">
+                        {session.userAgent || "Unknown device"}
+                      </div>
+
+                      <div className="mt-2 grid gap-1 text-xs font-semibold text-white/45 sm:grid-cols-2">
+                        <span>Created {fmtDate(session.createdAt)}</span>
+                        <span>IP {session.ip || "—"}</span>
+                      </div>
+                    </div>
+
+                    {!session.revokedAt ? (
+                      <AdminSessionActions userId={user.id} sessionId={session.id} mode="revokeOne" />
+                    ) : null}
                   </div>
                 </div>
               ))
