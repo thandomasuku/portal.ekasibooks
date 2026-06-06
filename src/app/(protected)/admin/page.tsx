@@ -29,14 +29,14 @@ function AdminChip({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-black uppercase tracking-[0.12em] shadow-sm backdrop-blur",
+        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.11em] shadow-sm backdrop-blur",
         tone === "success"
           ? "border-teal-200/35 bg-teal-300/15 text-teal-50"
-          : "border-white/20 bg-white/10 text-white/85",
+          : "border-white/18 bg-white/10 text-white/82",
       )}
     >
       {tone === "success" ? (
-        <span className="h-2 w-2 rounded-full bg-[#14b8a6] shadow-[0_0_0_4px_rgba(20,184,166,0.16)]" />
+        <span className="h-2 w-2 rounded-full bg-[#14b8a6] shadow-[0_0_0_4px_rgba(20,184,166,0.14)]" />
       ) : null}
       {children}
     </span>
@@ -55,18 +55,29 @@ function AdminMetricCard({
   icon: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/15 bg-[#073540]/72 p-5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_44px_rgba(7,53,64,0.20)] ring-1 ring-white/10 backdrop-blur">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.24em] text-white/70">{label}</p>
-          <p className="mt-3 text-2xl font-black tracking-tight text-white">{value}</p>
-          <p className="mt-1 text-sm font-bold text-white/68">{hint}</p>
+    <div className="rounded-2xl border border-white/14 bg-[#073540]/72 p-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_34px_rgba(7,53,64,0.16)] ring-1 ring-white/10 backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-white/62">{label}</p>
+          <p className="mt-2 text-2xl font-black tracking-tight text-white">{value}</p>
+          <p className="mt-0.5 text-xs font-bold leading-5 text-white/60">{hint}</p>
         </div>
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/10 text-lg font-black text-white/85 shadow-sm">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/10 text-base font-black text-white/80 shadow-sm">
           {icon}
         </span>
       </div>
     </div>
+  );
+}
+
+function AdminButton({ children, href }: { children: React.ReactNode; href: string }) {
+  return (
+    <Link
+      className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white px-4 py-2 text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-white/92"
+      href={href}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -86,23 +97,23 @@ function SectionCard({
   return (
     <section
       className={cx(
-        "relative overflow-hidden rounded-3xl border border-white/15 bg-[linear-gradient(135deg,rgba(7,53,64,0.88),rgba(16,116,115,0.74))] p-5 text-white shadow-[0_22px_60px_rgba(7,53,64,0.18)] ring-1 ring-white/10",
+        "relative overflow-hidden rounded-2xl border border-white/14 bg-[linear-gradient(135deg,rgba(7,53,64,0.90),rgba(16,116,115,0.74))] p-4 text-white shadow-[0_18px_46px_rgba(7,53,64,0.16)] ring-1 ring-white/10",
         className,
       )}
     >
-      <div className="pointer-events-none absolute -left-24 -top-32 h-80 w-80 rounded-[5rem] bg-[#062f3a]/65 blur-sm" />
-      <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-[4rem] bg-white/10 blur-sm" />
+      <div className="pointer-events-none absolute -left-20 -top-28 h-64 w-64 rounded-[4rem] bg-[#062f3a]/54 blur-sm" />
+      <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-[4rem] bg-white/8 blur-sm" />
 
       <div className="relative">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-xl font-black tracking-tight text-white">{title}</h2>
-            <p className="mt-1 text-sm font-semibold leading-6 text-white/70">{description}</p>
+          <div className="min-w-0">
+            <h2 className="text-lg font-black tracking-tight text-white">{title}</h2>
+            <p className="mt-1 text-sm font-semibold leading-5 text-white/66">{description}</p>
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
 
-        <div className="mt-5">{children}</div>
+        <div className="mt-4">{children}</div>
       </div>
     </section>
   );
@@ -144,64 +155,49 @@ export default async function AdminPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-3xl border border-white/15 bg-[linear-gradient(135deg,rgba(7,53,64,0.94),rgba(16,116,115,0.78))] p-5 text-white shadow-[0_24px_70px_rgba(7,53,64,0.22)] ring-1 ring-white/10">
-        <div className="pointer-events-none absolute -left-28 -top-36 h-96 w-96 rounded-[6rem] bg-[#062f3a]/70 blur-sm" />
-        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-[5rem] bg-white/10 blur-sm" />
+    <div className="space-y-5">
+      <section className="relative overflow-hidden rounded-2xl border border-white/14 bg-[linear-gradient(135deg,rgba(7,53,64,0.94),rgba(16,116,115,0.76))] p-4 text-white shadow-[0_20px_54px_rgba(7,53,64,0.18)] ring-1 ring-white/10">
+        <div className="pointer-events-none absolute -left-24 -top-32 h-72 w-72 rounded-[5rem] bg-[#062f3a]/62 blur-sm" />
+        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-[5rem] bg-white/9 blur-sm" />
 
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap gap-2">
               <AdminChip tone="success">Admin console</AdminChip>
               <AdminChip>{fmtNumber(totalUsers)} users</AdminChip>
               <AdminChip>{fmtNumber(activeSubscriptions)} active subscriptions</AdminChip>
             </div>
-            <p className="mt-3 text-sm font-semibold leading-6 text-white/70">
-              Quick operational snapshot for users, subscriptions, entitlements, and desktop activity.
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-white">Operations snapshot</h2>
+            <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-white/68">
+              Monitor users, subscriptions, entitlement state and desktop activity from one admin view.
             </p>
           </div>
 
-          <Link
-            className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white px-5 py-3 text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-white/92"
-            href="/admin/users"
-          >
-            Open users
-          </Link>
+          <AdminButton href="/admin/users">Open users</AdminButton>
         </div>
 
-        <div className="relative mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="relative mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {cards.map((card) => (
             <AdminMetricCard key={card.label} {...card} />
           ))}
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
-        <SectionCard
-          title="Users by tier"
-          description="Current entitlement distribution."
-          action={
-            <Link
-              className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white px-4 py-2 text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-white/92"
-              href="/admin/users"
-            >
-              View users
-            </Link>
-          }
-        >
-          <div className="grid gap-3">
+      <section className="grid gap-5 lg:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.5fr)]">
+        <SectionCard title="Users by tier" description="Current entitlement distribution." action={<AdminButton href="/admin/users">View users</AdminButton>}>
+          <div className="grid gap-2.5">
             {usersByTier.length === 0 ? (
-              <p className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white/72">
+              <p className="rounded-xl border border-white/14 bg-white/10 px-3 py-2 text-sm font-bold text-white/70">
                 No entitlement rows yet.
               </p>
             ) : (
               usersByTier.map((row) => (
                 <div
                   key={String(row.tier)}
-                  className="flex items-center justify-between rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10"
+                  className="flex items-center justify-between rounded-xl border border-white/14 bg-[#073540]/68 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-white/10"
                 >
-                  <span className="text-sm font-black uppercase tracking-[0.16em] text-white/78">{String(row.tier)}</span>
-                  <span className="rounded-full border border-teal-200/25 bg-teal-300/15 px-3 py-1 text-sm font-black text-teal-50">
+                  <span className="text-xs font-black uppercase tracking-[0.16em] text-white/76">{String(row.tier)}</span>
+                  <span className="rounded-full border border-teal-200/24 bg-teal-300/14 px-2.5 py-1 text-xs font-black text-teal-50">
                     {row._count._all}
                   </span>
                 </div>
@@ -210,51 +206,40 @@ export default async function AdminPage() {
           </div>
         </SectionCard>
 
-        <SectionCard
-          title="Newest users"
-          description="Recent portal registrations and desktop activity."
-          action={
-            <Link
-              className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white px-4 py-2 text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-[1px] hover:bg-white/92"
-              href="/admin/users"
-            >
-              Open users
-            </Link>
-          }
-        >
-          <div className="overflow-hidden rounded-2xl border border-white/15 bg-[#073540]/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
+        <SectionCard title="Newest users" description="Recent portal registrations and desktop activity." action={<AdminButton href="/admin/users">Open users</AdminButton>}>
+          <div className="overflow-hidden rounded-xl border border-white/14 bg-[#073540]/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.09)] ring-1 ring-white/10">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="border-b border-white/10 bg-white/10 text-xs uppercase tracking-[0.16em] text-white/68">
+              <table className="w-full min-w-[700px] text-left text-sm">
+                <thead className="border-b border-white/10 bg-white/10 text-[11px] uppercase tracking-[0.14em] text-white/62">
                   <tr>
-                    <th className="px-4 py-3 font-black">User</th>
-                    <th className="px-4 py-3 font-black">Tier</th>
-                    <th className="px-4 py-3 font-black">Desktop</th>
-                    <th className="px-4 py-3 font-black">Created</th>
+                    <th className="px-3 py-2.5 font-black">User</th>
+                    <th className="px-3 py-2.5 font-black">Tier</th>
+                    <th className="px-3 py-2.5 font-black">Desktop</th>
+                    <th className="px-3 py-2.5 font-black">Created</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
                   {latestUsers.map((user) => (
                     <tr key={user.id} className="transition hover:bg-white/8">
-                      <td className="px-4 py-3">
-                        <Link className="font-black text-white hover:text-teal-100" href={`/admin/users/${user.id}`}>
+                      <td className="px-3 py-2.5 align-top">
+                        <Link className="font-black text-teal-100 hover:text-white" href={`/admin/users/${user.id}`}>
                           {user.fullName || user.email}
                         </Link>
-                        <div className="mt-0.5 text-xs font-semibold text-white/55">{user.email}</div>
+                        <div className="mt-0.5 max-w-[260px] truncate text-xs font-semibold text-white/55">{user.email}</div>
                         {user.companyName ? (
-                          <div className="mt-0.5 text-xs font-semibold text-white/45">{user.companyName}</div>
+                          <div className="mt-0.5 max-w-[260px] truncate text-xs font-semibold text-white/45">{user.companyName}</div>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-white/78">
+                      <td className="px-3 py-2.5 align-top">
+                        <span className="rounded-full border border-white/14 bg-white/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.10em] text-white/76">
                           {user.entitlement?.tier ?? "free"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 font-bold text-white/78">
+                      <td className="px-3 py-2.5 align-top font-bold text-white/76">
                         {user.lastDesktopVersion ? `${user.lastDesktopVersion}` : "—"}
-                        <div className="mt-0.5 text-xs font-semibold text-white/50">{fmtDate(user.lastDesktopSeenAt)}</div>
+                        <div className="mt-0.5 text-xs font-semibold text-white/48">{fmtDate(user.lastDesktopSeenAt)}</div>
                       </td>
-                      <td className="px-4 py-3 font-bold text-white/78">{fmtDate(user.createdAt)}</td>
+                      <td className="px-3 py-2.5 align-top font-bold text-white/76">{fmtDate(user.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
