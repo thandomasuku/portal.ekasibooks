@@ -482,9 +482,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        if (eventEmail) {
-          await syncSubscriptionFromPaystack(userId);
-        }
+        await syncSubscriptionFromPaystack(userId);
 
         // Only upgrade/realign entitlement if payment matches one of OUR plan codes
         // (and amount if supplied). Renewal webhooks may still be valid for period-end
@@ -537,9 +535,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      if (eventEmail) {
-        await syncSubscriptionFromPaystack(userId);
-      }
+      await syncSubscriptionFromPaystack(userId);
 
       if (nextStatus === "active") {
         // Subscription became active: upgrade only if plan code matches one of ours.
@@ -599,9 +595,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      if (eventEmail) {
-        await syncSubscriptionFromPaystack(userId);
-      }
+      await syncSubscriptionFromPaystack(userId);
 
       // Failed payment => put paid tier on grace
       await putPaidOnGrace(userId, "charge_failed");
@@ -610,8 +604,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ received: true }, { status: 200 });
-  } catch {
+  } catch (err) {
     // Returning 500 may trigger Paystack retries, which is useful if DB was down.
+    console.error("[paystack webhook] handler error", err);
     return NextResponse.json({ error: "Webhook handler error." }, { status: 500 });
   }
 }

@@ -56,6 +56,7 @@ type PaystackSubscription = {
   id: number;
   status: string;
   subscription_code: string;
+  email_token?: string | null;
   next_payment_date?: string | null;
   plan?: {
     plan_code: string;
@@ -249,6 +250,117 @@ async function paystackGet<T>(path: string): Promise<PaystackResponse<T>> {
   return json;
 }
 
+async function paystackPost<T>(path: string, body: unknown): Promise<PaystackResponse<T>> {
+  const res = await fetch(`${PAYSTACK_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  const json = (await res.json().catch(() => null)) as PaystackResponse<T> | null;
+
+  if (!res.ok || !json?.status) {
+    const msg =
+      (json as any)?.message ||
+      (json as any)?.error ||
+      `Paystack request failed (${res.status}).`;
+    throw new Error(msg);
+  }
+
+  return json;
+}
+
+function isPaystackBillingActive(status: unknown) {
+  const s = lower(status);
+  return s === "active" || s === "trialing" || s === "non-renewing" || s === "attention";
+}
+
+type CancelRecurringResult =
+  | { ok: true; reason: "disabled" | "already_inactive" | "no_subscription" }
+  | { ok: false; reason: string };
+
+async function cancelRecurringBillingForGraceExpiry(args: {
+  email: string;
+  localSubscriptionCode?: string | null;
+}): Promise<CancelRecurringResult> {
+  if (!PAYSTACK_SECRET_KEY) {
+    return { ok: false, reason: "missing_paystack_secret" };
+  }
+
+  const email = safeTrim(args.email).toLowerCase();
+  if (!email) return { ok: false, reason: "missing_email" };
+
+  try {
+    let candidate: PaystackSubscription | null = null;
+    const localCode = safeTrim(args.localSubscriptionCode);
+
+    if (localCode) {
+      candidate = await paystackGetSubscriptionByCode(localCode).catch(() => null);
+    }
+
+    if (!candidate || !isPaystackBillingActive(candidate.status)) {
+      const customerResp = await paystackGet<PaystackCustomer>(
+        `/customer/${encodeURIComponent(email)}`
+      );
+      const customer = customerResp.data;
+
+      if (!customer?.id && !customer?.customer_code) {
+        return { ok: true, reason: "no_subscription" };
+      }
+
+      const lookupKey = customer.id ? String(customer.id) : String(customer.customer_code);
+      const subsResp = await paystackGet<PaystackSubscription[]>(
+        `/subscription?customer=${encodeURIComponent(lookupKey)}`
+      );
+
+      const list = Array.isArray(subsResp.data) ? subsResp.data : [];
+      candidate =
+        list.find((s) => isPaystackBillingActive(s?.status)) ||
+        (localCode ? list.find((s) => safeTrim(s?.subscription_code) === localCode) : null) ||
+        null;
+    }
+
+    if (!candidate?.subscription_code) {
+      return { ok: true, reason: "no_subscription" };
+    }
+
+    if (!isPaystackBillingActive(candidate.status)) {
+      return { ok: true, reason: "already_inactive" };
+    }
+
+    const subscriptionCode = safeTrim(candidate.subscription_code);
+    let emailToken = safeTrim(candidate.email_token);
+
+    if (!emailToken) {
+      const fetched = await paystackGetSubscriptionByCode(subscriptionCode).catch(() => null);
+      emailToken = safeTrim(fetched?.email_token);
+    }
+
+    if (!emailToken) {
+      return { ok: false, reason: "missing_paystack_email_token" };
+    }
+
+    await paystackPost("/subscription/disable", {
+      code: subscriptionCode,
+      token: emailToken,
+    });
+
+    return { ok: true, reason: "disabled" };
+  } catch (err: any) {
+    console.error("[entitlement] Failed to disable Paystack subscription after grace expiry", {
+      email,
+      localSubscriptionCode: args.localSubscriptionCode,
+      error: err?.message || String(err),
+    });
+
+    return { ok: false, reason: err?.message || "paystack_disable_failed" };
+  }
+}
+
 async function paystackGetSubscriptionByCode(subscriptionCode: string) {
   const code = safeTrim(subscriptionCode);
   if (!code) return null;
@@ -352,7 +464,14 @@ export async function GET(req: NextRequest) {
       }),
       prisma.subscription.findUnique({
         where: { userId },
-        select: { status: true, currentPeriodEnd: true, canceledAt: true, planCode: true },
+        select: {
+          status: true,
+          currentPeriodEnd: true,
+          canceledAt: true,
+          planCode: true,
+          customerCode: true,
+          subscriptionCode: true,
+        },
       }),
     ]);
 
@@ -475,29 +594,76 @@ export async function GET(req: NextRequest) {
        * only downgrade after the 7-day window has passed.
        */
       if (periodHasEnded && !isCanceledOrBlocked && nowMs > graceEndMs) {
-        const nextFeatures = stripGraceFields(featuresObj);
-        if (!isPlainObject(nextFeatures.limits)) nextFeatures.limits = {};
-
-        await prisma.entitlement.update({
-          where: { userId },
-          data: {
-            tier: "free" as any,
-            status: "active" as any,
-            features: nextFeatures as any,
-          },
+        const cancelResult = await cancelRecurringBillingForGraceExpiry({
+          email: user.email,
+          localSubscriptionCode: sub?.subscriptionCode ?? null,
         });
 
-        await prisma.subscription
-          .update({
-            where: { userId },
-            data: { status: "past_due" as any },
-          })
-          .catch(() => null);
+        if (!cancelResult.ok) {
+          /**
+           * Do not silently downgrade to FREE while Paystack may still be able to debit the card.
+           * Keep the account in a billing-problem grace state, make it read-only, and surface
+           * enough metadata for support/admin debugging.
+           */
+          const nextFeatures = { ...featuresObj };
+          nextFeatures.readOnly = true;
+          nextFeatures.graceReason = "grace_expired_cancellation_failed";
+          nextFeatures.graceExpiredAt = new Date().toISOString();
+          nextFeatures.billingActionRequired = true;
+          nextFeatures.paystackCancelFailedAt = new Date().toISOString();
+          nextFeatures.paystackCancelFailureReason = cancelResult.reason;
+          delete nextFeatures.downgradedAt;
+          delete nextFeatures.downgradeReason;
 
-        tier = "free";
-        entStatus = "active";
-        graceUntil = null;
-        featuresObj = nextFeatures;
+          if (!isPlainObject(nextFeatures.limits)) nextFeatures.limits = {};
+
+          await prisma.entitlement
+            .update({
+              where: { userId },
+              data: { status: "grace" as any, features: nextFeatures as any },
+            })
+            .catch(() => null);
+
+          await prisma.subscription
+            .update({
+              where: { userId },
+              data: { status: "past_due" as any },
+            })
+            .catch(() => null);
+
+          entStatus = "grace";
+          graceUntil = null;
+          featuresObj = nextFeatures;
+        } else {
+          const nextFeatures = stripGraceFields(featuresObj);
+          nextFeatures.paystackCancelledAt = new Date().toISOString();
+          nextFeatures.paystackCancelReason = cancelResult.reason;
+          if (!isPlainObject(nextFeatures.limits)) nextFeatures.limits = {};
+
+          await prisma.entitlement.update({
+            where: { userId },
+            data: {
+              tier: "free" as any,
+              status: "active" as any,
+              features: nextFeatures as any,
+            },
+          });
+
+          await prisma.subscription
+            .update({
+              where: { userId },
+              data: {
+                status: "canceled" as any,
+                canceledAt: new Date(),
+              },
+            })
+            .catch(() => null);
+
+          tier = "free";
+          entStatus = "active";
+          graceUntil = null;
+          featuresObj = nextFeatures;
+        }
       }
     }
 

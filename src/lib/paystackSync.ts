@@ -1,14 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY!;
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || "";
 const BASE_URL = "https://api.paystack.co";
 
-type PaidTier = "starter" | "growth" | "pro";
-type Cycle = "monthly" | "annual";
+type Tier = "starter" | "growth" | "pro";
 
 type PlanMeta = {
-  tier: PaidTier;
-  cycle: Cycle;
+  tier: Tier;
   companies: number;
 };
 
@@ -17,61 +15,37 @@ const PLAN_MAP: Record<string, PlanMeta> = {
     process.env.PAYSTACK_PLAN_CODE_STARTER_MONTHLY ||
       process.env.PAYSTACK_STARTER_MONTHLY_PLAN_CODE ||
       ""
-  ).trim()]: {
-    tier: "starter",
-    cycle: "monthly",
-    companies: 1,
-  },
+  ).trim()]: { tier: "starter", companies: 1 },
 
   [String(
     process.env.PAYSTACK_PLAN_CODE_STARTER_ANNUAL ||
       process.env.PAYSTACK_STARTER_ANNUAL_PLAN_CODE ||
       ""
-  ).trim()]: {
-    tier: "starter",
-    cycle: "annual",
-    companies: 1,
-  },
+  ).trim()]: { tier: "starter", companies: 1 },
 
   [String(
     process.env.PAYSTACK_PLAN_CODE_GROWTH_MONTHLY ||
       process.env.PAYSTACK_GROWTH_MONTHLY_PLAN_CODE ||
       ""
-  ).trim()]: {
-    tier: "growth",
-    cycle: "monthly",
-    companies: 3,
-  },
+  ).trim()]: { tier: "growth", companies: 3 },
 
   [String(
     process.env.PAYSTACK_PLAN_CODE_GROWTH_ANNUAL ||
       process.env.PAYSTACK_GROWTH_ANNUAL_PLAN_CODE ||
       ""
-  ).trim()]: {
-    tier: "growth",
-    cycle: "annual",
-    companies: 3,
-  },
+  ).trim()]: { tier: "growth", companies: 3 },
 
   [String(
     process.env.PAYSTACK_PLAN_CODE_PRO_MONTHLY ||
       process.env.PAYSTACK_PRO_MONTHLY_PLAN_CODE ||
       ""
-  ).trim()]: {
-    tier: "pro",
-    cycle: "monthly",
-    companies: 5,
-  },
+  ).trim()]: { tier: "pro", companies: 5 },
 
   [String(
     process.env.PAYSTACK_PLAN_CODE_PRO_ANNUAL ||
       process.env.PAYSTACK_PRO_ANNUAL_PLAN_CODE ||
       ""
-  ).trim()]: {
-    tier: "pro",
-    cycle: "annual",
-    companies: 5,
-  },
+  ).trim()]: { tier: "pro", companies: 5 },
 };
 
 for (const k of Object.keys(PLAN_MAP)) {
@@ -85,6 +59,8 @@ const PAID_LIMITS_UNLIMITED = {
 };
 
 async function fetchJSON(url: string) {
+  if (!PAYSTACK_SECRET) throw new Error("Missing PAYSTACK_SECRET_KEY env var.");
+
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${PAYSTACK_SECRET}`,
@@ -92,7 +68,7 @@ async function fetchJSON(url: string) {
     cache: "no-store",
   });
 
-  const json = await res.json();
+  const json = await res.json().catch(() => null);
   if (!res.ok || !json?.status) {
     throw new Error(`Paystack error: ${JSON.stringify(json)}`);
   }
@@ -118,53 +94,75 @@ function lower(v: unknown) {
   return String(v ?? "").toLowerCase();
 }
 
-function normalizeSubscriptionStatus(status: unknown) {
-  const s = lower(status);
-
-  if (s === "active" || s === "success" || s === "trialing" || s === "non-renewing") {
-    return "active";
-  }
-
-  if (s === "cancelled" || s === "canceled" || s === "disabled") {
-    return "canceled";
-  }
-
-  if (s === "past_due" || s === "attention" || s === "unpaid" || s === "failed") {
-    return "past_due";
-  }
-
-  return "inactive";
-}
-
-function isActivePaystackStatus(status: unknown) {
-  const s = lower(status);
-  return s === "active" || s === "success" || s === "trialing" || s === "non-renewing";
-}
-
 function resolvePlanMeta(planCode: unknown): PlanMeta | null {
   const code = safeTrim(planCode);
   if (!code) return null;
   return PLAN_MAP[code] ?? null;
 }
 
-function buildPaidFeatures(tier: PaidTier, companies: number) {
-  return {
-    readOnly: false,
-    limits: {
-      ...PAID_LIMITS_UNLIMITED,
-      companies,
-    },
-    tier,
-  };
+function normalizeSubscriptionStatus(v: unknown) {
+  const status = lower(v);
+
+  if (status === "active") return "active";
+  if (
+    status === "cancelled" ||
+    status === "canceled" ||
+    status === "disabled" ||
+    status === "non-renewing" ||
+    status === "complete"
+  ) {
+    return "canceled";
+  }
+
+  if (
+    status === "past_due" ||
+    status === "past-due" ||
+    status === "attention" ||
+    status === "failed"
+  ) {
+    return "past_due";
+  }
+
+  return "past_due";
 }
 
-function pickSubscription(list: any[]) {
+function isActivePaystackStatus(v: unknown) {
+  return lower(v) === "active";
+}
+
+function pickSubscription(list: any[], preferredCode?: string | null) {
   if (!Array.isArray(list) || list.length === 0) return null;
+
+  const preferred = safeTrim(preferredCode);
+  if (preferred) {
+    const exact = list.find((s) => safeTrim(s?.subscription_code) === preferred);
+    if (exact) return exact;
+  }
 
   const active = list.find((s) => isActivePaystackStatus(s?.status));
   if (active) return active;
 
   return list[0] ?? null;
+}
+
+function buildPaidFeatures(tier: Tier, companies: number) {
+  return {
+    readOnly: false,
+    cloudSync: tier === "growth" || tier === "pro",
+    storeSync: tier === "pro",
+    maxActiveSessions: tier === "pro" ? 4 : tier === "growth" ? 2 : 1,
+    limits: {
+      ...PAID_LIMITS_UNLIMITED,
+      companies,
+    },
+    tier,
+    restoredAt: new Date().toISOString(),
+    restoreReason: "paystack_active_subscription",
+  };
+}
+
+function knownPlanCodes() {
+  return Object.keys(PLAN_MAP).filter(Boolean);
 }
 
 export async function syncSubscriptionFromPaystack(userId: string) {
@@ -189,45 +187,52 @@ export async function syncSubscriptionFromPaystack(userId: string) {
   let discoveredSubCode = sub?.subscriptionCode ?? null;
   let discoveredPlanCode = sub?.planCode ?? null;
   let discoveredCustomerCode = sub?.customerCode ?? null;
-  let discoveredRawStatus: unknown = sub?.status ?? "active";
+  let discoveredRawStatus: string | null = sub?.status ?? "active";
 
   try {
-    const customer = await fetchJSON(
-      `${BASE_URL}/customer/${encodeURIComponent(email)}`
-    );
+    const customer = await fetchJSON(`${BASE_URL}/customer/${encodeURIComponent(email)}`);
 
-    discoveredCustomerCode = customer.customer_code;
+    discoveredCustomerCode = safeTrim(customer?.customer_code) || discoveredCustomerCode;
 
     const subs = await fetchJSON(
-      `${BASE_URL}/subscription?customer=${customer.customer_code}`
+      `${BASE_URL}/subscription?customer=${encodeURIComponent(discoveredCustomerCode || email)}`
     );
 
-    const paystackSub = pickSubscription(subs);
+    const activeSub = pickSubscription(subs, discoveredSubCode);
 
-    if (paystackSub) {
-      discoveredSubCode = paystackSub.subscription_code;
-      discoveredPlanCode = paystackSub.plan?.plan_code || paystackSub.plan_code || discoveredPlanCode;
-      discoveredRawStatus = paystackSub.status || discoveredRawStatus;
+    if (activeSub) {
+      discoveredSubCode = safeTrim(activeSub.subscription_code) || discoveredSubCode;
+      discoveredPlanCode =
+        safeTrim(activeSub.plan?.plan_code) ||
+        safeTrim(activeSub.plan_code) ||
+        discoveredPlanCode;
 
-      const nextPayment = safeDate(paystackSub.next_payment_date);
+      discoveredRawStatus = safeTrim(activeSub.status) || discoveredRawStatus;
+
+      const nextPayment = safeDate(activeSub.next_payment_date);
 
       if (
         nextPayment &&
-        (!discoveredPeriodEnd ||
-          nextPayment.getTime() !== discoveredPeriodEnd.getTime())
+        (!discoveredPeriodEnd || nextPayment.getTime() !== discoveredPeriodEnd.getTime())
       ) {
         discoveredPeriodEnd = nextPayment;
       }
     }
   } catch (err) {
-    console.error("Paystack sync failed:", err);
+    console.error("[paystackSync] failed", {
+      userId,
+      email,
+      localCustomerCode: sub?.customerCode ?? null,
+      localSubscriptionCode: sub?.subscriptionCode ?? null,
+      localPlanCode: sub?.planCode ?? null,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 
   if (!discoveredSubCode && !discoveredCustomerCode) return null;
 
   const normalizedStatus = normalizeSubscriptionStatus(discoveredRawStatus);
-  const planMeta = resolvePlanMeta(discoveredPlanCode);
 
   await prisma.subscription.upsert({
     where: { userId },
@@ -239,6 +244,7 @@ export async function syncSubscriptionFromPaystack(userId: string) {
       subscriptionCode: discoveredSubCode ?? undefined,
       planCode: discoveredPlanCode ?? undefined,
       currentPeriodEnd: discoveredPeriodEnd ?? undefined,
+      canceledAt: normalizedStatus === "canceled" ? new Date() : undefined,
     },
     update: {
       status: normalizedStatus as any,
@@ -246,14 +252,24 @@ export async function syncSubscriptionFromPaystack(userId: string) {
       ...(discoveredSubCode ? { subscriptionCode: discoveredSubCode } : {}),
       ...(discoveredPlanCode ? { planCode: discoveredPlanCode } : {}),
       ...(discoveredPeriodEnd ? { currentPeriodEnd: discoveredPeriodEnd } : {}),
+      ...(normalizedStatus === "active" ? { canceledAt: null } : {}),
+      ...(normalizedStatus === "canceled" ? { canceledAt: new Date() } : {}),
     },
   });
 
-  /**
-   * Critical repair path:
-   * A successful/active Paystack subscription must restore paid access even if the
-   * local entitlement was previously downgraded to FREE after grace expiry.
-   */
+  const planMeta = resolvePlanMeta(discoveredPlanCode);
+
+  if (!planMeta && isActivePaystackStatus(discoveredRawStatus)) {
+    console.warn("[paystackSync] active subscription has unknown plan code", {
+      userId,
+      email,
+      customerCode: discoveredCustomerCode,
+      subscriptionCode: discoveredSubCode,
+      paystackPlanCode: discoveredPlanCode,
+      knownPlanCodes: knownPlanCodes(),
+    });
+  }
+
   if (planMeta && isActivePaystackStatus(discoveredRawStatus) && ent?.status !== "blocked") {
     await prisma.entitlement.upsert({
       where: { userId },
@@ -268,6 +284,16 @@ export async function syncSubscriptionFromPaystack(userId: string) {
         status: "active" as any,
         features: buildPaidFeatures(planMeta.tier, planMeta.companies) as any,
       },
+    });
+
+    console.info("[paystackSync] entitlement repaired from active subscription", {
+      userId,
+      email,
+      tier: planMeta.tier,
+      customerCode: discoveredCustomerCode,
+      subscriptionCode: discoveredSubCode,
+      planCode: discoveredPlanCode,
+      currentPeriodEnd: discoveredPeriodEnd?.toISOString() ?? null,
     });
   }
 
