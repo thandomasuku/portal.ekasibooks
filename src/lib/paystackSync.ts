@@ -165,6 +165,28 @@ function knownPlanCodes() {
   return Object.keys(PLAN_MAP).filter(Boolean);
 }
 
+function isPlainObject(v: unknown): v is Record<string, any> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function activeManualOverride(features: unknown) {
+  if (!isPlainObject(features)) return null;
+  if (features.manualOverride !== true) return null;
+
+  const untilRaw = safeTrim(features.manualOverrideUntil);
+  if (!untilRaw) return null;
+
+  const until = safeDate(untilRaw);
+  if (!until) return null;
+
+  if (until.getTime() <= Date.now()) return null;
+
+  return {
+    until,
+    reason: safeTrim(features.manualOverrideReason) || null,
+  };
+}
+
 export async function syncSubscriptionFromPaystack(userId: string) {
   const [user, sub, ent] = await Promise.all([
     prisma.user.findUnique({
@@ -176,12 +198,24 @@ export async function syncSubscriptionFromPaystack(userId: string) {
     }),
     prisma.entitlement.findUnique({
       where: { userId },
-      select: { status: true },
+      select: { status: true, tier: true, features: true },
     }),
   ]);
 
   const email = toLowerEmail(user?.email);
   if (!email) return null;
+
+  const manualOverride = activeManualOverride(ent?.features);
+  if (manualOverride) {
+    console.info("[paystackSync] skipped because active manual override is in force", {
+      userId,
+      email,
+      tier: ent?.tier ?? null,
+      manualOverrideUntil: manualOverride.until.toISOString(),
+      manualOverrideReason: manualOverride.reason,
+    });
+    return sub?.currentPeriodEnd ?? manualOverride.until;
+  }
 
   let discoveredPeriodEnd: Date | null = sub?.currentPeriodEnd ?? null;
   let discoveredSubCode = sub?.subscriptionCode ?? null;

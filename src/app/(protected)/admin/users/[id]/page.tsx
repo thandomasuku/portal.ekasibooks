@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 
 import AdminUserAccountEditor from "./AdminUserAccountEditor";
 import AdminSessionActions from "./AdminSessionActions";
+import AdminSubscriptionTierEditor from "./AdminSubscriptionTierEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,16 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
+function safeString(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function JsonBlock({ value }: { value: unknown }) {
   return (
     <pre className="max-h-80 overflow-auto rounded-2xl border border-white/15 bg-[#061f29]/88 p-4 text-xs leading-relaxed text-white/82 shadow-inner ring-1 ring-white/10">
@@ -30,8 +41,12 @@ function JsonBlock({ value }: { value: unknown }) {
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
-      <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">{label}</div>
-      <div className="mt-1 break-words text-sm font-bold text-white">{value || "—"}</div>
+      <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-sm font-bold text-white">
+        {value || "—"}
+      </div>
     </div>
   );
 }
@@ -56,7 +71,9 @@ function Panel({
       <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-[4rem] bg-white/10 blur-sm" />
 
       <div className="relative">
-        <h3 className="text-xl font-black tracking-tight text-white">{title}</h3>
+        <h3 className="text-xl font-black tracking-tight text-white">
+          {title}
+        </h3>
         {children}
       </div>
     </section>
@@ -71,7 +88,11 @@ function StatusPill({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default async function AdminUserDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminUserDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
 
   const user = await prisma.user.findUnique({
@@ -100,19 +121,44 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       subscription: true,
       sessions: {
         orderBy: { lastSeenAt: "desc" },
-        take: 10,
-        select: { id: true, userAgent: true, ip: true, createdAt: true, lastSeenAt: true, revokedAt: true },
+        take: 4,
+        select: {
+          id: true,
+          userAgent: true,
+          ip: true,
+          createdAt: true,
+          lastSeenAt: true,
+          revokedAt: true,
+        },
       },
       companies: {
         orderBy: { updatedAt: "desc" },
         take: 20,
-        select: { id: true, name: true, isActive: true, isDefault: true, createdAt: true, updatedAt: true, deletedAt: true },
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+          isDefault: true,
+          createdAt: true,
+          updatedAt: true,
+          deletedAt: true,
+        },
       },
-      _count: { select: { customers: true, quotes: true, invoices: true, companies: true, sessions: true } },
+      _count: {
+        select: {
+          customers: true,
+          quotes: true,
+          invoices: true,
+          companies: true,
+          sessions: true,
+        },
+      },
     },
   });
 
   if (!user) notFound();
+
+  const entitlementFeatures = asObject(user.entitlement?.features);
 
   return (
     <div className="space-y-6">
@@ -142,7 +188,13 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     : "inline-flex items-center gap-2 rounded-full border border-red-200/35 bg-red-300/15 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-red-50 shadow-sm backdrop-blur"
                 }
               >
-                <span className={user.isActive ? "h-2 w-2 rounded-full bg-[#14b8a6]" : "h-2 w-2 rounded-full bg-red-300"} />
+                <span
+                  className={
+                    user.isActive
+                      ? "h-2 w-2 rounded-full bg-[#14b8a6]"
+                      : "h-2 w-2 rounded-full bg-red-300"
+                  }
+                />
                 {user.isActive ? "Active" : "Deactivated"}
               </div>
             </div>
@@ -150,7 +202,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             <h2 className="mt-4 break-words text-2xl font-black tracking-tight text-white md:text-3xl">
               {user.fullName || user.email}
             </h2>
-            <p className="mt-1 break-words text-sm font-semibold text-white/65">{user.email}</p>
+            <p className="mt-1 break-words text-sm font-semibold text-white/65">
+              {user.email}
+            </p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row md:items-center">
@@ -168,8 +222,12 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
             />
 
             <div className="rounded-2xl border border-white/15 bg-[#073540]/70 px-4 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] ring-1 ring-white/10">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">User ID</div>
-              <div className="mt-1 max-w-[280px] truncate font-bold text-white">{user.id}</div>
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-white/55">
+                User ID
+              </div>
+              <div className="mt-1 max-w-[280px] truncate font-bold text-white">
+                {user.id}
+              </div>
             </div>
           </div>
         </div>
@@ -179,12 +237,24 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <Panel title="Profile" className="lg:col-span-2">
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <InfoRow label="Role" value={user.role} />
-            <InfoRow label="Account status" value={user.isActive ? "Active" : "Deactivated"} />
-            <InfoRow label="Deactivated at" value={fmtDate(user.deactivatedAt)} />
-            <InfoRow label="Deactivation reason" value={user.deactivatedReason} />
+            <InfoRow
+              label="Account status"
+              value={user.isActive ? "Active" : "Deactivated"}
+            />
+            <InfoRow
+              label="Deactivated at"
+              value={fmtDate(user.deactivatedAt)}
+            />
+            <InfoRow
+              label="Deactivation reason"
+              value={user.deactivatedReason}
+            />
             <InfoRow label="Company" value={user.companyName} />
             <InfoRow label="Phone" value={user.phone} />
-            <InfoRow label="Email verified" value={fmtDate(user.emailVerifiedAt)} />
+            <InfoRow
+              label="Email verified"
+              value={fmtDate(user.emailVerifiedAt)}
+            />
             <InfoRow label="Created" value={fmtDate(user.createdAt)} />
             <InfoRow label="Last login" value={fmtDate(user.lastLoginAt)} />
           </div>
@@ -193,9 +263,20 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <Panel title="Desktop">
           <div className="mt-4 grid gap-3">
             <InfoRow label="Version" value={user.lastDesktopVersion} />
-            <InfoRow label="Platform" value={[user.lastDesktopPlatform, user.lastDesktopArch].filter(Boolean).join(" ")} />
-            <InfoRow label="Last desktop seen" value={fmtDate(user.lastDesktopSeenAt)} />
-            <InfoRow label="Last entitlement check" value={fmtDate(user.lastEntitlementCheckAt)} />
+            <InfoRow
+              label="Platform"
+              value={[user.lastDesktopPlatform, user.lastDesktopArch]
+                .filter(Boolean)
+                .join(" ")}
+            />
+            <InfoRow
+              label="Last desktop seen"
+              value={fmtDate(user.lastDesktopSeenAt)}
+            />
+            <InfoRow
+              label="Last entitlement check"
+              value={fmtDate(user.lastEntitlementCheckAt)}
+            />
           </div>
         </Panel>
       </section>
@@ -204,7 +285,10 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <Panel title="Entitlement">
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <InfoRow label="Tier" value={user.entitlement?.tier ?? "free"} />
-            <InfoRow label="Status" value={user.entitlement?.status ?? "active"} />
+            <InfoRow
+              label="Status"
+              value={user.entitlement?.status ?? "active"}
+            />
           </div>
           <div className="mt-4">
             <JsonBlock value={user.entitlement?.features} />
@@ -214,12 +298,47 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
         <Panel title="Subscription">
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <InfoRow label="Status" value={user.subscription?.status ?? "—"} />
-            <InfoRow label="Provider" value={user.subscription?.provider ?? "—"} />
-            <InfoRow label="Plan code" value={user.subscription?.planCode ?? "—"} />
-            <InfoRow label="Current period end" value={fmtDate(user.subscription?.currentPeriodEnd)} />
-            <InfoRow label="Customer code" value={user.subscription?.customerCode ?? "—"} />
-            <InfoRow label="Subscription code" value={user.subscription?.subscriptionCode ?? "—"} />
+            <InfoRow
+              label="Provider"
+              value={user.subscription?.provider ?? "—"}
+            />
+            <InfoRow
+              label="Plan code"
+              value={user.subscription?.planCode ?? "—"}
+            />
+            <InfoRow
+              label="Current period end"
+              value={fmtDate(user.subscription?.currentPeriodEnd)}
+            />
+            <InfoRow
+              label="Customer code"
+              value={user.subscription?.customerCode ?? "—"}
+            />
+            <InfoRow
+              label="Subscription code"
+              value={user.subscription?.subscriptionCode ?? "—"}
+            />
           </div>
+
+          <AdminSubscriptionTierEditor
+            userId={user.id}
+            currentTier={user.entitlement?.tier ?? "free"}
+            currentStatus={user.entitlement?.status ?? "active"}
+            subscriptionStatus={user.subscription?.status ?? null}
+            subscriptionProvider={user.subscription?.provider ?? null}
+            currentPeriodEnd={user.subscription?.currentPeriodEnd ?? null}
+            manualOverrideUntil={safeString(
+              entitlementFeatures.manualOverrideUntil,
+            )}
+            manualOverrideReason={safeString(
+              entitlementFeatures.manualOverrideReason,
+            )}
+            hasPaystackBilling={Boolean(
+              user.subscription?.provider === "paystack" &&
+              (user.subscription?.customerCode ||
+                user.subscription?.subscriptionCode),
+            )}
+          />
         </Panel>
       </section>
 
@@ -236,9 +355,16 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
 
         <Panel title="Recent sessions">
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-semibold text-white/65">
-              Active sessions count against the user’s entitlement limit. Revoking a session forces that device to log in again.
-            </p>
+            <div>
+              <p className="text-sm font-semibold text-white/65">
+                Active sessions count against the user’s entitlement limit.
+                Revoking a session forces that device to log in again.
+              </p>
+              <p className="mt-1 text-xs font-semibold text-white/45">
+                Showing the latest {user.sessions.length} of {user._count.sessions} sessions.
+                Older sessions stay in history but are hidden here to keep the page compact.
+              </p>
+            </div>
 
             <AdminSessionActions
               userId={user.id}
@@ -249,7 +375,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
 
           <div className="mt-4 grid gap-3">
             {user.sessions.length === 0 ? (
-              <p className="text-sm font-semibold text-white/70">No sessions found.</p>
+              <p className="text-sm font-semibold text-white/70">
+                No sessions found.
+              </p>
             ) : (
               user.sessions.map((session) => (
                 <div
@@ -269,7 +397,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                         >
                           {session.revokedAt ? "Revoked" : "Active"}
                         </span>
-                        <span className="text-xs font-semibold text-white/55">Last seen {fmtDate(session.lastSeenAt)}</span>
+                        <span className="text-xs font-semibold text-white/55">
+                          Last seen {fmtDate(session.lastSeenAt)}
+                        </span>
                       </div>
 
                       <div className="mt-2 break-words text-xs font-semibold leading-5 text-white/50">
@@ -283,7 +413,11 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
                     </div>
 
                     {!session.revokedAt ? (
-                      <AdminSessionActions userId={user.id} sessionId={session.id} mode="revokeOne" />
+                      <AdminSessionActions
+                        userId={user.id}
+                        sessionId={session.id}
+                        mode="revokeOne"
+                      />
                     ) : null}
                   </div>
                 </div>
@@ -296,7 +430,9 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
       <Panel title="Companies">
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {user.companies.length === 0 ? (
-            <p className="text-sm font-semibold text-white/70">No companies found.</p>
+            <p className="text-sm font-semibold text-white/70">
+              No companies found.
+            </p>
           ) : (
             user.companies.map((company) => (
               <div
@@ -305,9 +441,17 @@ export default async function AdminUserDetailPage({ params }: { params: Promise<
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-black text-white">{company.name}</span>
-                  <StatusPill>{company.isDefault ? "Default" : company.isActive ? "Active" : "Inactive"}</StatusPill>
+                  <StatusPill>
+                    {company.isDefault
+                      ? "Default"
+                      : company.isActive
+                        ? "Active"
+                        : "Inactive"}
+                  </StatusPill>
                 </div>
-                <div className="mt-1 text-xs font-semibold text-white/50">Updated {fmtDate(company.updatedAt)}</div>
+                <div className="mt-1 text-xs font-semibold text-white/50">
+                  Updated {fmtDate(company.updatedAt)}
+                </div>
               </div>
             ))
           )}
