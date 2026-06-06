@@ -67,7 +67,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [remember, setRemember] = useState(true);
 
   const [agree, setAgree] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -168,11 +167,6 @@ export default function RegisterPage() {
       return showError("Please accept the Terms & Privacy Policy.");
     }
 
-    await trackAnalytics("register_attempt", {
-      next_url: nextUrl,
-      plan: planParam,
-      remember,
-    });
 
     setLoading(true);
 
@@ -181,12 +175,7 @@ export default function RegisterPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password,
-          remember,
-          name: name.trim() || undefined,
-        }),
+        
       });
 
       const data = await res.json().catch(() => ({}));
@@ -317,45 +306,45 @@ export default function RegisterPage() {
         <div className="absolute bottom-[-12rem] right-[-10rem] h-[32rem] w-[32rem] rounded-full bg-[#215D63]/10 blur-3xl" />
       </div>
 
-      <section className="relative flex min-h-screen min-h-[100svh] items-center justify-center px-5 py-8 sm:px-8 lg:px-12">
-        <div className="grid w-full max-w-[1200px] overflow-hidden rounded-[2rem] border border-white/45 bg-white/86 shadow-[0_28px_90px_rgba(15,23,42,0.16)] backdrop-blur-xl lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="relative overflow-hidden bg-gradient-to-br from-[#073340] via-[#164e59] to-[#277077] px-6 py-6 text-white sm:px-8 lg:min-h-[600px] lg:px-10 lg:py-8">
+      <section className="relative flex min-h-screen min-h-[100svh] items-center justify-center px-4 py-2 sm:px-5 lg:px-6">
+        <div className="grid w-full max-w-[1040px] overflow-hidden rounded-[1.35rem] border border-white/45 bg-white/88 shadow-[0_24px_70px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:max-h-[calc(100svh-1rem)] lg:grid-cols-[1.04fr_0.96fr]">
+          <div className="relative overflow-hidden bg-gradient-to-br from-[#073340] via-[#164e59] to-[#277077] px-5 py-5 text-white sm:px-7 lg:px-8 lg:py-6">
             <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-32 right-[-9rem] h-[28rem] w-[28rem] rounded-full bg-white/10" />
             <div className="pointer-events-none absolute bottom-0 right-0 h-52 w-52 rounded-tl-[10rem] bg-black/10" />
 
-            <div className="relative flex h-full flex-col justify-between gap-7">
+            <div className="relative flex h-full flex-col justify-center gap-5">
               <div>
-                <div className="inline-flex items-center gap-4 rounded-[1.4rem] border border-white/16 bg-white/10 p-2.5 pr-5 shadow-[0_18px_44px_rgba(0,0,0,0.18)] backdrop-blur">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-[0_18px_44px_rgba(0,0,0,0.16)] ring-1 ring-white/25">
+                <div className="inline-flex items-center gap-3 rounded-[1.25rem] border border-white/16 bg-white/10 p-2 pr-4 shadow-[0_16px_36px_rgba(0,0,0,0.16)] backdrop-blur">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-[0_16px_36px_rgba(0,0,0,0.14)] ring-1 ring-white/25">
                     <Image
                       src="/logo/ekasibooks.png"
                       alt="eKasiBooks"
                       width={96}
                       height={96}
                       priority
-                      className="h-10 w-10 object-contain"
+                      className="h-9 w-9 object-contain"
                     />
                   </div>
                   <div>
-                    <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-50 ring-1 ring-white/16">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-cyan-50 ring-1 ring-white/16">
                       <span className="h-2 w-2 rounded-full bg-emerald-300" />
                       Secure portal access
                     </div>
-                    <p className="mt-2 text-sm font-bold uppercase tracking-[0.3em] text-white/72">
+                    <p className="mt-1.5 text-xs font-bold uppercase tracking-[0.28em] text-white/72">
                       eKasiBooks Portal
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-8 max-w-[620px]">
-                  <p className="inline-flex rounded-full bg-white/12 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-50 ring-1 ring-white/15">
+                <div className="mt-6 max-w-[520px]">
+                  <p className="inline-flex rounded-full bg-white/12 px-3 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.16em] text-cyan-50 ring-1 ring-white/15">
                     Business access workspace
                   </p>
-                  <h1 className="mt-4 text-4xl font-black leading-[0.98] tracking-[-0.045em] text-white sm:text-5xl lg:text-[3.8rem]">
+                  <h1 className="mt-3 max-w-[480px] text-[1.95rem] font-black leading-[1.05] tracking-[-0.03em] text-white sm:text-[2.15rem] lg:text-[2.35rem]">
                     Create your business access.
                   </h1>
-                  <p className="mt-4 max-w-xl text-sm font-medium leading-7 text-white/76 sm:text-base">
+                  <p className="mt-2.5 max-w-[440px] text-sm font-medium leading-5 text-white/76">
                     Register your portal account to manage subscriptions,
                     downloads, cloud sync and account security from one
                     controlled workspace.
@@ -363,7 +352,7 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-2.5 sm:grid-cols-3">
                 <BrandFeature
                   title="Portal access"
                   desc="Create your account and verify your email before signing in."
@@ -380,29 +369,25 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <div className="relative bg-white px-6 py-6 sm:px-8 lg:px-9 lg:py-8">
+          <div className="relative bg-white px-5 py-5 sm:px-7 lg:px-8 lg:py-6">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(33,93,99,0.10),transparent_24rem)]" />
             <div className="relative flex min-h-full flex-col justify-center">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <span className="rounded-full bg-[#e8f7f5] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-[#215D63]">
-                  Get started
-                </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-                  Secure access
-                </span>
-              </div>
-
               <div>
-                <h2 className="text-2xl font-black tracking-[-0.04em] text-slate-950">
-                  Create account
-                </h2>
-                <p className="mt-1.5 max-w-sm text-sm leading-5 text-slate-600">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-[1.35rem] font-black tracking-[-0.04em] text-slate-950 sm:text-[1.5rem]">
+                    Create account
+                  </h2>
+                  <span className="rounded-full bg-[#e8f7f5] px-3 py-1.5 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#215D63]">
+                    Get started
+                  </span>
+                </div>
+                <p className="mt-1 max-w-sm text-sm leading-5 text-slate-600">
                   Use your email and password to create your eKasiBooks portal
                   account.
                 </p>
               </div>
 
-              <div className="mt-5 space-y-3">
+              <div className="mt-3.5 space-y-2.5">
                 {msg && (
                   <div
                     className={`rounded-xl border px-3 py-2.5 text-sm ${msgClass(msg)}`}
@@ -460,7 +445,7 @@ export default function RegisterPage() {
                     Full name
                   </span>
                   <input
-                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-[0.62rem] text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Your full name"
@@ -474,7 +459,7 @@ export default function RegisterPage() {
                     Email
                   </span>
                   <input
-                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-[0.62rem] text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@company.com"
@@ -490,7 +475,7 @@ export default function RegisterPage() {
                   </span>
                   <input
                     type="password"
-                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-[0.62rem] text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Minimum 8 characters"
@@ -505,7 +490,7 @@ export default function RegisterPage() {
                   </span>
                   <input
                     type="password"
-                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-[0.62rem] text-sm outline-none transition focus:border-[#215D63] focus:ring-4 focus:ring-[#215D63]/12 disabled:bg-slate-50 disabled:text-slate-500"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     placeholder="Re-type your password"
@@ -517,21 +502,9 @@ export default function RegisterPage() {
                   />
                 </label>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] leading-relaxed text-slate-600">
                   {PASSWORD_RULE}.
                 </div>
-
-                <label className="flex select-none items-center gap-2 text-sm font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    disabled={loading || created}
-                    className="h-4 w-4 accent-[#215D63]"
-                  />
-                  Remember me for 7 days
-                </label>
-
                 <label className="flex select-none items-start gap-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
@@ -563,7 +536,7 @@ export default function RegisterPage() {
                   </span>
                 </label>
 
-                <div className="space-y-3 pt-1">
+                <div className="space-y-2.5 pt-0.5">
                   <button
                     onClick={() => (!created ? register() : undefined)}
                     disabled={loading || created}
@@ -587,10 +560,6 @@ export default function RegisterPage() {
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
-                  After registering, verify your email before signing in. OTP
-                  remains available later for quick sign-ins when needed.
-                </div>
               </div>
             </div>
           </div>
@@ -604,7 +573,7 @@ function BrandFeature({ title, desc }: { title: string; desc: string }) {
   return (
     <div className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
       <p className="font-bold text-white">{title}</p>
-      <p className="mt-1.5 text-xs leading-5 text-white/70">{desc}</p>
+      <p className="mt-1 text-xs leading-4 text-white/70">{desc}</p>
     </div>
   );
 }
